@@ -1,5 +1,5 @@
-"""OSOBA 2 – ludzie i ich preferencje kanałów: CRUD + podgląd „kto dostanie alert”.
-Kształt JSON = frontend/src/shared/types.ts (Person)."""
+"""People and their channel preferences: CRUD + "who will get this alert" preview.
+JSON shape = frontend/src/shared/types.ts (Person)."""
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
@@ -12,7 +12,7 @@ from database import get_db
 from models import Delivery, Person, Rule
 from services.people_service import plan_recipients
 
-router = APIRouter(prefix="/api/people", tags=["People (Osoba 2)"])
+router = APIRouter(prefix="/api/people", tags=["People"])
 
 Channel = Literal["email", "sms", "phone", "ui"]
 Severity = Literal["info", "warning", "critical"]
@@ -20,7 +20,7 @@ HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 class QuietWindow(BaseModel):
-    """Kanał działa tylko od `from` do `to`; poza tym oknem idzie kanałem `else`."""
+    """The channel is used only from `from` to `to`; outside that window the `else` channel is used."""
     from_: str = Field(..., alias="from")
     to: str
     else_: Optional[Channel] = Field("email", alias="else")
@@ -103,7 +103,7 @@ def list_people(team: Optional[str] = None, db: Session = Depends(get_db)):
 
 @router.get("/teams")
 def list_teams(db: Session = Depends(get_db)):
-    """Wszystkie zespoły i osoby, do których może iść reguła (podpowiedzi w polu „Who gets notified”)."""
+    """All teams and people a rule can target (suggestions for the "Who gets notified" field)."""
     teams = {t for (t,) in db.query(Person.team).distinct()} | {t for (t,) in db.query(Rule.team).distinct()}
     return {
         "teams": sorted(t for t in teams if t),
@@ -115,12 +115,12 @@ class PreviewIn(BaseModel):
     team: str
     severity: Severity = "warning"
     channels: List[Channel] = Field(default_factory=list)
-    at: Optional[datetime] = None  # domyślnie teraz
+    at: Optional[datetime] = None  # defaults to now
 
 
 @router.post("/preview")
 def preview_recipients(payload: PreviewIn, db: Session = Depends(get_db)):
-    """Kto dostałby alert z taką regułą i dlaczego (bez wysyłania czegokolwiek)."""
+    """Who would get an alert from such a rule, and why (nothing is sent)."""
     planned = plan_recipients(db, payload.team.strip(), payload.severity, payload.channels, payload.at)
     return [
         {"person_id": p.recipient.person_id, "name": p.recipient.name, "channel": p.recipient.channel,
@@ -156,7 +156,7 @@ def update_person(person_id: int, payload: PersonIn, db: Session = Depends(get_d
 @router.delete("/{person_id}")
 def delete_person(person_id: int, db: Session = Depends(get_db)):
     person = _get_or_404(db, person_id)
-    # Historia wysyłek zostaje, tylko bez wskazania na usuniętą osobę
+    # Keep delivery history, just unlink it from the deleted person
     db.query(Delivery).filter(Delivery.person_id == person_id).update({Delivery.person_id: None})
     db.delete(person)
     db.commit()

@@ -1,10 +1,10 @@
-// Wywołania backendu dla reguł i podpowiedzi w edytorze (Osoba 2).
+// Backend calls for rules and rule-editor suggestions.
 import { api } from '../shared/api';
 import type { Channel, Rule, Severity } from './ruleTypes';
 
 export interface FieldHint {
-  field: string;     // np. "payload.notional"
-  example: unknown;  // przykładowa wartość z prawdziwego zdarzenia
+  field: string;     // e.g. "payload.notional"
+  example: unknown;  // sample value from a real event
   count: number;
 }
 
@@ -32,7 +32,7 @@ export const rulesApi = {
     api<PlannedRecipient[]>('/people/preview', { method: 'POST', body: json({ team, severity, channels }) }),
 };
 
-// Błąd z backendu ("422 {"detail":[...]}") -> czytelne zdanie dla użytkownika
+// Backend error ("422 {"detail":[...]}") -> readable sentence for the user
 export function errorMessage(err: unknown): string {
   const text = err instanceof Error ? err.message : String(err);
   const jsonStart = text.indexOf('{');
@@ -47,7 +47,7 @@ export function errorMessage(err: unknown): string {
           .join('; ');
       }
     } catch {
-      /* zwykły tekst */
+      /* plain text */
     }
   }
   return text;

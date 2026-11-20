@@ -1,4 +1,4 @@
-// Zamienia regułę na zdanie zwykłym językiem – dla osób nietechnicznych.
+// Turns a rule into a plain-language sentence, for non-technical users.
 import { CHANNELS, Condition, OPERATORS, Rule, groupConditions, groupMode } from './ruleTypes';
 
 function formatValue(value: Condition['value']): string {

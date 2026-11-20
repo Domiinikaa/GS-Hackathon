@@ -1,5 +1,5 @@
-// Strona "Rules": lista reguł + dodawanie, edycja, włączanie/wyłączanie, usuwanie.
-// Dane z backendu (/api/rules) – zmiany działają od razu, bez restartu serwera.
+// Rules page: list of rules + add, edit, enable/disable, delete.
+// Data comes from /api/rules; changes take effect immediately, without a server restart.
 import { useEffect, useMemo, useState } from 'react';
 import { Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { CHANNELS, COLOR_DOT, Rule } from './ruleTypes';
@@ -13,7 +13,7 @@ export default function RulesPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [filter, setFilter] = useState('');
-  // null = formularz zamknięty, 'new' = nowa reguła, Rule = edycja tej reguły
+  // null = form closed, 'new' = new rule, Rule = editing that rule
   const [editing, setEditing] = useState<Rule | 'new' | null>(null);
 
   async function load() {
@@ -37,7 +37,7 @@ export default function RulesPage() {
     window.setTimeout(() => setNotice(''), 3000);
   }
 
-  // Zwraca komunikat błędu do pokazania w formularzu albo null, gdy się udało
+  // Returns an error message to show in the form, or null on success
   async function saveRule(rule: Rule): Promise<string | null> {
     try {
       const isNew = editing === 'new';

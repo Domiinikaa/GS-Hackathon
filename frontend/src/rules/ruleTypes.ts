@@ -1,19 +1,19 @@
-// Typy reguł.
-// UWAGA: to wersja robocza – format trzeba jeszcze ustalić z Osobą 3 (backend) i Osobą 4 (silnik reguł).
+// Rule types. Must match the JSON returned by /api/rules (routers/rules.py)
+// and the format read by the rules engine (services/rules_engine.py).
 
 export type Operator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'contains' | 'wildcard';
 export type Channel = 'email' | 'sms' | 'phone' | 'ui';
 export type Severity = 'info' | 'warning' | 'critical';
 export type Color = 'red' | 'amber' | 'blue' | 'green' | 'slate';
 
-// Jeden warunek, np. { field: "payload.notional", op: "gt", value: 10000000 }
+// One condition, e.g. { field: "payload.notional", op: "gt", value: 10000000 }
 export interface Condition {
   field: string;
   op: Operator;
   value: string | number | string[];
 }
 
-// Grupa warunków: "and" = muszą być spełnione wszystkie, "or" = wystarczy jeden
+// Condition group: "and" = all must match, "or" = any one is enough
 export type ConditionGroup = { and: Condition[] } | { or: Condition[] };
 
 export interface Rule {
@@ -23,12 +23,12 @@ export interface Rule {
   enabled: boolean;
   condition: ConditionGroup;
   channels: Channel[];
-  title: string;           // szablon tytułu, np. "Rejected {{payload.currency}}"
-  body?: string | null;           // szablon treści
+  title: string;           // title template, e.g. "Rejected {{payload.currency}}"
+  body?: string | null;           // body template
   severity: Severity;
   color: Color;
-  group_by?: string | null;       // np. "instrument" – grupuj alerty po tym polu
-  group_window_s?: number | null; // np. 300 = jeden alert na 5 minut
+  group_by?: string | null;       // e.g. "instrument" – group alerts by this field
+  group_window_s?: number | null; // e.g. 300 = one alert per 5 minutes
   runbook_id?: number | null;
   updated_at?: string | null;
 }
@@ -56,7 +56,7 @@ export const SEVERITIES: Severity[] = ['info', 'warning', 'critical'];
 
 export const COLORS: Color[] = ['red', 'amber', 'blue', 'green', 'slate'];
 
-// Tailwind wymaga pełnych nazw klas wpisanych w kodzie, dlatego taka mapa
+// Tailwind needs full class names written in the code, hence this map
 export const COLOR_DOT: Record<Color, string> = {
   red: 'bg-red-500',
   amber: 'bg-amber-500',

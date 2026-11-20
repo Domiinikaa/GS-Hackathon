@@ -1,4 +1,4 @@
-"""Testy API reguł i ludzi (Osoba 2) na osobnej bazie w pamięci."""
+"""API tests for rules and people, on a separate in-memory database."""
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -58,7 +58,7 @@ def test_rules_crud(client):
     assert rule["channels"] == ["email", "ui"]
     assert rule["condition"]["or"][1]["value"] == ["LIMIT_BREACH", "TIMEOUT"]
 
-    # ta sama nazwa -> unikalne id
+    # same name -> unique id
     assert client.post("/api/rules", json=NEW_RULE).json()["id"] == "big-eur-rejections-2"
 
     updated = client.put(f"/api/rules/{rule['id']}", json={**NEW_RULE, "severity": "critical"})
@@ -110,7 +110,7 @@ def test_people_crud(client):
 
 
 @pytest.mark.parametrize("bad", [
-    {"phone": ""},                                             # SMS wybrany, brak telefonu
+    {"phone": ""},                                             # SMS selected, no phone
     {"email": "not-an-email"},
     {"quiet_hours": {"sms": {"from": "8am", "to": "20:00"}}},
     {"channel_prefs": {"urgent": ["sms"]}},

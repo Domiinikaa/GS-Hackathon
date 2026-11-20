@@ -1,11 +1,11 @@
-"""Testy preferencji kanałów (Osoba 2). Uruchom: python -m pytest tests -q"""
+"""Tests for channel preferences. Run: python -m pytest tests -q"""
 from datetime import datetime
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-import models  # noqa: F401  (rejestruje tabele)
+import models  # noqa: F401  (registers the tables)
 from database import Base
 from models import Person
 from services.people_service import in_window, plan_recipients
@@ -66,7 +66,7 @@ def test_missing_phone_falls_back_to_email(db):
 
 
 def test_empty_intersection_uses_rule_channels(db):
-    # Kasia woli email dla warning, ale reguła zna tylko SMS -> SMS niemożliwy (brak tel.) -> email
+    # Kasia prefers email for warning, but the rule only allows SMS -> no phone number -> email
     assert simple(plan_recipients(db, "Rates", "warning", ["sms"], DAY)) == [("Kasia", "email")]
 
 

@@ -1,16 +1,16 @@
 """
-OSOBA 2 – kto ma dostać alert i jakim kanałem.
+Who gets an alert, and on which channel.
 
-Zasady (w tej kolejności):
-1. Odbiorcy: rule.team może być nazwą zespołu ("Payments") albo osoby ("Anna").
-   Jeśli istnieje osoba o takim imieniu, alert idzie tylko do niej, w przeciwnym razie do całego zespołu.
-2. Kanał "ui" to kanał zespołowy (live feed), więc zawsze jest jeden wpis na alert, a nie po jednym na osobę.
-3. Kanały osobiste = kanały reguły ∩ channel_prefs[severity] danej osoby.
-   Osoba bez preferencji dla tej wagi albo z pustym przecięciem dostaje kanały z reguły (alert nie może zginąć).
-4. "phone" tylko do dyżurnego (on_call). Pozostali dostają zamiast tego SMS.
-5. quiet_hours: {"sms": {"from": "08:00", "to": "20:00", "else": "email"}} oznacza, że SMS idzie tylko w tym oknie,
-   a poza nim kanał zastępczy. Okno przez północ (22:00–06:00) też działa.
-6. Brak adresu (SMS bez telefonu, e-mail bez adresu) -> kanał zastępczy, żeby wiadomość dokądś dotarła.
+Rules (applied in this order):
+1. Audience: rule.team can be a team name ("Payments") or a person's name ("Anna").
+   If a person with that name exists, only they get the alert; otherwise the whole team does.
+2. "ui" is a team channel (live feed), so there is always one entry per alert, not one per person.
+3. Personal channels = rule channels ∩ the person's channel_prefs[severity].
+   A person with no preference for that severity, or an empty intersection, gets the rule's channels (no alert is lost).
+4. "phone" goes only to the on-call person; everyone else gets an SMS instead.
+5. quiet_hours: {"sms": {"from": "08:00", "to": "20:00", "else": "email"}} means SMS is sent only inside that window
+   and the fallback channel outside it. Windows across midnight (22:00–06:00) work too.
+6. Missing address (SMS without a phone, e-mail without an address) -> fallback channel, so the message still lands somewhere.
 """
 from __future__ import annotations
 
@@ -24,13 +24,13 @@ from models import Alert, Person
 from services.contracts import Recipient
 
 PERSONAL_CHANNELS = ("phone", "sms", "email")
-# Dokąd przejść, gdy kanał jest niedostępny (brak adresu itp.)
+# Where to go when a channel is unavailable (missing address etc.)
 FALLBACK = {"phone": "sms", "sms": "email", "email": None}
 
 
 @dataclass
 class PlannedRecipient:
-    """Recipient + powód decyzji (do podglądu w UI: „Anna → email, bo poza godzinami SMS”)."""
+    """Recipient + the reason for the decision (shown in the UI preview: "Anna → email, outside SMS hours")."""
     recipient: Recipient
     reason: str
 
@@ -41,7 +41,7 @@ def _parse_hhmm(value: str) -> time:
 
 
 def in_window(now: time, start: str, end: str) -> bool:
-    """Czy `now` mieści się w oknie [start, end). Obsługuje okna przez północ."""
+    """Whether `now` is inside the window [start, end). Supports windows across midnight."""
     a, b = _parse_hhmm(start), _parse_hhmm(end)
     if a == b:
         return True
@@ -59,7 +59,7 @@ def _address(person: Person, channel: str) -> str | None:
 
 
 def _resolve_channel(person: Person, channel: str, now: time) -> tuple[str | None, list[str]]:
-    """Zwraca (ostateczny kanał albo None, notatki), stosując on-call, godziny ciszy i brak adresu."""
+    """Returns (final channel or None, notes) after applying on-call, quiet hours and missing addresses."""
     notes: list[str] = []
     seen: set[str] = set()
     current: str | None = channel
@@ -98,7 +98,7 @@ def plan_recipients(
     rule_channels: Iterable[str],
     now: datetime | None = None,
 ) -> list[PlannedRecipient]:
-    """Serce logiki: kto, jakim kanałem i dlaczego. Używane przez pipeline i przez podgląd w UI."""
+    """Core logic: who, on which channel, and why. Used by the pipeline and by the UI preview."""
     now_t = (now or datetime.now()).time()
     rule_channels = list(dict.fromkeys(rule_channels or []))
     out: list[PlannedRecipient] = []

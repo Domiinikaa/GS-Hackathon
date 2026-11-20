@@ -1,7 +1,7 @@
-"""OSOBA 2 – reguły: CRUD. Kształt JSON = frontend/src/rules/ruleTypes.ts (Rule).
+"""Alert rules: CRUD. JSON shape = frontend/src/rules/ruleTypes.ts (Rule).
 
-Reguły to dane w bazie, nie kod: zmiana przez API/UI działa od razu (pipeline czyta reguły przy każdym zdarzeniu),
-bez restartu serwera.
+Rules are data in the database, not code: a change via the API/UI takes effect immediately
+(the pipeline reads rules for every event), without restarting the server.
 """
 import re
 from typing import Any, Dict, List, Literal, Optional, Union
@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Alert, Event, Rule, Source
 
-router = APIRouter(prefix="/api/rules", tags=["Rules (Osoba 2)"])
+router = APIRouter(prefix="/api/rules", tags=["Rules"])
 
 Operator = Literal["eq", "neq", "gt", "gte", "lt", "lte", "in", "contains", "wildcard"]
 Channel = Literal["email", "sms", "phone", "ui"]
@@ -39,7 +39,7 @@ class ConditionIn(BaseModel):
 
 
 def _validate_group(group: Any, depth: int = 0) -> Dict[str, Any]:
-    """{"and": [...]} albo {"or": [...]}; elementy to warunki albo zagnieżdżone grupy."""
+    """{"and": [...]} or {"or": [...]}; items are conditions or nested groups."""
     if depth > 5:
         raise ValueError("condition nested too deep")
     if not isinstance(group, dict) or len(group) != 1 or next(iter(group)) not in ("and", "or"):
@@ -91,7 +91,7 @@ class RuleIn(BaseModel):
 
 
 class RulePatch(BaseModel):
-    """Częściowa zmiana, np. {"enabled": false}."""
+    """Partial change, e.g. {"enabled": false}."""
     enabled: Optional[bool] = None
 
 
@@ -144,7 +144,7 @@ def _flatten(obj: Any, prefix: str = "", out: Optional[Dict[str, Any]] = None) -
 
 @router.get("/fields")
 def field_hints(limit: int = 200, db: Session = Depends(get_db)):
-    """Podpowiedzi pól do edytora reguł: wszystkie ścieżki z ostatnich zdarzeń i przykładów źródeł."""
+    """Field suggestions for the rule editor: every path found in recent events and source samples."""
     seen: Dict[str, Dict[str, Any]] = {}
     payloads = [s.sample_event for s in db.query(Source).all() if s.sample_event]
     payloads += [e.payload for e in db.query(Event).order_by(Event.id.desc()).limit(limit).all()]
@@ -175,7 +175,7 @@ def create_rule(payload: RuleIn, db: Session = Depends(get_db)):
 def update_rule(rule_id: str, payload: RuleIn, db: Session = Depends(get_db)):
     rule = _get_or_404(db, rule_id)
     data = payload.model_dump()
-    data.pop("id", None)  # id się nie zmienia, bo odwołują się do niego alerty
+    data.pop("id", None)  # the id never changes because alerts reference it
     for key, value in data.items():
         setattr(rule, key, value)
     db.commit()
@@ -197,7 +197,7 @@ def patch_rule(rule_id: str, payload: RulePatch, db: Session = Depends(get_db)):
 def delete_rule(rule_id: str, db: Session = Depends(get_db)):
     rule = _get_or_404(db, rule_id)
     if db.query(Alert).filter(Alert.rule_id == rule_id).first() is not None:
-        # Alerty wskazują na regułę (klucz obcy), więc jej nie kasujemy, tylko wyłączamy
+        # Alerts reference the rule (foreign key), so disable it instead of deleting
         rule.enabled = False
         db.commit()
         return {"deleted": False, "disabled": True, "detail": "Rule has alerts, so it was disabled instead"}
