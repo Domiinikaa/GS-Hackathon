@@ -14,10 +14,8 @@ import {
   Briefcase,
   Trash2,
   FolderPlus,
-  UserPlus,
   Shield,
-  UserX,
-  UserCheck
+  UserX
 } from 'lucide-react';
 
 interface NewlyCreatedInvite {
@@ -42,16 +40,6 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
   const [newDeptName, setNewDeptName] = useState('');
   const [newDeptDesc, setNewDeptDesc] = useState('');
   const [addingDept, setAddingDept] = useState(false);
-
-  // Direct user / admin creation state
-  const [showDirectCreate, setShowDirectCreate] = useState(false);
-  const [directUname, setDirectUname] = useState('');
-  const [directEmail, setDirectEmail] = useState('');
-  const [directPassword, setDirectPassword] = useState('');
-  const [directDzial, setDirectDzial] = useState('');
-  const [directPhone, setDirectPhone] = useState('');
-  const [directIsAdmin, setDirectIsAdmin] = useState(true);
-  const [directCreating, setDirectCreating] = useState(false);
 
   // Modifying user role
   const [roleChangingUserId, setRoleChangingUserId] = useState<number | null>(null);
@@ -122,38 +110,6 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
     }
   };
 
-  const handleDirectCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!directUname.trim() || !directEmail.trim() || !directPassword) return;
-
-    try {
-      setDirectCreating(true);
-      setError(null);
-      await adminService.createUser({
-        uname: directUname.trim(),
-        email: directEmail.trim().toLowerCase(),
-        password: directPassword,
-        dzial: directDzial || undefined,
-        nrtel: directPhone.trim() || undefined,
-        is_admin: directIsAdmin,
-      });
-
-      setSuccessMsg(
-        `Successfully provisioned ${directIsAdmin ? 'Administrator' : 'User'} account @${directUname.trim()}!`
-      );
-      setTimeout(() => setSuccessMsg(null), 4000);
-      setDirectUname('');
-      setDirectEmail('');
-      setDirectPassword('');
-      setDirectPhone('');
-      setShowDirectCreate(false);
-      await loadData();
-    } catch (err: any) {
-      setError(err.message || 'Failed to provision account.');
-    } finally {
-      setDirectCreating(false);
-    }
-  };
 
   const handleAddDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -256,14 +212,6 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               <PlusCircle className="w-4 h-4" />
               <span>{generating ? 'Generating...' : `Generate ${inviteRole === 'admin' ? 'Admin' : 'Normal'} Invite`}</span>
             </button>
-
-            <button
-              onClick={() => setShowDirectCreate(!showDirectCreate)}
-              className="px-3 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 rounded-lg flex items-center space-x-1.5 transition"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>{showDirectCreate ? 'Close Provisioning' : 'Direct Provision'}</span>
-            </button>
           </div>
         </div>
 
@@ -303,122 +251,6 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
           </div>
         )}
       </div>
-
-      {/* Direct User / Admin Account Provisioning Form (Collapsible) */}
-      {showDirectCreate && (
-        <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-bold text-white flex items-center space-x-2">
-                <UserPlus className="w-4 h-4 text-amber-400" />
-                <span>Direct Account Provisioning</span>
-              </h3>
-              <p className="text-xs text-slate-400">
-                Immediately create an Administrator or Standard User account without requiring an invite code.
-              </p>
-            </div>
-          </div>
-
-          <form onSubmit={handleDirectCreateUser} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Username *</label>
-              <input
-                type="text"
-                required
-                value={directUname}
-                onChange={(e) => setDirectUname(e.target.value)}
-                placeholder="e.g. alex_admin"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Email Address *</label>
-              <input
-                type="email"
-                required
-                value={directEmail}
-                onChange={(e) => setDirectEmail(e.target.value)}
-                placeholder="e.g. alex@company.com"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Temporary Password *</label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={directPassword}
-                onChange={(e) => setDirectPassword(e.target.value)}
-                placeholder="Minimum 6 characters"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Department</label>
-              <select
-                value={directDzial}
-                onChange={(e) => setDirectDzial(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
-              >
-                <option value="">Select Department (Optional)</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.name}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Phone Number (optional)</label>
-              <input
-                type="text"
-                value={directPhone}
-                onChange={(e) => setDirectPhone(e.target.value)}
-                placeholder="+48 123 456 789"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div className="flex items-center space-x-3 pt-6">
-              <label className="flex items-center space-x-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={directIsAdmin}
-                  onChange={(e) => setDirectIsAdmin(e.target.checked)}
-                  className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-950 border-slate-700"
-                />
-                <span className="text-xs font-bold text-amber-400 flex items-center space-x-1">
-                  <Shield className="w-3.5 h-3.5" />
-                  <span>Grant Administrator Privileges</span>
-                </span>
-              </label>
-            </div>
-
-            <div className="md:col-span-3 flex justify-end space-x-3 mt-2">
-              <button
-                type="button"
-                onClick={() => setShowDirectCreate(false)}
-                className="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={directCreating}
-                className="px-5 py-2 text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg flex items-center space-x-1.5 transition active:scale-95"
-              >
-                <UserCheck className="w-4 h-4" />
-                <span>{directCreating ? 'Provisioning...' : `Create ${directIsAdmin ? 'Administrator' : 'User'}`}</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {/* --- SECTION: DEPARTMENT MANAGEMENT --- */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">

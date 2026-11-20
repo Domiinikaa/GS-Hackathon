@@ -129,25 +129,6 @@ export const adminService = {
     return res.json();
   },
 
-  async createUser(data: {
-    uname: string;
-    email: string;
-    password: string;
-    dzial?: string;
-    nrtel?: string;
-    is_admin: boolean;
-  }): Promise<User> {
-    const res = await authFetch('/api/admin/users', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Failed to create user account.');
-    }
-    return res.json();
-  },
-
   async listInvites(): Promise<InviteCode[]> {
     const res = await authFetch('/api/admin/invites');
     if (!res.ok) {

@@ -2,7 +2,7 @@ import secrets
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+from sqlalchemy import func
 
 from database import get_db
 from models import User, InviteCode, Department
@@ -12,12 +12,10 @@ from schemas import (
     InviteCodeCreateRequest,
     UserResponse,
     UserRoleUpdate,
-    AdminCreateUserRequest,
     DepartmentResponse,
     DepartmentCreate,
     DepartmentUpdate
 )
-from services.security import hash_password
 from routers.deps import get_current_admin_user
 
 router = APIRouter(tags=["Admin & Departments"])
@@ -232,40 +230,3 @@ def update_user_role(
     db.commit()
     db.refresh(user)
     return user
-
-
-@router.post("/api/admin/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def admin_create_user(
-    payload: AdminCreateUserRequest,
-    admin: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
-):
-    """Directly provisions a new user or administrator account without requiring an invite code."""
-    existing_user = db.query(User).filter(
-        or_(User.uname == payload.uname.strip(), User.email == payload.email.lower().strip())
-    ).first()
-
-    if existing_user:
-        if existing_user.uname.lower() == payload.uname.lower().strip():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Username '{payload.uname}' is already taken."
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Email address '{payload.email}' is already registered."
-            )
-
-    new_user = User(
-        uname=payload.uname.strip(),
-        email=payload.email.lower().strip(),
-        hashed_password=hash_password(payload.password),
-        dzial=payload.dzial.strip() if payload.dzial else None,
-        nrtel=payload.nrtel.strip() if payload.nrtel else None,
-        is_admin=payload.is_admin
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return new_user
