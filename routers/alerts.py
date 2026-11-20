@@ -4,10 +4,13 @@ import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Alert
+from services.alert_service import upsert_alert
+from services.contracts import Match
 
 router = APIRouter(prefix="/api/alerts", tags=["Alerts (Osoba 1)"])
 
@@ -20,6 +23,43 @@ def list_alerts(team: Optional[str] = None, status: Optional[str] = None, db: Se
     if status:
         q = q.filter(Alert.status == status)
     return q.order_by(Alert.last_seen.desc()).limit(200).all()
+
+
+class TestAlertRequest(BaseModel):
+    """Dane udawanej paczki. Wszystko ma wartości domyślne, więc można nic nie wpisywać."""
+    dedup_key: str = "test-payments-errors"
+    title: str = "HighErrorRate on payments-api"
+    body: Optional[str] = "Error rate 12% over the last 5 minutes"
+    team: str = "Payments"
+    severity: str = "critical"
+    color: str = "red"
+    rule_id: str = "anna-payments-critical"
+
+
+@router.post("/test")
+def create_test_alert(req: TestAlertRequest, db: Session = Depends(get_db)):
+    """TYLKO DO TESTÓW: udaje Osobę 4 i przepuszcza paczkę przez upsert_alert."""
+    match = Match(
+        rule_id=req.rule_id,
+        team=req.team,
+        event_id=None,                 # nie ma prawdziwego zdarzenia
+        dedup_key=req.dedup_key,
+        title=req.title,
+        body=req.body,
+        severity=req.severity,
+        color=req.color,
+        channels=["ui"],
+        steps=[
+            {"text": "Open the payments dashboard and check if errors are in one region",
+             "action": None, "params": {}, "approval": "none"},
+            {"text": "Fail traffic over to the other region",
+             "action": "failover", "params": {"service": "payments-api"}, "approval": "required"},
+        ],
+    )
+    alert = upsert_alert(db, match)
+    db.commit()
+    db.refresh(alert)  # po commit obiekt jest "pusty" – wczytaj go z bazy, żeby było co zwrócić
+    return alert
 
 
 @router.get("/stream")
