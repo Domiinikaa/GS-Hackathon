@@ -24,11 +24,13 @@ export interface Rule {
   condition: ConditionGroup;
   channels: Channel[];
   title: string;           // szablon tytułu, np. "Rejected {{payload.currency}}"
-  body?: string;           // szablon treści
+  body?: string | null;           // szablon treści
   severity: Severity;
   color: Color;
-  group_by?: string;       // np. "instrument" – grupuj alerty po tym polu
-  group_window_s?: number; // np. 300 = jeden alert na 5 minut
+  group_by?: string | null;       // np. "instrument" – grupuj alerty po tym polu
+  group_window_s?: number | null; // np. 300 = jeden alert na 5 minut
+  runbook_id?: number | null;
+  updated_at?: string | null;
 }
 
 export const OPERATORS: { value: Operator; label: string; symbol: string }[] = [

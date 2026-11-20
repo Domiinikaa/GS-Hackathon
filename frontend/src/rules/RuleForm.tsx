@@ -1,11 +1,12 @@
 // Formularz dodawania / edycji reguły, z podglądem zwykłym językiem na żywo.
-import React, { useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Plus, Trash2, Users, X } from 'lucide-react';
 import {
   CHANNELS, COLORS, COLOR_DOT, Channel, Color, Condition, Operator, OPERATORS,
   Rule, SEVERITIES, Severity, groupConditions, groupMode,
 } from './ruleTypes';
 import { describeRule } from './describeRule';
+import { FieldHint, PlannedRecipient, errorMessage, rulesApi } from './rulesApi';
 
 // W formularzu wartość warunku trzymamy jako tekst (tak jak wpisuje użytkownik)
 interface ConditionRow {
@@ -29,7 +30,7 @@ function valueToText(value: Condition['value']): string {
 
 interface Props {
   initial?: Rule;               // brak = nowa reguła
-  onSave: (rule: Rule) => void;
+  onSave: (rule: Rule) => Promise<string | null>; // zwraca błąd albo null
   onCancel: () => void;
 }
 
@@ -56,6 +57,29 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
     initial?.group_window_s ? String(initial.group_window_s / 60) : '',
   );
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [targets, setTargets] = useState<string[]>([]);
+  const [fieldHints, setFieldHints] = useState<FieldHint[]>([]);
+  const [recipients, setRecipients] = useState<PlannedRecipient[] | null>(null);
+
+  // Podpowiedzi: zespoły/osoby i nazwy pól z prawdziwych zdarzeń
+  useEffect(() => {
+    rulesApi.teams().then((t) => setTargets([...t.teams, ...t.people])).catch(() => {});
+    rulesApi.fields().then(setFieldHints).catch(() => {});
+  }, []);
+
+  // Podgląd „kto dostanie alert” – odświeżany pół sekundy po ostatniej zmianie
+  useEffect(() => {
+    const target = team.trim();
+    if (!target || channels.length === 0) {
+      setRecipients(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      rulesApi.previewRecipients(target, severity, channels).then(setRecipients).catch(() => setRecipients(null));
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [team, severity, channels]);
 
   // Składa regułę z aktualnego stanu formularza (używane do podglądu i zapisu)
   function buildRule(): Rule {
@@ -64,7 +88,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
       .map((r) => ({ field: r.field.trim(), op: r.op, value: parseValue(r.op, r.value) }));
     const minutes = Number(groupMinutes);
     return {
-      id: initial?.id ?? `rule-${Date.now()}`,
+      id: initial?.id ?? '', // nowa reguła: backend nada id z nazwy
       name: name.trim(),
       team: team.trim(),
       enabled: initial?.enabled ?? true,
@@ -87,7 +111,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
     setChannels(channels.includes(ch) ? channels.filter((c) => c !== ch) : [...channels, ch]);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const rule = buildRule();
     if (!rule.name) return setError('Give the rule a name.');
@@ -96,7 +120,15 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
     if (rule.channels.length === 0) return setError('Pick at least one channel.');
     if (!rule.title) return setError('Add an alert title.');
     setError('');
-    onSave(rule);
+    setSaving(true);
+    try {
+      const failure = await onSave(rule);
+      if (failure) setError(failure);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -118,7 +150,10 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
         <div>
           <label className={labelClass}>Who gets notified (team or person)</label>
           <input className={inputClass} value={team} onChange={(e) => setTeam(e.target.value)}
-            placeholder="e.g. Rates" />
+            placeholder="e.g. Rates" list="rule-targets" />
+          <datalist id="rule-targets">
+            {targets.map((t) => <option key={t} value={t} />)}
+          </datalist>
         </div>
       </div>
 
@@ -143,7 +178,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
             <div key={i} className="grid grid-cols-12 gap-2 items-center">
               <input className={`${inputClass} col-span-4 font-mono`} value={row.field}
                 onChange={(e) => updateRow(i, { field: e.target.value })}
-                placeholder="field, e.g. payload.desk" />
+                placeholder="field, e.g. payload.desk" list="rule-fields" />
               <select className={`${inputClass} col-span-3`} value={row.op}
                 onChange={(e) => updateRow(i, { op: e.target.value as Operator })}>
                 {OPERATORS.map((o) => (
@@ -161,6 +196,11 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
             </div>
           ))}
         </div>
+        <datalist id="rule-fields">
+          {fieldHints.map((h) => (
+            <option key={h.field} value={h.field}>{`e.g. ${JSON.stringify(h.example)}`.slice(0, 60)}</option>
+          ))}
+        </datalist>
         <button type="button" onClick={() => setRows([...rows, { field: '', op: 'eq', value: '' }])}
           className="mt-2 text-xs text-amber-400 hover:text-amber-300 flex items-center space-x-1">
           <Plus className="w-3.5 h-3.5" /><span>Add condition</span>
@@ -235,6 +275,30 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
         <p className="text-sm text-slate-200">{describeRule(buildRule())}</p>
       </div>
 
+      {/* Kto dostanie alert z tej reguły – liczone przez backend z preferencji ludzi */}
+      {recipients && (
+        <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
+          <p className="text-xs font-semibold uppercase text-slate-500 mb-2 flex items-center gap-1">
+            <Users className="w-3.5 h-3.5" /> Who will be notified (right now)
+          </p>
+          {recipients.length === 0 ? (
+            <p className="text-sm text-amber-300">Nobody – no people in “{team.trim()}”. Add them on the People page.</p>
+          ) : (
+            <ul className="space-y-1">
+              {recipients.map((r, i) => (
+                <li key={i} className="text-sm text-slate-200">
+                  <span className="font-semibold">{r.name.startsWith('team:') ? `Team feed (${r.name.slice(5)})` : r.name}</span>
+                  {' → '}
+                  <span className="text-amber-300">{CHANNELS.find((c) => c.value === r.channel)?.label ?? r.channel}</span>
+                  {r.to && <span className="text-slate-500 font-mono"> {r.to}</span>}
+                  <span className="block text-xs text-slate-500">{r.reason}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {error && <p className="text-sm text-red-400">{error}</p>}
 
       <div className="flex justify-end gap-3">
@@ -242,9 +306,9 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
           className="px-4 py-2 rounded-lg text-sm text-slate-300 border border-slate-700 hover:bg-slate-800">
           Cancel
         </button>
-        <button type="submit"
-          className="px-4 py-2 rounded-lg text-sm font-bold bg-amber-500 hover:bg-amber-400 text-slate-950">
-          Save rule
+        <button type="submit" disabled={saving}
+          className="px-4 py-2 rounded-lg text-sm font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-60">
+          {saving ? 'Saving…' : 'Save rule'}
         </button>
       </div>
     </form>
