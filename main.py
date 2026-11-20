@@ -9,37 +9,132 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from database import engine, Base, SessionLocal
-from models import Item
-from routers import api, views
+import models  # Registers all models with Base
+from services.security import hash_password
+from routers import api, auth, admin, alerts, rules, people, sources, deliveries, runbooks
+from seed import seed_all
+from sqlalchemy import text
 
-# Tworzenie tabel bazy danych (SQLite / Postgres)
+# Create database tables (SQLite / PostgreSQL)
 Base.metadata.create_all(bind=engine)
 
 
-def seed_initial_data():
-    """Wrzuca 2 przykładowe rekordy na start, żeby demo nie było puste."""
+def ensure_sqlite_columns():
+    """Ensures backwards compatibility schema migrations in local SQLite development."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0"))
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE items ADD COLUMN user_id INTEGER REFERENCES users(id)"))
+            conn.commit()
+        except Exception:
+            pass
+
+
+ensure_sqlite_columns()
+
+
+def purge_demo_user():
+    """Removes any obsolete demo accounts from previous iterations."""
     db = SessionLocal()
     try:
-        if db.query(Item).count() == 0:
-            db.add_all([
-                Item(title="Goldman Sachs Group (GS)", category="Equity", value=475.50, description="Kluczowa pozycja benchmarkowa"),
-                Item(title="S&P 500 Index Fund", category="Equity", value=512.40, description="Ekspozycja rynkowa"),
-                Item(title="US 10Y Treasury Bond", category="Fixed Income", value=100.00, description="Stopa wolna od ryzyka"),
-            ])
+        demo = db.query(models.User).filter(
+            (models.User.uname == "demo_goldman") | (models.User.email == "demo@goldmansachs.com")
+        ).first()
+        if demo:
+            db.query(models.Item).filter(models.Item.user_id == demo.id).delete()
+            db.delete(demo)
             db.commit()
+            print("[CLEANUP] Obsolete demo account successfully removed from database.")
+    except Exception as e:
+        print(f"[CLEANUP ERROR] {e}")
     finally:
         db.close()
 
 
-seed_initial_data()
+def seed_default_departments():
+    """Initializes default company departments if the table is empty (fully editable by Admin)."""
+    db = SessionLocal()
+    try:
+        if db.query(models.Department).count() == 0:
+            default_depts = [
+                models.Department(name="Management", description="Executive leadership and strategic planning"),
+                models.Department(name="IT", description="Engineering, software architecture, and infrastructure"),
+                models.Department(name="Finance", description="Capital markets, quantitative analysis, and treasury"),
+                models.Department(name="Sales", description="Institutional client relations and capital raising"),
+                models.Department(name="Business", description="Business development and operations"),
+            ]
+            db.add_all(default_depts)
+            db.commit()
+            print("[SEED] Default company departments initialized.")
+    except Exception as e:
+        print(f"[SEED ERROR] {e}")
+    finally:
+        db.close()
+
+
+def init_admin_from_env():
+    """
+    Bootstraps an Administrator account if provided via environment variables (e.g. in Railway):
+    - ADMIN_UNAME
+    - ADMIN_EMAIL
+    - ADMIN_PASSWORD
+    - ADMIN_PHONE (optional)
+    """
+    admin_uname = os.getenv("ADMIN_UNAME")
+    admin_email = os.getenv("ADMIN_EMAIL")
+    admin_password = os.getenv("ADMIN_PASSWORD")
+
+    if not admin_uname or not admin_email or not admin_password:
+        return
+
+    db = SessionLocal()
+    try:
+        existing = db.query(models.User).filter(
+            (models.User.uname == admin_uname.strip()) | (models.User.email == admin_email.strip().lower())
+        ).first()
+
+        if not existing:
+            admin_user = models.User(
+                uname=admin_uname.strip(),
+                email=admin_email.strip().lower(),
+                hashed_password=hash_password(admin_password),
+                dzial="Management",
+                is_admin=True,
+                nrtel=os.getenv("ADMIN_PHONE")
+            )
+            db.add(admin_user)
+            db.commit()
+            print(f"[AUTH] Administrator '{admin_uname}' successfully initialized from environment variables.")
+        else:
+            if not existing.is_admin:
+                existing.is_admin = True
+                db.commit()
+    finally:
+        db.close()
+
+
+# Startup initialization & seeding
+purge_demo_user()
+seed_default_departments()
+init_admin_from_env()
+
+startup_db = SessionLocal()
+try:
+    seed_all(startup_db)
+finally:
+    startup_db.close()
 
 app = FastAPI(
-    title="GS Hackathon Core",
-    description="Fullstack FastAPI + React/TSX + SQLite Starter",
+    title="GS Alerting & Orchestration Engine",
+    description="Enterprise Ingest -> Rules -> Alerts -> Runbooks -> Escalations Pipeline",
     version="1.0.0"
 )
 
-# CORS
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -48,23 +143,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# API routes & health check
+# Authentication & Administration routers
+app.include_router(auth.router)
+app.include_router(admin.router)
 app.include_router(api.router)
+
+# Alerting system routers (from feature/rules-ui)
+for r in (alerts, rules, people, sources, deliveries, runbooks):
+    app.include_router(r.router)
 
 
 @app.get("/health", tags=["System"])
 def health_check():
-    """Endpoint używany przez Render/Railway do weryfikacji działania."""
+    """Health check endpoint used by Railway / Render uptime monitors."""
     return {"status": "ok"}
 
 
-# Obsługa Frontendu: Jeśli zbudowano Reacta w frontend/dist -> serwuj React SPA
+# Frontend SPA: Serve compiled React application from frontend/dist
 FRONTEND_DIST = Path(__file__).resolve().parent / "frontend" / "dist"
 
 if FRONTEND_DIST.exists():
-    # Montowanie plików statycznych zbudowanego Reacta
     if (FRONTEND_DIST / "assets").exists():
         app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+
+    @app.get("/", include_in_schema=False)
+    async def serve_react_root():
+        return FileResponse(FRONTEND_DIST / "index.html")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_react_spa(full_path: str):
@@ -75,8 +179,14 @@ if FRONTEND_DIST.exists():
             return FileResponse(file_path)
         return FileResponse(FRONTEND_DIST / "index.html")
 else:
-    # Fallback na szablony Jinja2 (gdy frontend React nie został zbudowany)
-    app.include_router(views.router)
+    @app.get("/", include_in_schema=False)
+    def api_welcome():
+        return {
+            "status": "online",
+            "message": "GS Alerting Backend API is operational.",
+            "docs": "/docs",
+            "frontend_dev_url": "http://localhost:5173"
+        }
 
 
 if __name__ == "__main__":

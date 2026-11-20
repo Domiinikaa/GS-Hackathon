@@ -1,0 +1,73 @@
+// Wspólne typy = kształt JSON z backendu (models.py). Zmiana tutaj = zmiana w models.py i odwrotnie.
+// Typy reguł są w rules/ruleTypes.ts.
+import type { Channel, Color, Severity } from '../rules/ruleTypes';
+
+export type AlertStatus = 'open' | 'acknowledged' | 'resolved';
+
+export interface RunbookStep {
+  text: string;
+  action: string | null;          // retry_workflow | restart_service | http_get | escalate | webhook | open_ticket
+  params: Record<string, unknown>;
+  approval: 'none' | 'required';
+  done?: boolean;
+}
+
+export interface Alert {
+  id: number;
+  rule_id: string;
+  team: string;
+  dedup_key: string;
+  title: string;
+  body: string | null;
+  severity: Severity;
+  color: Color;
+  status: AlertStatus;
+  count: number;
+  steps: RunbookStep[];
+  history: { at: string; who: string; what: string }[];
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface Person {
+  id: number;
+  name: string;
+  team: string;
+  email: string | null;
+  phone: string | null;
+  on_call: boolean;
+  channel_prefs: Partial<Record<Severity, Channel[]>>;
+  quiet_hours: Partial<Record<Channel, { from: string; to: string; else: Channel }>>;
+}
+
+export interface Source {
+  id: number;
+  key: string;                    // adres: /api/ingest/{key}
+  name: string;
+  team: string;
+  kind: 'webhook' | 'kafka' | 'rabbitmq' | 'logfile';
+  config: Record<string, unknown>;
+  sample_event: unknown | null;
+  created_at: string;
+}
+
+export interface Delivery {
+  id: number;
+  alert_id: number;
+  person_id: number | null;
+  channel: Channel;
+  to: string | null;
+  status: 'pending' | 'sent' | 'failed';
+  attempts: number;
+  last_error: string | null;
+  created_at: string;
+  sent_at: string | null;
+}
+
+export interface Runbook {
+  id: number;
+  name: string;
+  format: 'yaml' | 'markdown' | 'text' | 'link';
+  raw: string;
+  steps: RunbookStep[];
+}

@@ -1,0 +1,156 @@
+import { User, AuthResponse, InviteCode, DepartmentItem } from '../types';
+
+const TOKEN_KEY = 'gs_jwt_token';
+
+export const authStorage = {
+  getToken(): string | null {
+    return localStorage.getItem(TOKEN_KEY);
+  },
+  setToken(token: string): void {
+    localStorage.setItem(TOKEN_KEY, token);
+  },
+  clearToken(): void {
+    localStorage.removeItem(TOKEN_KEY);
+  },
+};
+
+/**
+ * Fetch wrapper automatically attaching the Authorization: Bearer token header.
+ */
+export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = authStorage.getToken();
+  const headers = new Headers(options.headers || {});
+
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  return fetch(url, { ...options, headers });
+}
+
+export const departmentService = {
+  async getDepartments(): Promise<DepartmentItem[]> {
+    try {
+      const res = await fetch('/api/departments');
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
+    }
+  },
+};
+
+export const authService = {
+  async register(data: {
+    uname: string;
+    email: string;
+    password: string;
+    invite_code: string;
+    nrtel?: string;
+    dzial?: string;
+  }): Promise<AuthResponse> {
+    const payload = {
+      ...data,
+      invite_code: data.invite_code.trim().toUpperCase(),
+      dzial: data.dzial || null,
+      nrtel: data.nrtel || null,
+    };
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Registration failed.');
+    }
+    const result: AuthResponse = await res.json();
+    authStorage.setToken(result.access_token);
+    return result;
+  },
+
+  async login(uname_or_email: string, password: string): Promise<AuthResponse> {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uname_or_email, password }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Invalid login or password.');
+    }
+    const result: AuthResponse = await res.json();
+    authStorage.setToken(result.access_token);
+    return result;
+  },
+
+  async getMe(): Promise<User> {
+    const res = await authFetch('/api/auth/me');
+    if (!res.ok) {
+      authStorage.clearToken();
+      throw new Error('Session expired.');
+    }
+    return res.json();
+  },
+
+  logout(): void {
+    authStorage.clearToken();
+  },
+};
+
+export const adminService = {
+  async createInvite(): Promise<{ code: string; message: string }> {
+    const res = await authFetch('/api/admin/invites', { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to generate invite code.');
+    }
+    return res.json();
+  },
+
+  async listInvites(): Promise<InviteCode[]> {
+    const res = await authFetch('/api/admin/invites');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to fetch invite codes.');
+    }
+    return res.json();
+  },
+
+  async listUsers(): Promise<User[]> {
+    const res = await authFetch('/api/admin/users');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to fetch employee roster.');
+    }
+    return res.json();
+  },
+
+  async createDepartment(name: string, description?: string): Promise<DepartmentItem> {
+    const res = await authFetch('/api/admin/departments', {
+      method: 'POST',
+      body: JSON.stringify({ name, description }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to create department.');
+    }
+    return res.json();
+  },
+
+  async deleteDepartment(id: number): Promise<void> {
+    const res = await authFetch(`/api/admin/departments/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to delete department.');
+    }
+  },
+};

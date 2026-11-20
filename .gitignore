@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -13,13 +14,16 @@ venv/
 
 # Frontend (Node / Vite)
 node_modules/
+frontend/node_modules/
+dist/
 frontend/dist/
 *.tsbuildinfo
+*.local
 
-# Logi
+# Logs
 *.log
 npm-debug.log*
 
-# Edytory
+# Editors
 .vscode/
 .idea/
