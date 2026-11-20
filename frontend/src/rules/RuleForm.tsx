@@ -145,8 +145,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
           <label className={labelClass}>Rule name</label>
           <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Large rejected trades" />
-          <p className={hintClass}>A short name so your team recognises this rule.</p>
-        </div>
+                  </div>
         <div>
           <label className={labelClass}>Send alerts to</label>
           <input className={inputClass} value={team} onChange={(e) => setTeam(e.target.value)}
@@ -154,7 +153,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
           <datalist id="rule-targets">
             {targets.map((t) => <option key={t} value={t} />)}
           </datalist>
-          <p className={hintClass}>A team name (everyone in it) or one person's name.</p>
+          <p className={hintClass}>Team or person</p>
         </div>
       </div>
 
@@ -173,10 +172,6 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
             </button>
           </div>
         </div>
-        <p className={`${hintClass} mb-2`}>
-          Every event that arrives is checked against these conditions. Field = a value inside the event
-          (use dots for nested values, e.g. payload.desk).
-        </p>
 
         <div className="grid grid-cols-12 gap-2 text-xs text-slate-500 mb-1">
           <span className="col-span-4">Event field</span>
@@ -234,9 +229,6 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
             </button>
           ))}
         </div>
-        <p className={hintClass}>
-          Sets the alert colour, and each person's channels for this level (People page) are used.
-        </p>
       </div>
 
       {/* 4. Channels */}
@@ -254,7 +246,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
             </button>
           ))}
         </div>
-        <p className={hintClass}>The channels this rule may use. UI = the live alert feed in this app.</p>
+        <p className={hintClass}>UI = live feed in this app</p>
       </div>
 
       {/* 5. Alert text */}
@@ -263,16 +255,13 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
           <label className={labelClass}>Alert headline</label>
           <input className={`${inputClass} font-mono`} value={title} onChange={(e) => setTitle(e.target.value)}
             placeholder="Rejected {{payload.currency}} {{payload.notional}}" />
-          <p className={hintClass}>
-            The first line people see. Put a field in {'{{ }}'} to insert its value, e.g. {'{{payload.currency}}'} → EUR.
-          </p>
+          <p className={hintClass}>{'{{field}}'} inserts a value from the event</p>
         </div>
         <div>
           <label className={labelClass}>Alert details (optional)</label>
           <input className={`${inputClass} font-mono`} value={body} onChange={(e) => setBody(e.target.value)}
             placeholder="{{error.message}}" />
-          <p className={hintClass}>Extra text under the headline – in the UI and e-mail (SMS shows only the headline).</p>
-        </div>
+                  </div>
       </div>
 
       {/* 6. Combining repeated alerts (optional) */}
@@ -280,20 +269,17 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
         <span className={labelClass}>Combine repeated alerts (optional)</span>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Treat events as the same when this field matches</label>
+            <label className="block text-xs text-slate-400 mb-1">Same problem if this field is equal</label>
             <input className={`${inputClass} font-mono`} value={groupBy} onChange={(e) => setGroupBy(e.target.value)}
               placeholder="e.g. instrument" />
           </div>
           <div>
-            <label className="block text-xs text-slate-400 mb-1">…and they happen within (minutes)</label>
+            <label className="block text-xs text-slate-400 mb-1">Time window (minutes)</label>
             <input type="number" min="1" className={inputClass} value={groupMinutes}
               onChange={(e) => setGroupMinutes(e.target.value)} placeholder="e.g. 5" />
           </div>
         </div>
-        <p className={hintClass}>
-          Instead of 500 separate alerts you get one alert per value (e.g. per instrument) with a counter.
-          Leave empty to get every alert.
-        </p>
+        <p className={hintClass}>One alert with a counter instead of many</p>
       </div>
 
       {/* Who gets alerts from this rule, computed by the backend from people's preferences */}
