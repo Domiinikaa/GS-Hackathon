@@ -1,13 +1,92 @@
-// OSOBA 1 – live feed alertów + szczegóły alertu (kroki runbooka, ack/resolve, zatwierdzanie).
-import Placeholder from '../shared/Placeholder';
+// OSOBA 1 – lista alertów z filtrami.
+// Na razie odświeżanie przyciskiem; "na żywo" (SSE) dojdzie w kroku 4, ack/resolve w kroku 3.
+import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
+import { api } from '../shared/api';
+import type { Alert, AlertStatus } from '../shared/types';
+import AlertCard from './AlertCard';
+
+type StatusFilter = AlertStatus | 'all';
 
 export default function AlertsPage() {
+  // "Pamięć" strony
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [status, setStatus] = useState<StatusFilter>('open');
+  const [team, setTeam] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Pobierz alerty z backendu. Filtr statusu robi backend (?status=…), zespołu – my niżej.
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const query = status === 'all' ? '' : `?status=${status}`;
+      setAlerts(await api<Alert[]>(`/alerts${query}`));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Uruchom load() przy otwarciu strony i za każdym razem, gdy zmieni się filtr statusu
+  useEffect(() => {
+    load();
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lista zespołów do filtra – zbudowana z tego, co jest w alertach
+  const teams = Array.from(new Set(alerts.map((a) => a.team))).sort();
+  const visible = team === 'all' ? alerts : alerts.filter((a) => a.team === team);
+
+  const selectClass =
+    'bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500';
+
   return (
-    <Placeholder title="Alerts" owner="Osoba 1" todo={[
-      'Live list for a team: GET /api/alerts?team=… + EventSource("/api/alerts/stream")',
-      'Card: colour + severity from the rule, title, counter "×500", last seen',
-      'Details: body, runbook steps, Approve button for risky steps, history',
-      'Acknowledge / Resolve: POST /api/alerts/{id}/ack | /resolve',
-    ]} />
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Alerts</h1>
+          <p className="text-sm text-slate-400">What needs attention right now.</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={team} onChange={(e) => setTeam(e.target.value)} className={selectClass} aria-label="Team">
+            <option value="all">All teams</option>
+            {teams.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} className={selectClass} aria-label="Status">
+            <option value="open">Open</option>
+            <option value="acknowledged">Acknowledged</option>
+            <option value="resolved">Resolved</option>
+            <option value="all">All statuses</option>
+          </select>
+          <button onClick={load}
+            className="flex items-center gap-1.5 text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
+          Could not load alerts: {error}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {visible.map((a) => <AlertCard key={a.id} alert={a} />)}
+
+        {!loading && !error && visible.length === 0 && (
+          <div className="text-center py-12 border border-dashed border-slate-800 rounded-xl">
+            <p className="text-slate-400">No alerts here.</p>
+            <p className="text-xs text-slate-600 mt-1">
+              Tip: create a test alert with <code className="text-amber-400">POST /api/alerts/test</code> in <a href="/docs" target="_blank" rel="noreferrer" className="underline">/docs</a>.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
