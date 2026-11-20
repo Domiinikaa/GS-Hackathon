@@ -32,8 +32,8 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
   const [departments, setDepartments] = useState<DepartmentItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Invite code generation
-  const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('admin');
+  // Invite code generation (default: normal user invite)
+  const [inviteRole, setInviteRole] = useState<'user' | 'admin'>('user');
   const [generating, setGenerating] = useState(false);
   const [newlyCreatedInvite, setNewlyCreatedInvite] = useState<NewlyCreatedInvite | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -226,25 +226,25 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
             <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5">
               <button
                 type="button"
+                onClick={() => setInviteRole('user')}
+                className={`px-2.5 py-1 text-xs font-semibold rounded transition ${
+                  inviteRole === 'user'
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Normal Invite
+              </button>
+              <button
+                type="button"
                 onClick={() => setInviteRole('admin')}
                 className={`px-2.5 py-1 text-xs font-semibold rounded transition ${
                   inviteRole === 'admin'
-                    ? 'bg-amber-500 text-slate-950 font-bold'
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 Admin Invite
-              </button>
-              <button
-                type="button"
-                onClick={() => setInviteRole('user')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded transition ${
-                  inviteRole === 'user'
-                    ? 'bg-slate-700 text-white font-bold'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                User Invite
               </button>
             </div>
 
@@ -254,7 +254,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               className="px-4 py-2 text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg flex items-center space-x-1.5 transition shadow active:scale-95"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>{generating ? 'Generating...' : `Generate ${inviteRole === 'admin' ? 'Admin' : 'User'} Invite`}</span>
+              <span>{generating ? 'Generating...' : `Generate ${inviteRole === 'admin' ? 'Admin' : 'Normal'} Invite`}</span>
             </button>
 
             <button
