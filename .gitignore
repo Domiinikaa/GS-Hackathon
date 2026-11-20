@@ -10,3 +10,16 @@ venv/
 *.sqlite3
 .env
 .DS_Store
+
+# Frontend (Node / Vite)
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# Logi
+*.log
+npm-debug.log*
+
+# Edytory
+.vscode/
+.idea/
