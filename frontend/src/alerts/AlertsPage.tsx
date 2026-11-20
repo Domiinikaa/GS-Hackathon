@@ -55,9 +55,13 @@ export default function AlertsPage() {
   useEffect(() => {
     const source = new EventSource('/api/alerts/stream');
 
+    let connectedBefore = false;
     source.addEventListener('hello', (e) => {          // serwer potwierdza połączenie
       setLive(true);
       setLiveMode(JSON.parse((e as MessageEvent).data).mode);
+      // Ponowne połączenie (np. po zerwaniu Wi-Fi): zmiany z czasu przerwy nie przyszły – pobierz listę od nowa
+      if (connectedBefore) load();
+      connectedBefore = true;
     });
     source.onerror = () => setLive(false);             // przeglądarka sama spróbuje połączyć się ponownie
 
