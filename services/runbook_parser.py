@@ -21,7 +21,10 @@ import re
 from typing import Any
 
 _LIST_ITEM = re.compile(r"^\s*(?:\d+[.)]|[-*+])\s+(?:\[[ xX]\]\s+)?(.*\S)\s*$")
-_SPLIT_TEXT = re.compile(r"(?<=[.!?])\s+(?=[A-ZĄĆĘŁŃÓŚŹŻ])|;\s*|\s+(?:then|and then|następnie|potem)\s+", re.I)
+# kropka kończy zdanie, ale nie po skrótach typu "e.g." / "np." (lookbehind musi mieć stałą długość)
+_SPLIT_TEXT = re.compile(
+    r"(?<!\be\.g\.)(?<!\bi\.e\.)(?<!\bnp\.)(?<!\betc\.)(?<!\bvs\.)(?<=[.!?])\s+(?=[A-ZĄĆĘŁŃÓŚŹŻ])"
+    r"|;\s*|\s+(?:then|and then|następnie|potem)\s+", re.I)
 _LEADING_THEN = re.compile(r"^(?:and then|then|następnie|potem)\s+", re.I)
 
 
@@ -36,10 +39,13 @@ def _parse_yaml(raw: str) -> list[dict[str, Any]]:
         import yaml  # pyyaml
     except ImportError as e:  # pragma: no cover
         raise ValueError("PyYAML is not installed (pip install pyyaml)") from e
+    hint = "If this is a plain list of steps, choose Auto-detect or Markdown instead."
     try:
         doc = yaml.safe_load(raw)
     except yaml.YAMLError as e:
-        raise ValueError(f"Invalid YAML: {e}") from e
+        mark = getattr(e, "problem_mark", None)
+        where = f" (problem around line {mark.line + 1})" if mark is not None else ""
+        raise ValueError(f"This is not valid YAML{where}. {hint}") from e
 
     if isinstance(doc, dict):
         if isinstance(doc.get("runbook"), dict):  # runbook: {name: ..., steps: [...]}
@@ -48,12 +54,16 @@ def _parse_yaml(raw: str) -> list[dict[str, Any]]:
     if doc is None:
         return []
     if not isinstance(doc, list):
-        raise ValueError("YAML runbook must be a list of steps or have a 'steps:' list")
+        raise ValueError(f"A YAML runbook must be a list of steps or have a 'steps:' list. {hint}")
 
     steps = []
     for item in doc:
         if isinstance(item, dict):
-            item = next((item[k] for k in ("text", "name", "title", "description", "step") if item.get(k)), "")
+            known = next((item[k] for k in ("text", "name", "title", "description", "step") if item.get(k)), None)
+            # "- Note: check logs" -> {"Note": "check logs"}; nie gubimy takiego kroku
+            item = known if known is not None else ", ".join(f"{k}: {v}" for k, v in item.items())
+        if item is None:  # pusty element "- " albo "- null" w YAML-u
+            continue
         if str(item).strip():
             steps.append(_step(str(item)))
     return steps
@@ -94,20 +104,36 @@ def detect_format(raw: str) -> str:
     return "text"
 
 
-def parse_runbook(raw: str, fmt: str = "auto") -> list[dict[str, Any]]:
-    """Główne wejście. Rzuca ValueError przy niepoprawnym YAML-u."""
+def parse_runbook_with_format(raw: str, fmt: str = "auto") -> tuple[str, list[dict[str, Any]]]:
+    """Zwraca (format, którego naprawdę użyto, kroki).
+
+    - format wybrany ręcznie: tylko ten format; niepoprawny YAML -> ValueError z czytelnym komunikatem
+    - "auto": zgadujemy; jeśli wygląda na YAML, ale nim nie jest, traktujemy treść jak listę / tekst
+    """
     if not raw or not raw.strip():
-        return []
+        return (fmt or "auto").lower(), []
     fmt = (fmt or "auto").lower()
     if fmt in ("auto", ""):
         fmt = detect_format(raw)
+        if fmt == "yaml":
+            try:
+                return "yaml", _parse_yaml(raw)
+            except ValueError:
+                # nie YAML: bierzemy każdą linię jako krok (nic nie znika), bez samego nagłówka "steps:"
+                kept = "\n".join(l for l in raw.splitlines() if not re.fullmatch(r"\s*steps\s*:\s*", l, re.I))
+                return "text", _parse_text(kept)
     if fmt == "yaml":
-        return _parse_yaml(raw)
+        return "yaml", _parse_yaml(raw)
     if fmt in ("markdown", "md"):
-        return _parse_markdown(raw)
+        return "markdown", _parse_markdown(raw)
     if fmt == "link":
-        return [_step(f"Open runbook {raw.strip()}")]
-    return _parse_text(raw)
+        return "link", [_step(f"Open runbook {raw.strip()}")]
+    return "text", _parse_text(raw)
+
+
+def parse_runbook(raw: str, fmt: str = "auto") -> list[dict[str, Any]]:
+    """Same kroki. Rzuca ValueError tylko przy ręcznie wybranym, niepoprawnym YAML-u."""
+    return parse_runbook_with_format(raw, fmt)[1]
 
 
 # ---------------------------------------------------------------- podstawianie wartości

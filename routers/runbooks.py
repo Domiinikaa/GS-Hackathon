@@ -4,13 +4,13 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Event, Rule, Runbook
 from services.rules_engine import evaluate
-from services.runbook_parser import detect_format, parse_runbook
+from services.runbook_parser import parse_runbook_with_format
 
 router = APIRouter(prefix="/api", tags=["Runbooks & engine (Osoba 4)"])
 
@@ -22,11 +22,22 @@ class ParseRequest(BaseModel):
     format: str = "auto"  # auto | yaml | markdown | text | link
 
 
+def _clean_name(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return v
+    v = v.strip()
+    if not v:
+        raise ValueError("Name cannot be empty")
+    return v
+
+
 class RunbookIn(BaseModel):
     name: str
     raw: str
     format: str = "auto"
     matches: Optional[Dict[str, Any]] = None  # grupa warunków jak w regułach – automatyczne podpinanie
+
+    _name = field_validator("name")(_clean_name)
 
 
 class RunbookPatch(BaseModel):
@@ -34,6 +45,8 @@ class RunbookPatch(BaseModel):
     raw: Optional[str] = None
     format: Optional[str] = None
     matches: Optional[Dict[str, Any]] = None
+
+    _name = field_validator("name")(_clean_name)
 
 
 class EngineTestRequest(BaseModel):
@@ -43,11 +56,9 @@ class EngineTestRequest(BaseModel):
 
 
 def _parse_or_422(raw: str, fmt: str) -> tuple:
-    fmt = (fmt or "auto").lower()
-    if fmt == "auto":
-        fmt = detect_format(raw)
+    """(format, którego naprawdę użyto, kroki). Błąd tylko przy ręcznie wybranym, niepoprawnym YAML-u."""
     try:
-        return fmt, parse_runbook(raw, fmt)
+        return parse_runbook_with_format(raw, fmt)
     except ValueError as e:
         raise HTTPException(422, str(e))
 

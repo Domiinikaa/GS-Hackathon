@@ -183,7 +183,7 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
 
   // podgląd na żywo: pytamy backend 300 ms po ostatnim naciśnięciu klawisza
   useEffect(() => {
-    if (!raw.trim()) { setPreview([]); setParseError(''); return; }
+    if (!raw.trim()) { setPreview([]); setDetected(''); setParseError(''); return; }
     const timer = setTimeout(async () => {
       try {
         const res = await runbookApi.parse(raw, format);
@@ -191,6 +191,7 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
         setDetected(res.format);
         setParseError('');
       } catch (e) {
+        setDetected('');  // nie pokazuj formatu z poprzedniego, udanego odczytu
         setParseError(errorText(e));
       }
     }, 300);
@@ -270,7 +271,7 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
         </div>
         <div>
           <label className={labelClass}>
-            Extracted steps {format === 'auto' && detected && <span className="text-slate-500 font-normal">(detected: {detected})</span>}
+            Extracted steps {format === 'auto' && detected && !parseError && <span className="text-slate-500 font-normal">(detected: {detected})</span>}
           </label>
           {parseError
             ? <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 whitespace-pre-wrap">{parseError}</p>

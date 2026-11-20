@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import Event, Rule  # noqa: E402
 from services.rules_engine import check_group, evaluate, get_field, render_template, _MISSING  # noqa: E402
-from services.runbook_parser import detect_format, fill_steps, parse_runbook  # noqa: E402
+from services.runbook_parser import detect_format, fill_steps, parse_runbook, parse_runbook_with_format  # noqa: E402
 
 # te same reguły co seed.py
 RULES = [
@@ -122,6 +122,21 @@ def test_operators():
     assert not ok("eq", "missing", None)
 
 
+def test_number_formats_and_booleans():
+    ok = lambda op, d, value: check_group(d, {"and": [{"field": "a", "op": op, "value": value}]})  # noqa
+    assert ok("gt", {"a": 2}, "1,5") and not ok("gt", {"a": 1}, "1,5")      # polski przecinek = 1.5
+    assert ok("eq", {"a": 10_000_000}, "10,000,000")                         # separator tysięcy
+    assert not ok("eq", {"a": True}, 1) and not ok("eq", {"a": 1}, True)      # true != 1
+    assert ok("eq", {"a": True}, "true") and ok("eq", {"a": False}, False)
+
+
+def test_events_that_are_not_objects():
+    rule = Rule(id="r", name="r", team="t", enabled=True, title="t",
+                condition={"and": [{"field": "a", "op": "eq", "value": 1}]})
+    for payload in ([1, 2], "text", 42, None):
+        assert evaluate(ev(payload), [rule]) == []
+
+
 def test_or_and_nested_groups():
     d = {"level": "ERROR", "env": "prod"}
     assert check_group(d, {"or": [{"field": "level", "op": "eq", "value": "WARN"},
@@ -190,12 +205,35 @@ def test_free_text_runbook():
     assert texts(parse_runbook("https://wiki.example.com/rb/1", "auto")) == ["Open runbook https://wiki.example.com/rb/1"]
 
 
-def test_bad_yaml_raises():
+def test_bad_yaml_raises_only_when_chosen():
     try:
         parse_runbook("steps: [unclosed", "yaml")
-    except ValueError:
-        return
-    raise AssertionError("expected ValueError")
+    except ValueError as e:
+        assert "not valid YAML" in str(e) and "line 1" in str(e) and "Auto-detect" in str(e)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_auto_detect_falls_back_when_yaml_is_broken():
+    mixed = "Check logs. Then restart service; open a ticket\nsteps:\n- Check logs\n- Call on-call"
+    fmt, steps = parse_runbook_with_format(mixed, "auto")
+    assert fmt == "text"  # nie YAML, więc zwykły tekst; żadna linia nie znika
+    assert texts(steps) == ["Check logs", "Restart service", "Open a ticket", "Check logs", "Call on-call"]
+    fmt, steps = parse_runbook_with_format("Check logs: now\nthen: call on-call", "auto")
+    assert steps  # coś zawsze wychodzi, bez błędu
+
+
+def test_yaml_empty_items_are_skipped():
+    assert texts(parse_runbook("steps:\n  - Check\n  -\n  - null\n  - Call", "yaml")) == ["Check", "Call"]
+
+
+def test_text_does_not_split_on_abbreviations():
+    assert texts(parse_runbook("Check e.g. Kibana logs. Then call np. Tom", "text")) == [
+        "Check e.g. Kibana logs", "Call np. Tom"]
+
+
+def test_yaml_item_with_unknown_key_is_kept():
+    assert texts(parse_runbook("- Note: check logs\n- Call on-call", "auto")) == ["Note: check logs", "Call on-call"]
 
 
 def test_fill_steps():

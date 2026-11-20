@@ -66,28 +66,35 @@ def get_field(data: Any, path: str) -> Any:
 
 # ---------------------------------------------------------------- operatory
 
+_THOUSANDS = re.compile(r"^-?\d{1,3}(,\d{3})+(\.\d+)?$")  # 1,000,000 albo 1,234.5
+
+
 def _to_number(v: Any) -> float | None:
     if isinstance(v, bool):
         return None
     if isinstance(v, (int, float)):
         return float(v)
     if isinstance(v, str):
+        s = v.strip().replace("_", "").replace(" ", "")
+        if _THOUSANDS.match(s):
+            s = s.replace(",", "")        # separator tysięcy: 10,000,000
+        elif s.count(",") == 1 and "." not in s:
+            s = s.replace(",", ".")       # polski przecinek dziesiętny: 1,5
         try:
-            return float(v.strip().replace("_", "").replace(",", ""))
+            return float(s)
         except ValueError:
             return None
     return None
 
 
 def _equals(actual: Any, expected: Any) -> bool:
+    # true/false porównujemy tylko z true/false (albo tekstem "true"/"false"), nigdy z 1/0
+    if isinstance(actual, bool) or isinstance(expected, bool):
+        return str(actual).lower() == str(expected).lower()
     if actual == expected:
         return True
     a, e = _to_number(actual), _to_number(expected)
-    if a is not None and e is not None:
-        return a == e
-    if isinstance(actual, bool) or isinstance(expected, bool):
-        return str(actual).lower() == str(expected).lower()
-    return False
+    return a is not None and e is not None and a == e
 
 
 def _as_list(value: Any) -> list[Any]:
