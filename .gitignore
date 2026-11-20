@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -11,9 +12,18 @@ venv/
 .env
 .DS_Store
 
-# Frontend
+# Frontend (Node / Vite)
 node_modules/
 frontend/node_modules/
 dist/
 frontend/dist/
+*.tsbuildinfo
 *.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors
+.vscode/
+.idea/
