@@ -19,6 +19,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
   const [uname, setUname] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [nrtel, setNrtel] = useState('');
   const [dzial, setDzial] = useState('');
@@ -36,8 +37,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
     try {
       if (isRegister) {
-        if (!uname.trim() || !email.trim() || !password || !inviteCode.trim()) {
-          setError('Username, Email, Password, and Invite Code are required.');
+        if (!uname.trim() || !email.trim() || !password || !confirmPassword || !inviteCode.trim()) {
+          setError('Username, Email, Password, Password Confirmation, and Invite Code are required.');
+          setLoading(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError('Passwords do not match. Please verify your password.');
           setLoading(false);
           return;
         }
@@ -45,6 +51,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           uname: uname.trim(),
           email: email.trim(),
           password,
+          confirm_password: confirmPassword,
           invite_code: inviteCode.trim(),
           nrtel: nrtel.trim() || undefined,
           dzial: dzial || undefined,
@@ -91,7 +98,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
         <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 mb-6">
           <button
             type="button"
-            onClick={() => { setIsRegister(false); setError(null); }}
+            onClick={() => { setIsRegister(false); setError(null); setConfirmPassword(''); }}
             className={`flex-1 py-2 text-xs font-semibold rounded-md transition ${
               !isRegister ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
             }`}
@@ -100,7 +107,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           </button>
           <button
             type="button"
-            onClick={() => { setIsRegister(true); setError(null); }}
+            onClick={() => { setIsRegister(true); setError(null); setConfirmPassword(''); }}
             className={`flex-1 py-2 text-xs font-semibold rounded-md transition ${
               isRegister ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
             }`}
@@ -165,6 +172,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
               <input
                 type="password"
                 required
+                minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -172,6 +180,27 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
               />
             </div>
           </div>
+
+          {/* Confirm Password (Registration only) */}
+          {isRegister && (
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">
+                Confirm Password <span className="text-amber-400">*</span>
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repeat password"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Registration fields */}
           {isRegister && (

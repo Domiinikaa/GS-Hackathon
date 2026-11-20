@@ -26,6 +26,7 @@ export interface InviteCode {
   id: number;
   code: string;
   is_used: boolean;
+  is_admin_invite?: boolean;
   created_at: string;
   used_at?: string | null;
   created_by_uname?: string | null;

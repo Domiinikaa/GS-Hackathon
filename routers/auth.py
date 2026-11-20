@@ -20,6 +20,13 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
     Required: uname, email, password, invite_code.
     Optional: nrtel (phone), dzial (department).
     """
+    # 0. Validate password confirmation if provided
+    if payload.confirm_password is not None and payload.password != payload.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match."
+        )
+
     # 1. Validate invite code (must exist and be unused)
     code_str = payload.invite_code.strip().upper()
     invite = db.query(InviteCode).filter(InviteCode.code == code_str).first()
@@ -49,6 +56,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
 
     # 3. Hash password and create user record
     hashed_pwd = hash_password(payload.password)
+    is_admin = bool(getattr(invite, "is_admin_invite", False))
 
     new_user = User(
         uname=payload.uname.strip(),
@@ -56,7 +64,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
         hashed_password=hashed_pwd,
         nrtel=payload.nrtel.strip() if payload.nrtel else None,
         dzial=payload.dzial.strip() if payload.dzial else None,
-        is_admin=False
+        is_admin=is_admin
     )
     db.add(new_user)
     db.commit()
