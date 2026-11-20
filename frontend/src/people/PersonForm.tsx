@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import { CHANNELS, Channel, Severity } from '../rules/ruleTypes';
 import type { Person } from '../shared/types';
 import type { PersonInput } from './peopleApi';
-import { SEVERITY_LABEL, SEVERITY_ORDER, SEVERITY_STYLE, describePrefs, describeQuietHours } from './describePerson';
+import { SEVERITY_LABEL, SEVERITY_ORDER, SEVERITY_STYLE } from './describePerson';
 
 // Channels that can be limited to working hours (UI is always on)
 const TIMED_CHANNELS: Channel[] = ['sms', 'phone', 'email'];
@@ -66,7 +66,7 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
     setQuiet({ ...quiet, [ch]: { ...quiet[ch], ...change } });
   }
 
-  // Builds the request body from the current form state (also used for the live summary)
+  // Builds the request body from the current form state
   function build(): PersonInput {
     const channelPrefs: Person['channel_prefs'] = {};
     for (const sev of SEVERITY_ORDER) {
@@ -105,8 +105,6 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
       setSaving(false);
     }
   }
-
-  const preview = build();
 
   return (
     <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-6">
@@ -213,18 +211,6 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
             );
           })}
         </div>
-      </div>
-
-      {/* Live summary in plain words */}
-      <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
-        <p className="text-xs font-semibold uppercase text-slate-500 mb-1">In plain words</p>
-        <p className="text-sm text-slate-200">
-          {preview.name || 'This person'} ({preview.team || 'no team'}){preview.on_call ? ', on call' : ''}:
-        </p>
-        <ul className="text-sm text-slate-300 list-disc pl-5">
-          {describePrefs(preview).map((line) => <li key={line}>{line}</li>)}
-          {describeQuietHours(preview).map((line) => <li key={line}>{line}</li>)}
-        </ul>
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}

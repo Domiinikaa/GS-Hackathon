@@ -21,13 +21,6 @@ export function channelLabel(ch: Channel | string): string {
   return CHANNELS.find((c) => c.value === ch)?.label ?? ch;
 }
 
-export function describePrefs(person: Pick<Person, 'channel_prefs'>): string[] {
-  return SEVERITY_ORDER.map((sev) => {
-    const chans = person.channel_prefs?.[sev] ?? [];
-    return `${SEVERITY_LABEL[sev]} → ${chans.length ? chans.map(channelLabel).join(' + ') : 'rule channels'}`;
-  });
-}
-
 export function describeQuietHours(person: Pick<Person, 'quiet_hours'>): string[] {
   return Object.entries(person.quiet_hours ?? {})
     .filter(([, w]) => w && w.from && w.to)

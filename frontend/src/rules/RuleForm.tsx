@@ -1,11 +1,10 @@
-// Add / edit rule form with a live plain-language preview.
+// Add / edit rule form with a live preview of who will be notified.
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Users, X } from 'lucide-react';
 import {
   CHANNELS, COLORS, COLOR_DOT, Channel, Color, Condition, Operator, OPERATORS,
   Rule, SEVERITIES, Severity, groupConditions, groupMode,
 } from './ruleTypes';
-import { describeRule } from './describeRule';
 import { FieldHint, PlannedRecipient, errorMessage, rulesApi } from './rulesApi';
 
 // In the form a condition value is kept as text (exactly as the user types it)
@@ -81,7 +80,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
     return () => window.clearTimeout(timer);
   }, [team, severity, channels]);
 
-  // Builds the rule from the current form state (used for the preview and for saving)
+  // Builds the rule from the current form state
   function buildRule(): Rule {
     const conditions: Condition[] = rows
       .filter((r) => r.field.trim() !== '')
@@ -267,12 +266,6 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
           <input type="number" min="1" className={inputClass} value={groupMinutes}
             onChange={(e) => setGroupMinutes(e.target.value)} placeholder="e.g. 5" />
         </div>
-      </div>
-
-      {/* Plain-language preview, updated live */}
-      <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
-        <p className="text-xs font-semibold uppercase text-slate-500 mb-1">In plain words</p>
-        <p className="text-sm text-slate-200">{describeRule(buildRule())}</p>
       </div>
 
       {/* Who gets alerts from this rule, computed by the backend from people's preferences */}
