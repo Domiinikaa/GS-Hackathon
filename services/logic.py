@@ -1,7 +1,7 @@
 def process_calculations(items: list) -> dict:
     """
-    TUTAJ: Główna logika obliczeniowa / analityczna (dla Osoby 3).
-    Dostosujcie to do tematu hackathonu (np. ryzyko, optymalizacja, sumy, scoring).
+    Core analytics and calculations service.
+    Extend this for hackathon quantitative logic, risk metrics, scoring, or portfolio optimization.
     """
     total_val = sum(i.value for i in items if i.value)
     count = len(items)

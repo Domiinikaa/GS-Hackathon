@@ -3,10 +3,8 @@ import httpx
 
 async def fetch_external_data():
     """
-    TUTAJ: Integracja z zewnętrznymi API, modelami AI/LLM, czy danymi rynkowymi (dla Osoby 4).
-    Przykładowa prosta funkcja asynchroniczna z httpx.
+    Service for third-party integrations (e.g., market quotes, financial feeds, LLMs, Yahoo Finance).
     """
-    # Przykład mock / zewnętrzne API:
     return {
         "market_status": "OPEN",
         "benchmark_sp500": 5120.45,
