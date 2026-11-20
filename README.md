@@ -81,7 +81,21 @@ Designed so that all 4 engineers can commit code concurrently without merge conf
 - Python 3.11+
 - Node.js 18+ & npm
 
-### Terminal 1 — Backend (FastAPI)
+### One-Command Startup (Recommended)
+Run the entire platform (Backend + Frontend with hot-reloading) using the unified startup script:
+```bash
+./start.sh
+```
+Or build and run in unified production mode on a single port:
+```bash
+./start.sh --prod
+```
+
+---
+
+### Manual Multi-Terminal Startup (Optional)
+
+#### Terminal 1 — Backend (FastAPI)
 ```bash
 # 1. Create and activate virtual environment
 python3 -m venv .venv
