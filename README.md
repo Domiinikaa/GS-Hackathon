@@ -15,7 +15,6 @@ uvicorn main:app --reload
 ```
 - API działa pod `http://localhost:8000/api`
 - Swagger pod `http://localhost:8000/docs`
-- Jeśli React nie jest zbuildowany, pod `/` działa domyślny prosty widok Jinja2.
 
 ### 2. Frontendowiec (React + TSX + Tailwind):
 ```bash
@@ -43,10 +42,6 @@ I cała aplikacja (React + FastAPI + SQLite) działa online pod jednym URL!
 
 ---
 
-## 👥 Podział ról w zespole:
+## 👥 Podział ról w zespole
 
-| Osoba | Rola | Co edytuje |
-|---|---|---|
-| **Osoba 1 & 2 (Frontend)** | **React / TSX / UI** | `frontend/src/App.tsx`, komponenty, Tailwind, wykresy |
-| **Osoba 3 (Backend / DB)** | **FastAPI & Baza danych** | `models.py`, `routers/api.py`, `schemas.py` |
-| **Osoba 4 (Algorytmy / Logika)** | **Finanse & Integracje** | `services/logic.py`, `services/external.py` |
+Podział pionowy, pliki każdej osoby i styki między nimi: **[TEAM.md](TEAM.md)**.

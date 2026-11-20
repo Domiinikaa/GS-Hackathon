@@ -9,33 +9,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from database import engine, Base, SessionLocal
-from models import Item
-from routers import api, views
+import models  # noqa: F401  (rejestruje wszystkie tabele)
+from routers import alerts, deliveries, people, rules, runbooks, sources
+from seed import seed_all
 
 # Tworzenie tabel bazy danych (SQLite / Postgres)
 Base.metadata.create_all(bind=engine)
 
 
-def seed_initial_data():
-    """Wrzuca 2 przykładowe rekordy na start, żeby demo nie było puste."""
-    db = SessionLocal()
-    try:
-        if db.query(Item).count() == 0:
-            db.add_all([
-                Item(title="Goldman Sachs Group (GS)", category="Equity", value=475.50, description="Kluczowa pozycja benchmarkowa"),
-                Item(title="S&P 500 Index Fund", category="Equity", value=512.40, description="Ekspozycja rynkowa"),
-                Item(title="US 10Y Treasury Bond", category="Fixed Income", value=100.00, description="Stopa wolna od ryzyka"),
-            ])
-            db.commit()
-    finally:
-        db.close()
-
-
-seed_initial_data()
+db = SessionLocal()
+try:
+    seed_all(db)
+finally:
+    db.close()
 
 app = FastAPI(
-    title="GS Hackathon Core",
-    description="Fullstack FastAPI + React/TSX + SQLite Starter",
+    title="Flexible Alerting & Notification Service",
+    description="Ingest -> rules -> alerts -> deliveries. Podział pracy: TEAM.md",
     version="1.0.0"
 )
 
@@ -48,8 +38,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# API routes & health check
-app.include_router(api.router)
+# API – każdy router ma właściciela (TEAM.md)
+for r in (alerts, rules, people, sources, deliveries, runbooks):
+    app.include_router(r.router)
 
 
 @app.get("/health", tags=["System"])
@@ -75,8 +66,9 @@ if FRONTEND_DIST.exists():
             return FileResponse(file_path)
         return FileResponse(FRONTEND_DIST / "index.html")
 else:
-    # Fallback na szablony Jinja2 (gdy frontend React nie został zbudowany)
-    app.include_router(views.router)
+    @app.get("/", include_in_schema=False)
+    def root():
+        return {"msg": "Frontend nie jest zbudowany. Odpal `cd frontend && npm run dev` albo zajrzyj na /docs"}
 
 
 if __name__ == "__main__":
