@@ -2,8 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Users, X } from 'lucide-react';
 import {
-  CHANNELS, COLORS, COLOR_DOT, Channel, Color, Condition, Operator, OPERATORS,
-  Rule, SEVERITIES, Severity, groupConditions, groupMode,
+  CHANNELS, COLOR_DOT, Channel, Condition, Operator, OPERATORS,
+  Rule, SEVERITY_OPTIONS, Severity, colorForSeverity, groupConditions, groupMode,
 } from './ruleTypes';
 import { FieldHint, PlannedRecipient, errorMessage, rulesApi } from './rulesApi';
 
@@ -36,6 +36,7 @@ interface Props {
 const inputClass =
   'w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500';
 const labelClass = 'block text-xs font-semibold text-slate-300 mb-1';
+const hintClass = 'text-xs text-slate-500 mt-1';
 
 export default function RuleForm({ initial, onSave, onCancel }: Props) {
   const [name, setName] = useState(initial?.name ?? '');
@@ -50,7 +51,6 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [body, setBody] = useState(initial?.body ?? '');
   const [severity, setSeverity] = useState<Severity>(initial?.severity ?? 'warning');
-  const [color, setColor] = useState<Color>(initial?.color ?? 'amber');
   const [groupBy, setGroupBy] = useState(initial?.group_by ?? '');
   const [groupMinutes, setGroupMinutes] = useState(
     initial?.group_window_s ? String(initial.group_window_s / 60) : '',
@@ -96,7 +96,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
       title: title.trim(),
       body: body.trim() || undefined,
       severity,
-      color,
+      color: colorForSeverity(severity), // the colour always follows the urgency
       group_by: groupBy.trim() || undefined,
       group_window_s: groupBy.trim() && minutes > 0 ? minutes * 60 : undefined,
     };
@@ -114,10 +114,10 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
     e.preventDefault();
     const rule = buildRule();
     if (!rule.name) return setError('Give the rule a name.');
-    if (!rule.team) return setError('Choose who gets notified (team or person).');
+    if (!rule.team) return setError('Choose who receives the alerts (team or person).');
     if (groupConditions(rule.condition).length === 0) return setError('Add at least one condition.');
-    if (rule.channels.length === 0) return setError('Pick at least one channel.');
-    if (!rule.title) return setError('Add an alert title.');
+    if (rule.channels.length === 0) return setError('Pick at least one way to notify.');
+    if (!rule.title) return setError('Add an alert headline.');
     setError('');
     setSaving(true);
     try {
@@ -145,48 +145,59 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
           <label className={labelClass}>Rule name</label>
           <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Large rejected trades" />
+          <p className={hintClass}>A short name so your team recognises this rule.</p>
         </div>
         <div>
-          <label className={labelClass}>Who gets notified (team or person)</label>
+          <label className={labelClass}>Send alerts to</label>
           <input className={inputClass} value={team} onChange={(e) => setTeam(e.target.value)}
             placeholder="e.g. Rates" list="rule-targets" />
           <datalist id="rule-targets">
             {targets.map((t) => <option key={t} value={t} />)}
           </datalist>
+          <p className={hintClass}>A team name (everyone in it) or one person's name.</p>
         </div>
       </div>
 
       {/* 2. Conditions */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className={labelClass}>When an event matches</span>
+        <div className="flex items-center justify-between mb-1 gap-3 flex-wrap">
+          <span className={labelClass}>Raise an alert when an incoming event matches</span>
           <div className="flex text-xs rounded-lg overflow-hidden border border-slate-700">
             <button type="button" onClick={() => setMode('and')}
               className={`px-3 py-1 ${mode === 'and' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-300'}`}>
-              ALL conditions (AND)
+              ALL of these
             </button>
             <button type="button" onClick={() => setMode('or')}
               className={`px-3 py-1 ${mode === 'or' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-300'}`}>
-              ANY condition (OR)
+              ANY of these
             </button>
           </div>
         </div>
+        <p className={`${hintClass} mb-2`}>
+          Every event that arrives is checked against these conditions. Field = a value inside the event
+          (use dots for nested values, e.g. payload.desk).
+        </p>
 
+        <div className="grid grid-cols-12 gap-2 text-xs text-slate-500 mb-1">
+          <span className="col-span-4">Event field</span>
+          <span className="col-span-3">Check</span>
+          <span className="col-span-4">Value</span>
+        </div>
         <div className="space-y-2">
           {rows.map((row, i) => (
             <div key={i} className="grid grid-cols-12 gap-2 items-center">
               <input className={`${inputClass} col-span-4 font-mono`} value={row.field}
                 onChange={(e) => updateRow(i, { field: e.target.value })}
-                placeholder="field, e.g. payload.desk" list="rule-fields" />
-              <select className={`${inputClass} col-span-3`} value={row.op}
+                placeholder="e.g. payload.desk" list="rule-fields" aria-label="Event field" />
+              <select className={`${inputClass} col-span-3`} value={row.op} aria-label="Check"
                 onChange={(e) => updateRow(i, { op: e.target.value as Operator })}>
                 {OPERATORS.map((o) => (
                   <option key={o.value} value={o.value}>{o.symbol} {o.label}</option>
                 ))}
               </select>
-              <input className={`${inputClass} col-span-4 font-mono`} value={row.value}
+              <input className={`${inputClass} col-span-4 font-mono`} value={row.value} aria-label="Value"
                 onChange={(e) => updateRow(i, { value: e.target.value })}
-                placeholder={row.op === 'in' ? 'A, B, C' : 'value'} />
+                placeholder={row.op === 'in' ? 'A, B, C' : 'e.g. rates'} />
               <button type="button" onClick={() => setRows(rows.filter((_, j) => j !== i))}
                 className="col-span-1 text-slate-500 hover:text-red-400 flex justify-center"
                 title="Remove condition">
@@ -206,9 +217,31 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
         </button>
       </div>
 
-      {/* 3. Channels */}
+      {/* 3. Urgency (also sets the alert colour) */}
       <div>
-        <span className={labelClass}>Send on channels</span>
+        <span className={labelClass}>How urgent is it?</span>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {SEVERITY_OPTIONS.map((o) => (
+            <button key={o.value} type="button" onClick={() => setSeverity(o.value)}
+              aria-pressed={severity === o.value}
+              className={`text-left rounded-lg border px-3 py-2 transition ${
+                severity === o.value ? 'border-white bg-slate-800' : 'border-slate-700 hover:border-slate-500 opacity-70'
+              }`}>
+              <span className="flex items-center gap-2 text-sm font-bold text-white">
+                <span className={`w-3 h-3 rounded-full ${COLOR_DOT[o.color]}`} />{o.label}
+              </span>
+              <span className="block text-xs text-slate-400 mt-0.5">{o.hint}</span>
+            </button>
+          ))}
+        </div>
+        <p className={hintClass}>
+          Sets the alert colour, and each person's channels for this level (People page) are used.
+        </p>
+      </div>
+
+      {/* 4. Channels */}
+      <div>
+        <span className={labelClass}>Notify via</span>
         <div className="flex flex-wrap gap-2">
           {CHANNELS.map((ch) => (
             <button key={ch.value} type="button" onClick={() => toggleChannel(ch.value)}
@@ -221,51 +254,46 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
             </button>
           ))}
         </div>
+        <p className={hintClass}>The channels this rule may use. UI = the live alert feed in this app.</p>
       </div>
 
-      {/* 4. Alert appearance */}
+      {/* 5. Alert text */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className={labelClass}>Alert title (use {'{{field}}'} to insert values)</label>
+          <label className={labelClass}>Alert headline</label>
           <input className={`${inputClass} font-mono`} value={title} onChange={(e) => setTitle(e.target.value)}
             placeholder="Rejected {{payload.currency}} {{payload.notional}}" />
+          <p className={hintClass}>
+            The first line people see. Put a field in {'{{ }}'} to insert its value, e.g. {'{{payload.currency}}'} → EUR.
+          </p>
         </div>
         <div>
-          <label className={labelClass}>Alert body (optional)</label>
+          <label className={labelClass}>Alert details (optional)</label>
           <input className={`${inputClass} font-mono`} value={body} onChange={(e) => setBody(e.target.value)}
             placeholder="{{error.message}}" />
-        </div>
-        <div>
-          <label className={labelClass}>Severity</label>
-          <select className={inputClass} value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
-            {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div>
-          <span className={labelClass}>Colour in the UI</span>
-          <div className="flex gap-2 pt-1">
-            {COLORS.map((c) => (
-              <button key={c} type="button" onClick={() => setColor(c)} title={c}
-                className={`w-7 h-7 rounded-full ${COLOR_DOT[c]} ${
-                  color === c ? 'ring-2 ring-offset-2 ring-offset-slate-900 ring-white' : 'opacity-60'
-                }`} />
-            ))}
-          </div>
+          <p className={hintClass}>Extra text under the headline – in the UI and e-mail (SMS shows only the headline).</p>
         </div>
       </div>
 
-      {/* 5. Grouping (optional) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className={labelClass}>Group alerts by field (optional)</label>
-          <input className={`${inputClass} font-mono`} value={groupBy} onChange={(e) => setGroupBy(e.target.value)}
-            placeholder="e.g. instrument" />
+      {/* 6. Combining repeated alerts (optional) */}
+      <div>
+        <span className={labelClass}>Combine repeated alerts (optional)</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Treat events as the same when this field matches</label>
+            <input className={`${inputClass} font-mono`} value={groupBy} onChange={(e) => setGroupBy(e.target.value)}
+              placeholder="e.g. instrument" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">…and they happen within (minutes)</label>
+            <input type="number" min="1" className={inputClass} value={groupMinutes}
+              onChange={(e) => setGroupMinutes(e.target.value)} placeholder="e.g. 5" />
+          </div>
         </div>
-        <div>
-          <label className={labelClass}>Group window (minutes)</label>
-          <input type="number" min="1" className={inputClass} value={groupMinutes}
-            onChange={(e) => setGroupMinutes(e.target.value)} placeholder="e.g. 5" />
-        </div>
+        <p className={hintClass}>
+          Instead of 500 separate alerts you get one alert per value (e.g. per instrument) with a counter.
+          Leave empty to get every alert.
+        </p>
       </div>
 
       {/* Who gets alerts from this rule, computed by the backend from people's preferences */}

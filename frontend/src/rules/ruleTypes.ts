@@ -56,6 +56,18 @@ export const SEVERITIES: Severity[] = ['info', 'warning', 'critical'];
 
 export const COLORS: Color[] = ['red', 'amber', 'blue', 'green', 'slate'];
 
+// Urgency levels shown in the rule form. The alert colour follows the urgency,
+// so users pick one meaningful thing instead of a colour and a severity separately.
+export const SEVERITY_OPTIONS: { value: Severity; label: string; hint: string; color: Color }[] = [
+  { value: 'critical', label: 'Critical', hint: 'Act now – something is broken', color: 'red' },
+  { value: 'warning', label: 'Warning', hint: 'Look soon – something is wrong', color: 'amber' },
+  { value: 'info', label: 'Info', hint: 'Good to know – no action needed', color: 'blue' },
+];
+
+export function colorForSeverity(severity: Severity): Color {
+  return SEVERITY_OPTIONS.find((o) => o.value === severity)?.color ?? 'amber';
+}
+
 // Tailwind needs full class names written in the code, hence this map
 export const COLOR_DOT: Record<Color, string> = {
   red: 'bg-red-500',
