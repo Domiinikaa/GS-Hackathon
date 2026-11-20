@@ -357,7 +357,6 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                   <th className="px-5 py-3">Role Granted</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Claimed By</th>
-                  <th className="px-5 py-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 text-xs">
@@ -392,21 +391,11 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                     <td className="px-5 py-3 font-sans text-slate-300">
                       {inv.used_by_uname ? `@${inv.used_by_uname}` : '—'}
                     </td>
-                    <td className="px-5 py-3 text-right">
-                      {!inv.is_used && (
-                        <button
-                          onClick={() => copyToClipboard(inv.code)}
-                          className="px-2 py-1 text-[11px] font-sans bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition"
-                        >
-                          {copiedCode === inv.code ? 'Copied' : 'Copy'}
-                        </button>
-                      )}
-                    </td>
                   </tr>
                 ))}
                 {invites.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-5 py-8 text-center text-slate-500 font-sans">
+                    <td colSpan={4} className="px-5 py-8 text-center text-slate-500 font-sans">
                       No invite codes generated yet. Click "Generate Invite" above to create one.
                     </td>
                   </tr>
