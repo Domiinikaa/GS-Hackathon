@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api } from '../shared/api';
 import type { Alert, AlertStatus } from '../shared/types';
-import AlertCard from './AlertCard';
+import AlertCard, { AlertAction } from './AlertCard';
 
 type StatusFilter = AlertStatus | 'all';
 
@@ -15,6 +15,7 @@ export default function AlertsPage() {
   const [team, setTeam] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null); // który alert właśnie się zapisuje
 
   // Pobierz alerty z backendu. Filtr statusu robi backend (?status=…), zespołu – my niżej.
   async function load() {
@@ -27,6 +28,20 @@ export default function AlertsPage() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Kliknięcie Acknowledge / Resolve: POST /api/alerts/{id}/ack|resolve, potem odśwież listę
+  async function handleAction(alert: Alert, action: AlertAction) {
+    setBusyId(alert.id);
+    setError(null);
+    try {
+      await api<Alert>(`/alerts/${alert.id}/${action}`, { method: 'POST' });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -76,7 +91,9 @@ export default function AlertsPage() {
       )}
 
       <div className="space-y-3">
-        {visible.map((a) => <AlertCard key={a.id} alert={a} />)}
+        {visible.map((a) => (
+          <AlertCard key={a.id} alert={a} onAction={handleAction} busy={busyId === a.id} />
+        ))}
 
         {!loading && !error && visible.length === 0 && (
           <div className="text-center py-12 border border-dashed border-slate-800 rounded-xl">

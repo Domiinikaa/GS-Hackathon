@@ -1,4 +1,5 @@
 """OSOBA 1 – alerty: lista, szczegóły, ack/resolve, live feed."""
+from datetime import datetime
 from typing import Optional
 import asyncio
 
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Alert
+from routers.deps import get_optional_current_user
 from services.alert_service import upsert_alert
 from services.contracts import Match
 
@@ -80,14 +82,31 @@ def get_alert(alert_id: int, db: Session = Depends(get_db)):
     return alert
 
 
+def _change_status(db, alert_id, new_status, allowed_from, user):
+    """Wspólne dla ack i resolve: zmień status i dopisz do historii kto i kiedy."""
+    alert = db.get(Alert, alert_id)
+    if not alert:
+        raise HTTPException(404, "Alert not found")
+    if alert.status not in allowed_from:
+        raise HTTPException(409, f"Cannot {new_status} an alert that is {alert.status}")
+
+    alert.status = new_status
+    who = user.uname if user else "anonymous"
+    entry = {"at": datetime.utcnow().isoformat(), "who": who, "what": new_status}
+    alert.history = (alert.history or []) + [entry]  # NOWA lista – .append() baza by nie zauważyła
+    db.commit()
+    db.refresh(alert)
+    return alert
+
+
 @router.post("/{alert_id}/ack")
-def ack(alert_id: int, db: Session = Depends(get_db)):
-    raise HTTPException(501, "TODO (Osoba 1): status=acknowledged + wpis do history")
+def ack(alert_id: int, db: Session = Depends(get_db), user=Depends(get_optional_current_user)):
+    return _change_status(db, alert_id, "acknowledged", ["open"], user)
 
 
 @router.post("/{alert_id}/resolve")
-def resolve(alert_id: int, db: Session = Depends(get_db)):
-    raise HTTPException(501, "TODO (Osoba 1): status=resolved + wpis do history")
+def resolve(alert_id: int, db: Session = Depends(get_db), user=Depends(get_optional_current_user)):
+    return _change_status(db, alert_id, "resolved", ["open", "acknowledged"], user)
 
 
 @router.post("/{alert_id}/steps/{step_index}/approve")

@@ -43,8 +43,19 @@ export function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)} d ago`;
 }
 
-export default function AlertCard({ alert }: { alert: Alert }) {
+export type AlertAction = 'ack' | 'resolve';
+
+interface Props {
+  alert: Alert;
+  onAction: (alert: Alert, action: AlertAction) => void;
+  busy?: boolean; // true = trwa wysyłanie kliknięcia, przyciski wyłączone
+}
+
+export default function AlertCard({ alert, onAction, busy = false }: Props) {
   const color = BAR[alert.color] ? alert.color : 'slate'; // nieznany kolor z backendu → szary
+  // Kto ostatnio zmienił status – ostatni wpis historii (pomijamy "system created")
+  const last = alert.history?.length ? alert.history[alert.history.length - 1] : null;
+  const changedBy = last && last.who !== 'system' ? last.who : null;
 
   return (
     <div className="relative bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
@@ -60,17 +71,36 @@ export default function AlertCard({ alert }: { alert: Alert }) {
           <p className="font-semibold text-white truncate">{alert.title}</p>
           {alert.body && <p className="text-sm text-slate-400 mt-0.5">{alert.body}</p>}
           <p className="text-xs text-slate-500 mt-2">
-            {alert.team} · <span className={STATUS[alert.status]}>{alert.status}</span> · last seen {timeAgo(alert.last_seen)}
+            {alert.team} · <span className={STATUS[alert.status]}>{alert.status}</span>
+            {changedBy && <> by {changedBy}</>} · last seen {timeAgo(alert.last_seen)}
           </p>
         </div>
 
-        {/* licznik deduplikacji – tylko gdy alert się powtórzył */}
-        {alert.count > 1 && (
-          <span className="shrink-0 font-mono text-sm font-bold text-white bg-slate-800 border border-slate-700 rounded-lg px-2 py-1"
-            title={`This alert happened ${alert.count} times`}>
-            ×{alert.count}
-          </span>
-        )}
+        <div className="shrink-0 flex flex-col items-end gap-2">
+          {/* licznik deduplikacji – tylko gdy alert się powtórzył */}
+          {alert.count > 1 && (
+            <span className="font-mono text-sm font-bold text-white bg-slate-800 border border-slate-700 rounded-lg px-2 py-1"
+              title={`This alert happened ${alert.count} times`}>
+              ×{alert.count}
+            </span>
+          )}
+
+          {/* przyciski – tylko te, które mają sens dla obecnego statusu */}
+          <div className="flex gap-2">
+            {alert.status === 'open' && (
+              <button disabled={busy} onClick={() => onAction(alert, 'ack')}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 disabled:opacity-50">
+                Acknowledge
+              </button>
+            )}
+            {alert.status !== 'resolved' && (
+              <button disabled={busy} onClick={() => onAction(alert, 'resolve')}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50">
+                Resolve
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
