@@ -34,6 +34,7 @@ class UserRegister(BaseModel):
     uname: str = Field(..., min_length=3, max_length=50, example="j_smith")
     email: EmailStr = Field(..., example="jsmith@goldmansachs.com")
     password: str = Field(..., min_length=6, max_length=128, example="SuperSecret123!")
+    confirm_password: Optional[str] = Field(None, min_length=6, max_length=128, example="SuperSecret123!")
     invite_code: str = Field(..., min_length=4, max_length=64, example="GS-7F8A-9B2C")
     nrtel: Optional[str] = Field(None, example="+1 (212) 555-0199")
     dzial: Optional[str] = Field(None, example="Finance")

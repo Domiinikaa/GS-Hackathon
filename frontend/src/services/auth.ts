@@ -49,6 +49,7 @@ export const authService = {
     uname: string;
     email: string;
     password: string;
+    confirm_password?: string;
     invite_code: string;
     nrtel?: string;
     dzial?: string;
