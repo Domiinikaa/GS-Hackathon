@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-8">
+
+  <!-- Metryki / Kafelki (Osoba 3 / Logika) -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl">
+      <span class="text-xs uppercase text-slate-400 font-semibold">Elementów w bazie</span>
+      <p class="text-2xl font-bold font-mono text-white mt-2">{{ stats.count }}</p>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl">
+      <span class="text-xs uppercase text-slate-400 font-semibold">Wartość łączna (Total)</span>
+      <p class="text-2xl font-bold font-mono text-amber-400 mt-2">${{ "{:,.2f}".format(stats.total_value) }}</p>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl">
+      <span class="text-xs uppercase text-slate-400 font-semibold">Średnia wartość</span>
+      <p class="text-2xl font-bold font-mono text-emerald-400 mt-2">${{ "{:,.2f}".format(stats.average_value) }}</p>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl">
+      <span class="text-xs uppercase text-slate-400 font-semibold">Benchmark (External API)</span>
+      <p class="text-2xl font-bold font-mono text-blue-400 mt-2">{{ external.benchmark_sp500 }}</p>
+      <span class="text-[10px] text-slate-500">Status: {{ external.market_status }}</span>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    
+    <!-- Formularz dodawania (Osoba 1 / Widoki) -->
+    <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl h-fit">
+      <h2 class="text-lg font-bold text-white mb-1">Dodaj nowy wpis</h2>
+      <p class="text-xs text-slate-400 mb-4">Szybki formularz do testowania bazy danych i algorytmów.</p>
+
+      <form action="/items/add" method="POST" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Tytuł / Symbol</label>
+          <input type="text" name="title" required placeholder="np. Goldman Sachs lub Portfel A" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Kategoria</label>
+            <select name="category" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+              <option value="Equity">Equity</option>
+              <option value="Crypto">Crypto</option>
+              <option value="Fixed Income">Fixed Income</option>
+              <option value="General">Inne</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Wartość ($)</label>
+            <input type="number" step="0.01" name="value" required value="100.0" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Opis / Notatki</label>
+          <textarea name="description" rows="2" placeholder="Opcjonalny opis" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"></textarea>
+        </div>
+
+        <button type="submit" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2 rounded-lg text-sm transition">
+          Zapisz w bazie
+        </button>
+      </form>
+    </div>
+
+    <!-- Tabela wyników / Baza danych -->
+    <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div class="p-5 border-b border-slate-800 flex justify-between items-center">
+        <div>
+          <h2 class="text-lg font-bold text-white">Zawartość bazy danych</h2>
+          <p class="text-xs text-slate-400">Wszystkie wpisy pobierane na żywo z bazy SQLite.</p>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-950 text-slate-400 text-xs font-semibold uppercase border-b border-slate-800">
+            <tr>
+              <th class="px-5 py-3">ID</th>
+              <th class="px-5 py-3">Tytuł</th>
+              <th class="px-5 py-3">Kategoria</th>
+              <th class="px-5 py-3 text-right">Wartość</th>
+              <th class="px-5 py-3 text-center">Akcja</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800 font-mono text-xs">
+            {% if items %}
+              {% for item in items %}
+              <tr class="hover:bg-slate-800/40">
+                <td class="px-5 py-3 text-slate-500">#{{ item.id }}</td>
+                <td class="px-5 py-3 font-sans font-bold text-white">{{ item.title }}</td>
+                <td class="px-5 py-3 font-sans text-slate-400">{{ item.category }}</td>
+                <td class="px-5 py-3 text-right font-bold text-amber-400">${{ "{:,.2f}".format(item.value) }}</td>
+                <td class="px-5 py-3 text-center">
+                  <form action="/items/{{ item.id }}/delete" method="POST" class="inline">
+                    <button type="submit" class="text-rose-400 hover:text-rose-300 font-sans text-xs hover:underline">Usuń</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="5" class="px-5 py-8 text-center text-slate-500 font-sans">
+                  Baza danych jest pusta. Użyj formularza po lewej, aby dodać pierwszy wpis!
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
