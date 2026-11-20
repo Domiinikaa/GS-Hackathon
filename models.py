@@ -46,13 +46,14 @@ class User(Base):
 class InviteCode(Base):
     """
     One-time invite codes generated exclusively by Administrators.
-    Required for new user registration.
+    Required for new user registration. Can grant Administrator privileges.
     """
     __tablename__ = "invite_codes"
 
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String(64), unique=True, index=True, nullable=False)
     is_used = Column(Boolean, default=False, nullable=False)
+    is_admin_invite = Column(Boolean, default=False, nullable=False)
     created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     used_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -68,12 +68,30 @@ class TokenResponse(BaseModel):
     user: UserResponse
 
 
+class UserRoleUpdate(BaseModel):
+    is_admin: bool = Field(..., description="Set user administrator status")
+
+
+class AdminCreateUserRequest(BaseModel):
+    uname: str = Field(..., min_length=3, max_length=50, example="admin_two")
+    email: EmailStr = Field(..., example="admin2@goldmansachs.com")
+    password: str = Field(..., min_length=6, max_length=128, example="SuperSecret123!")
+    dzial: Optional[str] = Field("Management", example="Management")
+    nrtel: Optional[str] = Field(None, example="+1 (212) 555-0199")
+    is_admin: bool = Field(True, description="Whether the created user has administrator privileges")
+
+
 # --- Invite Code Schemas ---
+
+class InviteCodeCreateRequest(BaseModel):
+    is_admin: bool = Field(False, description="Whether registering with this code grants Administrator privileges")
+
 
 class InviteCodeResponse(BaseModel):
     id: int
     code: str
     is_used: bool
+    is_admin_invite: bool = False
     created_at: datetime
     used_at: Optional[datetime] = None
     created_by_uname: Optional[str] = None
@@ -85,6 +103,7 @@ class InviteCodeResponse(BaseModel):
 
 class InviteCodeCreateResponse(BaseModel):
     code: str
+    is_admin_invite: bool = False
     message: str
 
 

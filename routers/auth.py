@@ -49,6 +49,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
 
     # 3. Hash password and create user record
     hashed_pwd = hash_password(payload.password)
+    is_admin = bool(getattr(invite, "is_admin_invite", False))
 
     new_user = User(
         uname=payload.uname.strip(),
@@ -56,7 +57,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
         hashed_password=hashed_pwd,
         nrtel=payload.nrtel.strip() if payload.nrtel else None,
         dzial=payload.dzial.strip() if payload.dzial else None,
-        is_admin=False
+        is_admin=is_admin
     )
     db.add(new_user)
     db.commit()

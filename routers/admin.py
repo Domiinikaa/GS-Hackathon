@@ -1,19 +1,23 @@
 import secrets
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from database import get_db
 from models import User, InviteCode, Department
 from schemas import (
     InviteCodeResponse,
     InviteCodeCreateResponse,
+    InviteCodeCreateRequest,
     UserResponse,
+    UserRoleUpdate,
+    AdminCreateUserRequest,
     DepartmentResponse,
     DepartmentCreate,
     DepartmentUpdate
 )
+from services.security import hash_password
 from routers.deps import get_current_admin_user
 
 router = APIRouter(tags=["Admin & Departments"])
@@ -150,23 +154,28 @@ def generate_unique_code(db: Session) -> str:
 
 @router.post("/api/admin/invites", response_model=InviteCodeCreateResponse, status_code=status.HTTP_201_CREATED)
 def create_invite_code(
+    payload: Optional[InviteCodeCreateRequest] = None,
     admin: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
-    """Generates a new single-use registration invite code for a team member."""
+    """Generates a new single-use registration invite code for a team member or administrator."""
+    is_admin = payload.is_admin if payload else False
     code_str = generate_unique_code(db)
     invite = InviteCode(
         code=code_str,
         is_used=False,
+        is_admin_invite=is_admin,
         created_by_id=admin.id
     )
     db.add(invite)
     db.commit()
     db.refresh(invite)
 
+    role_desc = "Administrator" if is_admin else "Standard User"
     return {
         "code": invite.code,
-        "message": "Single-use invite code generated successfully."
+        "is_admin_invite": invite.is_admin_invite,
+        "message": f"Single-use invite code for {role_desc} generated successfully."
     }
 
 
@@ -183,6 +192,7 @@ def list_invite_codes(
             "id": inv.id,
             "code": inv.code,
             "is_used": inv.is_used,
+            "is_admin_invite": getattr(inv, "is_admin_invite", False),
             "created_at": inv.created_at,
             "used_at": inv.used_at,
             "created_by_uname": inv.created_by.uname if inv.created_by else None,
@@ -198,3 +208,64 @@ def list_company_users(
 ):
     """Returns the roster of registered users and their departments."""
     return db.query(User).order_by(User.created_at.desc()).all()
+
+
+@router.patch("/api/admin/users/{user_id}/role", response_model=UserResponse)
+def update_user_role(
+    user_id: int,
+    payload: UserRoleUpdate,
+    admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Promotes or demotes a user to/from Administrator role. Administrator only."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    if user.id == admin.id and not payload.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Administrators cannot demote their own account to prevent lockout."
+        )
+
+    user.is_admin = payload.is_admin
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.post("/api/admin/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def admin_create_user(
+    payload: AdminCreateUserRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Directly provisions a new user or administrator account without requiring an invite code."""
+    existing_user = db.query(User).filter(
+        or_(User.uname == payload.uname.strip(), User.email == payload.email.lower().strip())
+    ).first()
+
+    if existing_user:
+        if existing_user.uname.lower() == payload.uname.lower().strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Username '{payload.uname}' is already taken."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Email address '{payload.email}' is already registered."
+            )
+
+    new_user = User(
+        uname=payload.uname.strip(),
+        email=payload.email.lower().strip(),
+        hashed_password=hash_password(payload.password),
+        dzial=payload.dzial.strip() if payload.dzial else None,
+        nrtel=payload.nrtel.strip() if payload.nrtel else None,
+        is_admin=payload.is_admin
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user

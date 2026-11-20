@@ -205,7 +205,11 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <PageComponent />
+        {activeTabId === 'admin' ? (
+          <AdminPanel currentUser={currentUser} />
+        ) : (
+          <PageComponent />
+        )}
       </main>
     </div>
   );

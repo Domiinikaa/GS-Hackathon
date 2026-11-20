@@ -105,11 +105,45 @@ export const authService = {
 };
 
 export const adminService = {
-  async createInvite(): Promise<{ code: string; message: string }> {
-    const res = await authFetch('/api/admin/invites', { method: 'POST' });
+  async createInvite(isAdmin: boolean = false): Promise<{ code: string; is_admin_invite?: boolean; message: string }> {
+    const res = await authFetch('/api/admin/invites', {
+      method: 'POST',
+      body: JSON.stringify({ is_admin: isAdmin }),
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || 'Failed to generate invite code.');
+    }
+    return res.json();
+  },
+
+  async updateUserRole(userId: number, isAdmin: boolean): Promise<User> {
+    const res = await authFetch(`/api/admin/users/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_admin: isAdmin }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to update user role.');
+    }
+    return res.json();
+  },
+
+  async createUser(data: {
+    uname: string;
+    email: string;
+    password: string;
+    dzial?: string;
+    nrtel?: string;
+    is_admin: boolean;
+  }): Promise<User> {
+    const res = await authFetch('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to create user account.');
     }
     return res.json();
   },
