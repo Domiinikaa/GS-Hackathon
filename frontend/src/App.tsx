@@ -15,6 +15,7 @@ import { User } from './types';
 import { authService, authStorage } from './services/auth';
 import { AuthScreen } from './components/AuthScreen';
 import { AdminPanel } from './components/AdminPanel';
+import { AccessDenied } from './components/AccessDenied';
 
 import AlertsPage from './alerts/AlertsPage';
 import RulesPage from './rules/RulesPage';
@@ -43,7 +44,10 @@ const BASE_TABS: TabItem[] = [
 
 function getInitialTab(): string {
   const hash = window.location.hash.replace('#', '');
-  return hash || 'alerts';
+  if (hash) return hash;
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
+  if (path === 'admin') return 'admin';
+  return 'alerts';
 }
 
 export default function App() {
@@ -118,9 +122,20 @@ export default function App() {
   // Filter tabs: Admin sees all tabs; Regular users NEVER see the admin tab
   const visibleTabs = BASE_TABS.filter((tab) => !tab.adminOnly || currentUser.is_admin);
 
-  // If user is regular and on admin tab, fallback to alerts
+  // Detect if a non-admin user navigated directly to the admin route
+  const isUnauthorizedAdminRoute = activeTabId === 'admin' && !currentUser.is_admin;
+
   const currentTab = visibleTabs.find((t) => t.id === activeTabId) ?? visibleTabs[0];
   const PageComponent = currentTab.page;
+
+  const handleReturnToAlerts = () => {
+    if (window.location.pathname !== '/') {
+      window.history.replaceState(null, '', '/#alerts');
+    } else {
+      window.location.hash = '#alerts';
+    }
+    setActiveTabId('alerts');
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
@@ -140,7 +155,7 @@ export default function App() {
             <nav className="flex items-center gap-1">
               {visibleTabs.map((t) => {
                 const Icon = t.icon;
-                const active = t.id === currentTab.id;
+                const active = !isUnauthorizedAdminRoute && t.id === currentTab.id;
                 const isAdminTab = t.adminOnly;
 
                 return (
@@ -205,7 +220,9 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        {activeTabId === 'admin' ? (
+        {isUnauthorizedAdminRoute ? (
+          <AccessDenied user={currentUser} onReturn={handleReturnToAlerts} />
+        ) : activeTabId === 'admin' ? (
           <AdminPanel currentUser={currentUser} />
         ) : (
           <PageComponent />
