@@ -11,6 +11,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from models import Alert
+from services import live
 from services.contracts import Match
 
 
@@ -53,5 +54,6 @@ def upsert_alert(db: Session, match: Match) -> Alert | None:
     # 3) Wyślij do bazy, żeby alert dostał numer (id). Zatwierdzi to pipeline (commit).
     db.flush()
 
-    # TODO krok 4: live.publish(alert) – powiadomić przeglądarki
+    # 4) Powiadom przeglądarki na żywo (przed commit – patrz services/live.py)
+    live.publish(alert)
     return alert

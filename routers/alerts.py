@@ -2,8 +2,9 @@
 from datetime import datetime
 from typing import Optional
 import asyncio
+import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Alert
 from routers.deps import get_optional_current_user
+from services import live
 from services.alert_service import upsert_alert
 from services.contracts import Match
 
@@ -65,13 +67,25 @@ def create_test_alert(req: TestAlertRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/stream")
-async def stream():
-    # TODO (Osoba 1): czytać z kolejki w services/live.py i wysyłać "data: {json}\n\n"
+async def stream(request: Request):
+    """Przeglądarka słucha tutaj. Każda zmiana alertu = jedna wiadomość "data: {alert jako JSON}"."""
+    queue = live.subscribe()
+
     async def gen():
-        while True:
-            yield ": keepalive\n\n"
-            await asyncio.sleep(15)
-    return StreamingResponse(gen(), media_type="text/event-stream")
+        try:
+            # pierwsza wiadomość: "połączono" + tryb (in-memory / postgres-notify) – UI pokazuje kropkę Live
+            yield f"event: hello\ndata: {json.dumps({'mode': live.mode()})}\n\n"
+            while not await request.is_disconnected():
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=15)
+                    yield f"data: {message}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"  # co 15 s "jestem", żeby połączenie nie wygasło
+        finally:
+            live.unsubscribe(queue)
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @router.get("/{alert_id}")
@@ -88,12 +102,13 @@ def _change_status(db, alert_id, new_status, allowed_from, user):
     if not alert:
         raise HTTPException(404, "Alert not found")
     if alert.status not in allowed_from:
-        raise HTTPException(409, f"Cannot {new_status} an alert that is {alert.status}")
+        raise HTTPException(409, f"Cannot change an alert that is {alert.status} to {new_status}")
 
     alert.status = new_status
     who = user.uname if user else "anonymous"
     entry = {"at": datetime.utcnow().isoformat(), "who": who, "what": new_status}
     alert.history = (alert.history or []) + [entry]  # NOWA lista – .append() baza by nie zauważyła
+    live.publish(alert)  # przed commit: w trybie Postgres ogłoszenie wychodzi razem z zapisem
     db.commit()
     db.refresh(alert)
     return alert

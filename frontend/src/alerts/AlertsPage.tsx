@@ -1,5 +1,4 @@
-// OSOBA 1 – lista alertów z filtrami.
-// Na razie odświeżanie przyciskiem; "na żywo" (SSE) dojdzie w kroku 4, ack/resolve w kroku 3.
+// OSOBA 1 – lista alertów z filtrami, aktualizowana na żywo (SSE z /api/alerts/stream).
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api } from '../shared/api';
@@ -16,6 +15,8 @@ export default function AlertsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null); // który alert właśnie się zapisuje
+  const [live, setLive] = useState(false);                    // czy "radio" jest podłączone
+  const [liveMode, setLiveMode] = useState<string>('');       // in-memory / postgres-notify
 
   // Pobierz alerty z backendu. Filtr statusu robi backend (?status=…), zespołu – my niżej.
   async function load() {
@@ -50,6 +51,28 @@ export default function AlertsPage() {
     load();
   }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Na żywo: nastaw się na "radio" /api/alerts/stream. Każda wiadomość = alert, który się zmienił.
+  useEffect(() => {
+    const source = new EventSource('/api/alerts/stream');
+
+    source.addEventListener('hello', (e) => {          // serwer potwierdza połączenie
+      setLive(true);
+      setLiveMode(JSON.parse((e as MessageEvent).data).mode);
+    });
+    source.onerror = () => setLive(false);             // przeglądarka sama spróbuje połączyć się ponownie
+
+    source.onmessage = (e) => {
+      const changed: Alert = JSON.parse(e.data);
+      setAlerts((prev) => {
+        const rest = prev.filter((a) => a.id !== changed.id);         // wyrzuć starą wersję tej karty
+        const fits = status === 'all' || changed.status === status;   // czy pasuje do filtra statusu
+        return fits ? [changed, ...rest] : rest;                      // nowa wersja na górę listy
+      });
+    };
+
+    return () => source.close();                       // wyjście z zakładki / zmiana filtra = wyłącz radio
+  }, [status]);
+
   // Lista zespołów do filtra – zbudowana z tego, co jest w alertach
   const teams = Array.from(new Set(alerts.map((a) => a.team))).sort();
   const visible = team === 'all' ? alerts : alerts.filter((a) => a.team === team);
@@ -61,7 +84,14 @@ export default function AlertsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Alerts</h1>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+            Alerts
+            <span className={`flex items-center gap-1.5 text-xs font-medium ${live ? 'text-emerald-400' : 'text-slate-500'}`}
+              title={live ? `Live updates on (${liveMode})` : 'Live updates disconnected – use Refresh'}>
+              <span className={`w-2 h-2 rounded-full ${live ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+              {live ? 'Live' : 'Offline'}
+            </span>
+          </h1>
           <p className="text-sm text-slate-400">What needs attention right now.</p>
         </div>
 
