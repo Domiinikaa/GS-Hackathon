@@ -32,6 +32,11 @@ def ensure_sqlite_columns():
             conn.commit()
         except Exception:
             pass
+        try:
+            conn.execute(text("ALTER TABLE invite_codes ADD COLUMN is_admin_invite BOOLEAN DEFAULT 0"))
+            conn.commit()
+        except Exception:
+            pass
 
 
 ensure_sqlite_columns()
