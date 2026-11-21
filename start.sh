@@ -55,7 +55,7 @@ fi
 
 # 3. Node & Frontend dependencies check
 if [ -d "frontend" ]; then
-    if [ ! -d "frontend/node_modules" ]; then
+    if [ ! -d "frontend/node_modules" ] || [ ! -f "frontend/node_modules/.package-lock.json" ] || [ "frontend/package.json" -nt "frontend/node_modules/.package-lock.json" ] || [ "frontend/package-lock.json" -nt "frontend/node_modules/.package-lock.json" ]; then
         echo "[SETUP] Installing frontend npm dependencies..."
         npm --prefix frontend install
     fi
