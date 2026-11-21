@@ -246,7 +246,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
               {/* Team */}
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Team <span className="text-slate-500 text-[10px]">(optional)</span>
+                  Team <span className="text-slate-500 text-[10px]">(optional — or set by invite)</span>
                 </label>
                 <div className="relative">
                   <Briefcase className="w-4 h-4 text-slate-500 absolute left-3 top-3" />

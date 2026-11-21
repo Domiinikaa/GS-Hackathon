@@ -34,6 +34,7 @@ export interface InviteCode {
   is_used: boolean;
   is_admin_invite?: boolean;
   role?: 'member' | 'lead';
+  team?: string | null;
   created_at: string;
   used_at?: string | null;
   created_by_uname?: string | null;

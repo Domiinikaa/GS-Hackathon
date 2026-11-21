@@ -56,16 +56,20 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
                 detail=f"Email address '{payload.email}' is already registered."
             )
 
-    # 3. Validate team if provided
-    raw_team = (payload.team if payload.team is not None else payload.dzial) or ""
-    resolved_team = None
-    if raw_team.strip():
-        resolved_team = team_name(db, raw_team)
-        if resolved_team is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Team '{raw_team.strip()}' does not exist.",
-            )
+    # 3. Validate team (invite team takes precedence if specified)
+    invite_team = getattr(invite, "team", None)
+    if invite_team:
+        resolved_team = invite_team
+    else:
+        raw_team = (payload.team if payload.team is not None else payload.dzial) or ""
+        resolved_team = None
+        if raw_team.strip():
+            resolved_team = team_name(db, raw_team)
+            if resolved_team is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Team '{raw_team.strip()}' does not exist.",
+                )
 
     # 4. Hash password, create user record, claim invite, and sync People roster
     hashed_pwd = hash_password(payload.password)

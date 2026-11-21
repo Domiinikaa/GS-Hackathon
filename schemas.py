@@ -94,6 +94,8 @@ InviteRole = Literal["member", "lead"]
 class InviteCodeCreateRequest(BaseModel):
     role: Optional[InviteRole] = Field(None, description="Role assigned to the new user ('member' or 'lead')")
     is_admin: Optional[bool] = Field(None, description="Legacy flag: True sets role='lead'")
+    team: Optional[str] = Field(None, description="Optional team/department assigned to the new user")
+    dzial: Optional[str] = Field(None, description="Alias for team")
 
     def resolved_role(self) -> InviteRole:
         if self.role is not None:
@@ -109,6 +111,7 @@ class InviteCodeResponse(BaseModel):
     is_used: bool
     is_admin_invite: bool = False
     role: InviteRole = "member"
+    team: Optional[str] = None
     created_at: datetime
     used_at: Optional[datetime] = None
     created_by_uname: Optional[str] = None
@@ -122,6 +125,7 @@ class InviteCodeCreateResponse(BaseModel):
     code: str
     is_admin_invite: bool = False
     role: InviteRole = "member"
+    team: Optional[str] = None
     message: str
 
 

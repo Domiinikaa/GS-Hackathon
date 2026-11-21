@@ -23,6 +23,7 @@ import {
 interface NewlyCreatedInvite {
   code: string;
   role: 'member' | 'lead';
+  team?: string | null;
 }
 
 export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUser: initialUser }) => {
@@ -32,8 +33,9 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
   const [teams, setTeams] = useState<TeamItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Invite code generation (default: member)
+  // Invite code generation (default: member, optional pre-selected team)
   const [inviteRole, setInviteRole] = useState<'member' | 'lead'>('member');
+  const [inviteTeam, setInviteTeam] = useState<string>('');
   const [generating, setGenerating] = useState(false);
   const [newlyCreatedInvite, setNewlyCreatedInvite] = useState<NewlyCreatedInvite | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -84,8 +86,8 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
     try {
       setGenerating(true);
       setError(null);
-      const res = await adminService.createInvite(inviteRole);
-      setNewlyCreatedInvite({ code: res.code, role: inviteRole });
+      const res = await adminService.createInvite(inviteRole, inviteTeam || null);
+      setNewlyCreatedInvite({ code: res.code, role: inviteRole, team: res.team ?? (inviteTeam || null) });
       await loadData();
     } catch (err: any) {
       setError(err.message || 'Failed to generate invite code.');
@@ -209,6 +211,21 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               <span>Refresh</span>
             </button>
 
+            {/* Team selector for invite code */}
+            <select
+              value={inviteTeam}
+              onChange={(e) => setInviteTeam(e.target.value)}
+              title="Assign team/department for the invited employee"
+              className="px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-amber-500"
+            >
+              <option value="">Team: User chooses</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.name}>
+                  Team: {t.name}
+                </option>
+              ))}
+            </select>
+
             {/* Role selector for invite code */}
             <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5">
               <span className="px-2 text-[11px] font-medium text-slate-500">Role:</span>
@@ -254,7 +271,8 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
               <div>
                 <span className="text-xs text-emerald-300 font-semibold block">
-                  New Single-Use {newlyCreatedInvite.role === 'lead' ? 'LEAD' : 'MEMBER'} Invite Code Ready:
+                  New Single-Use {newlyCreatedInvite.role === 'lead' ? 'LEAD' : 'MEMBER'} Invite Code Ready
+                  {newlyCreatedInvite.team ? ` (${newlyCreatedInvite.team})` : ''}:
                 </span>
                 <span className="text-lg font-mono font-bold text-white tracking-wider">
                   {newlyCreatedInvite.code}
@@ -440,6 +458,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                 <tr>
                   <th className="px-5 py-3">Invite Code</th>
                   <th className="px-5 py-3">Role Granted</th>
+                  <th className="px-5 py-3">Team</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Claimed By</th>
                 </tr>
@@ -462,6 +481,15 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                         </span>
                       )}
                     </td>
+                    <td className="px-5 py-3 font-sans text-slate-300">
+                      {inv.team ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-200 border border-slate-700">
+                          {inv.team}
+                        </span>
+                      ) : (
+                        <span className="text-slate-500">—</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3 font-sans">
                       {inv.is_used ? (
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
@@ -480,7 +508,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                 ))}
                 {invites.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-5 py-8 text-center text-slate-500 font-sans">
+                    <td colSpan={5} className="px-5 py-8 text-center text-slate-500 font-sans">
                       No invite codes generated yet. Click "Generate Invite" above to create one.
                     </td>
                   </tr>

@@ -113,12 +113,16 @@ export const authService = {
 };
 
 export const adminService = {
-  async createInvite(roleOrIsAdmin: 'member' | 'lead' | boolean = 'member'): Promise<{ code: string; is_admin_invite?: boolean; role?: 'member' | 'lead'; message: string }> {
+  async createInvite(
+    roleOrIsAdmin: 'member' | 'lead' | boolean = 'member',
+    team?: string | null
+  ): Promise<{ code: string; is_admin_invite?: boolean; role?: 'member' | 'lead'; team?: string | null; message: string }> {
     const role: 'member' | 'lead' =
       typeof roleOrIsAdmin === 'boolean' ? (roleOrIsAdmin ? 'lead' : 'member') : roleOrIsAdmin;
+    const cleanTeam = team?.trim() || null;
     const res = await authFetch('/api/admin/invites', {
       method: 'POST',
-      body: JSON.stringify({ role, is_admin: role === 'lead' }),
+      body: JSON.stringify({ role, is_admin: role === 'lead', team: cleanTeam }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

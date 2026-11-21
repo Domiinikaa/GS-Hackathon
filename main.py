@@ -49,6 +49,11 @@ def ensure_sqlite_columns():
             conn.commit()
         except Exception:
             pass
+        try:
+            conn.execute(text("ALTER TABLE invite_codes ADD COLUMN team VARCHAR(100)"))
+            conn.commit()
+        except Exception:
+            pass
         for col_sql in (
             "ALTER TABLE sources ADD COLUMN enabled BOOLEAN DEFAULT 1",
             "ALTER TABLE sources ADD COLUMN status VARCHAR(20) DEFAULT 'active'",
@@ -64,19 +69,20 @@ def ensure_sqlite_columns():
 
 
 def ensure_invite_role_column(bind) -> None:
-    """Adds invite_codes.role on existing SQLite or PostgreSQL databases and backfills from is_admin_invite."""
+    """Adds invite_codes.role and invite_codes.team on existing SQLite or PostgreSQL databases."""
     insp = inspect(bind)
     if "invite_codes" not in insp.get_table_names():
         return
     existing = {col["name"] for col in insp.get_columns("invite_codes")}
-    if "role" in existing:
-        return
     with bind.begin() as conn:
-        conn.execute(text("ALTER TABLE invite_codes ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'member'"))
-        if bind.dialect.name == "postgresql":
-            conn.execute(text("UPDATE invite_codes SET role = 'lead' WHERE is_admin_invite IS TRUE"))
-        else:
-            conn.execute(text("UPDATE invite_codes SET role = 'lead' WHERE is_admin_invite = 1"))
+        if "role" not in existing:
+            conn.execute(text("ALTER TABLE invite_codes ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'member'"))
+            if bind.dialect.name == "postgresql":
+                conn.execute(text("UPDATE invite_codes SET role = 'lead' WHERE is_admin_invite IS TRUE"))
+            else:
+                conn.execute(text("UPDATE invite_codes SET role = 'lead' WHERE is_admin_invite = 1"))
+        if "team" not in existing:
+            conn.execute(text("ALTER TABLE invite_codes ADD COLUMN team VARCHAR(100)"))
 
 
 def ensure_sources_columns(bind) -> None:
