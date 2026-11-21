@@ -87,6 +87,7 @@ export default function PeoplePage() {
   useEffect(() => {
     peopleApi.teams().then((t) => setAllTeams(t.teams)).catch(() => {});
   }, []);
+  const availableTeams = useMemo(() => [...new Set([...allTeams, ...teams])].filter(Boolean).sort(), [allTeams, teams]);
 
   // People grouped by team (after applying the team filter)
   const grouped = useMemo(() => {
@@ -102,8 +103,8 @@ export default function PeoplePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-white">People & channels</h1>
-          <p className="text-sm text-slate-400">Who is in each team, and how each person wants to be alerted.</p>
+          <h1 className="text-2xl font-bold text-white">People</h1>
+          <p className="text-sm text-slate-400">Team members, on-call assignments, and notification preferences.</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} title="Reload" className="text-slate-400 hover:text-white p-2">
@@ -129,7 +130,7 @@ export default function PeoplePage() {
         <PersonForm
           key={editing === 'new' ? 'new' : editing.id}
           initial={editing === 'new' ? undefined : editing}
-          teams={allTeams}
+          teams={availableTeams}
           onSave={savePerson}
           onCancel={() => setEditing(null)}
         />
