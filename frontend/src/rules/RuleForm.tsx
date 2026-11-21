@@ -6,7 +6,7 @@ import {
   Rule, SEVERITY_OPTIONS, Severity, colorForSeverity, groupItems, groupMode, isFlat, isLeaf,
 } from './ruleTypes';
 import { FieldHint, PlannedRecipient, errorMessage, rulesApi } from './rulesApi';
-import { describeNode } from './describeRule';
+import RuleConditions from './RuleConditions';
 import ConditionEditor, { ConditionRow, EMPTY_ROW } from './ConditionEditor';
 
 // Form text -> real value (number, list or text)
@@ -161,9 +161,9 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
       {nested && initial ? (
         <div>
           <span className={labelClass}>Raise an alert when an incoming event matches</span>
-          <p className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-200">
-            {describeNode(initial.condition)}
-          </p>
+          <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2">
+            <RuleConditions condition={initial.condition} />
+          </div>
           <p className={hintClass}>Nested conditions – kept as they are; change them via the API</p>
         </div>
       ) : (

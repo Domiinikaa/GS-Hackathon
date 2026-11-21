@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { CHANNELS, COLOR_DOT, Rule } from './ruleTypes';
-import { describeRule } from './describeRule';
+import RuleConditions from './RuleConditions';
 import { errorMessage, rulesApi } from './rulesApi';
 import RuleForm from './RuleForm';
 
@@ -136,15 +136,24 @@ export default function RulesPage() {
                 <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">{rule.team}</span>
                 <span className="text-xs uppercase text-slate-500">{rule.severity}</span>
               </div>
-              <p className="text-sm text-slate-300">{describeRule(rule)}</p>
-              <div className="flex gap-2 flex-wrap">
+              <p className="text-sm text-slate-400">
+                Send to <b className="text-slate-200">{rule.team}</b> via{' '}
                 {rule.channels.map((ch) => (
-                  <span key={ch} className="text-xs bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded">
+                  <span key={ch} className="text-xs bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded mr-1">
                     {CHANNELS.find((c) => c.value === ch)?.label ?? ch}
                   </span>
                 ))}
-                <span className="text-xs font-mono text-slate-500 break-all">title: {rule.title}</span>
-              </div>
+              </p>
+              <RuleConditions condition={rule.condition} />
+              {rule.group_by && rule.group_window_s && (
+                <p className="text-sm text-slate-400">
+                  Combine repeats: one alert per <span className="font-mono text-slate-200">{rule.group_by}</span> every{' '}
+                  {Math.round(rule.group_window_s / 60)} min
+                </p>
+              )}
+              <p className="text-xs text-slate-500">
+                Headline: <span className="font-mono break-all">{rule.title}</span>
+              </p>
             </div>
             <div className="flex items-start gap-3">
               <button onClick={() => toggleEnabled(rule)}

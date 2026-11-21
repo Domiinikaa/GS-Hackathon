@@ -12,12 +12,8 @@ export interface Condition {
   value: string | number | string[];
 }
 
-// A node is a single condition or a nested group ("not" negates its child)
-export type ConditionNode =
-  | Condition
-  | { and: ConditionNode[] }
-  | { or: ConditionNode[] }
-  | { not: ConditionNode };
+// A node is a single condition or a nested and / or group
+export type ConditionNode = Condition | { and: ConditionNode[] } | { or: ConditionNode[] };
 
 // Top level: "and" = all must match, "or" = any one is enough
 export type ConditionGroup = { and: ConditionNode[] } | { or: ConditionNode[] };
