@@ -18,6 +18,13 @@ export interface PlannedRecipient {
   reason: string;
 }
 
+export interface RunbookSummary {
+  id: number;
+  name: string;
+  format: string;
+  steps: unknown[];
+}
+
 const json = (body: unknown): RequestInit['body'] => JSON.stringify(body);
 
 export const rulesApi = {
@@ -30,6 +37,7 @@ export const rulesApi = {
     api<{ deleted: boolean; disabled?: boolean; detail?: string }>(`/rules/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   fields: () => api<FieldHint[]>('/rules/fields'),
   teams: () => api<{ teams: string[]; people: string[] }>('/people/teams'),
+  runbooks: () => api<RunbookSummary[]>('/runbooks'),
   previewRecipients: (team: string, severity: Severity, channels: Channel[]) =>
     api<PlannedRecipient[]>('/people/preview', { method: 'POST', body: json({ team, severity, channels }) }),
 };

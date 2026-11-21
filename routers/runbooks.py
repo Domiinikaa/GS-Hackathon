@@ -170,7 +170,7 @@ def engine_test(req: EngineTestRequest, db: Session = Depends(get_db)):
         rules = q.all()
 
     event = Event(id=0, payload=req.event, received_at=datetime.utcnow())  # nie dodajemy do sesji
-    matches = evaluate(event, rules)
+    matches = evaluate(event, rules, db=db)
     matched = {m.rule_id for m in matches}
     return {
         "checked": [r.id for r in rules],

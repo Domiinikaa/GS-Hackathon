@@ -39,7 +39,7 @@ MAX_DEPTH = 5
 
 
 def _validate_node(node: Any, depth: int) -> Dict[str, Any]:
-    """A condition node: {"and": [...]}, {"or": [...]} or a leaf {"field", "op", "value"}."""
+    """A condition node: {"and": [...]}, {"or": [...]}, {"not": ...} or a leaf {"field", "op", "value"}."""
     if depth > MAX_DEPTH:
         raise ValueError(f"conditions can be nested at most {MAX_DEPTH} levels deep")
     if isinstance(node, dict) and len(node) == 1 and next(iter(node)) in ("and", "or"):
@@ -47,12 +47,11 @@ def _validate_node(node: Any, depth: int) -> Dict[str, Any]:
         if not isinstance(items, list) or not items:
             raise ValueError(f'"{mode}" needs at least one condition')
         return {mode: [_validate_node(item, depth + 1) for item in items]}
-    if isinstance(node, dict) and "not" in node:
-        # the rules engine (services/rules_engine.py) has no "not" yet, so such a rule would never fire
-        raise ValueError('"not" is not supported yet: use "is not" (neq) on a single condition instead')
+    if isinstance(node, dict) and len(node) == 1 and "not" in node:
+        return {"not": _validate_node(node["not"], depth + 1)}
     if isinstance(node, dict) and "field" in node:
         return ConditionIn.model_validate(node).model_dump()
-    raise ValueError('each condition must be {"and": [...]}, {"or": [...]} or {"field", "op", "value"}')
+    raise ValueError('each condition must be {"and": [...]}, {"or": [...]}, {"not": ...} or {"field", "op", "value"}')
 
 
 def _validate_group(group: Any) -> Dict[str, Any]:

@@ -24,7 +24,7 @@ import re
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy.orm import object_session
+from sqlalchemy.orm import Session, object_session
 
 from models import Event, Rule, Runbook
 from services.contracts import Match
@@ -114,7 +114,9 @@ def _compare(actual: Any, expected: Any, op: str) -> bool:
 
 
 def check_condition(data: Any, cond: dict[str, Any]) -> bool:
-    """Jeden warunek {"field","op","value"} albo zagnieżdżona grupa {"and"/"or": [...]}."""
+    """Jeden warunek {"field","op","value"} albo zagnieżdżona grupa {"and"/"or"/"not": ...}."""
+    if "not" in cond:
+        return not check_condition(data, cond["not"])
     if "and" in cond or "or" in cond:
         return check_group(data, cond)
 
@@ -145,9 +147,11 @@ def check_condition(data: Any, cond: dict[str, Any]) -> bool:
 
 
 def check_group(data: Any, group: dict[str, Any] | None) -> bool:
-    """{"and": [...]} = wszystkie; {"or": [...]} = co najmniej jeden. Pusta/brak grupy = pasuje."""
+    """{"and": [...]} = wszystkie; {"or": [...]} = co najmniej jeden; {"not": ...} = zaprzeczenie. Pusta/brak = pasuje."""
     if not group:
         return True
+    if "not" in group:
+        return not check_condition(data, group["not"])
     if "and" in group:
         return all(check_condition(data, c) for c in group["and"] or [])
     if "or" in group:
@@ -197,8 +201,8 @@ def build_dedup_key(rule: Rule, data: Any, at: datetime | None = None) -> str:
 
 # ---------------------------------------------------------------- runbook
 
-def _runbook_steps(rule: Rule, data: Any) -> list[dict[str, Any]]:
-    db = object_session(rule)
+def _runbook_steps(rule: Rule, data: Any, db: Session | None = None) -> list[dict[str, Any]]:
+    db = db or object_session(rule)
     if db is None:
         return []
     runbook: Runbook | None = None
@@ -241,12 +245,12 @@ def build_match(rule: Rule, data: Any, event_id: int, at: datetime | None = None
     )
 
 
-def evaluate(event: Event, rules: list[Rule]) -> list[Match]:
+def evaluate(event: Event, rules: list[Rule], db: Session | None = None) -> list[Match]:
     data = event.payload if event.payload is not None else {}
     at = event.received_at or datetime.utcnow()
     matches: list[Match] = []
     for rule in rules:
         if rule.enabled is False or not rule_matches(rule, data):
             continue
-        matches.append(build_match(rule, data, event.id, at, _runbook_steps(rule, data)))
+        matches.append(build_match(rule, data, event.id, at, _runbook_steps(rule, data, db=db)))
     return matches

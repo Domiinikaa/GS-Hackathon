@@ -89,7 +89,8 @@ export interface Delivery {
 export interface Runbook {
   id: number;
   name: string;
-  format: 'yaml' | 'markdown' | 'text' | 'link';
+  format: 'yaml' | 'json' | 'html' | 'markdown' | 'text' | 'link';
   raw: string;
   steps: RunbookStep[];
+  matches?: Record<string, unknown> | null;
 }

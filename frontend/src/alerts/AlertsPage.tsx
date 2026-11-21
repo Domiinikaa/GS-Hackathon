@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api } from '../shared/api';
+import { errorMessage } from '../rules/rulesApi';
 import type { Alert, AlertStatus } from '../shared/types';
 import AlertCard, { AlertAction } from './AlertCard';
 
@@ -61,7 +62,7 @@ export default function AlertsPage() {
       const query = status === 'all' ? '' : `?status=${status}`;
       setAlerts(await api<Alert[]>(`/alerts${query}`));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(`Could not load alerts: ${errorMessage(e)}`);
     } finally {
       setLoading(false);
     }
@@ -78,7 +79,7 @@ export default function AlertsPage() {
       await api<Alert>(path, { method: 'POST' });
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setBusyId(null);
     }
@@ -161,7 +162,7 @@ export default function AlertsPage() {
 
       {error && (
         <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
-          Could not load alerts: {error}
+          {error}
         </div>
       )}
 

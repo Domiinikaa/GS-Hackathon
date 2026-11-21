@@ -1,12 +1,11 @@
 """
 OSOBA 4 – zamiana runbooka w DOWOLNEJ formie na listę kroków (kartka zadania: Appendix B).
 
-Runbook to (na razie) zwykła instrukcja dla człowieka: lista kroków do przeczytania.
-Aplikacja niczego nie wykonuje. Zasada: przy "auto" nigdy błąd i nic nie ginie po cichu –
-jeśli czegoś nie użyliśmy, mówimy o tym w ostrzeżeniu (warnings).
+Zasada: przy "auto" nigdy błąd i nic nie ginie po cichu – jeśli czegoś nie użyliśmy,
+mówimy o tym w ostrzeżeniu (warnings). Zachowujemy pola `action`, `params` i `approval`
+("none" | "required") zarówno ze strukturalnego YAML/JSON, jak i z tekstu ("needs approval").
 
-Krok: {"text": "Check settlement service health", "action": None, "params": {}, "approval": "none"}
-(pola action / params / approval zostają puste, żeby nie zmieniać wspólnego kształtu RunbookStep)
+Krok: {"text": "...", "action": "retry_workflow" | None, "params": {...}, "approval": "none" | "required"}
 
 Obsługiwane formy:
 - yaml / json: lista kroków pod dowolnym kluczem (steps, procedure, actions, tasks…), także głębiej;
@@ -19,7 +18,7 @@ Obsługiwane formy:
 - link:       jeden krok "Open runbook <url>"
 - auto:       zgadujemy format po treści
 
-{{pole}} w treści kroku jest zamieniane na wartość ze zdarzenia (fill_steps).
+{{pole}} w treści kroku i parametrach jest zamieniane na wartość ze zdarzenia (fill_steps).
 """
 from __future__ import annotations
 
@@ -40,8 +39,32 @@ class ParseResult:
     matches: dict[str, Any] | None = None   # do jakich zdarzeń pasuje: {"and": [{"field","op","value"}]}
 
 
-def _step(text: str) -> dict[str, Any]:
-    return {"text": text.strip(), "action": None, "params": {}, "approval": "none"}
+def _step(
+    text: str,
+    *,
+    action: str | None = None,
+    params: dict[str, Any] | None = None,
+    approval: str = "none",
+) -> dict[str, Any]:
+    return {
+        "text": text.strip(),
+        "action": action,
+        "params": dict(params) if params else {},
+        "approval": "required" if approval == "required" else "none",
+    }
+
+
+_APPROVAL_MENTION = re.compile(
+    r"\b(?:needs?|requires?)\s+(?:human\s+|manual\s+|team\s+lead\s+|lead\s+)?approval\b"
+    r"|\bapproval\s*[:=]\s*required\b"
+    r"|\brequires?\s+confirmation\b"
+    r"|\bwymaga\s+(?:zgody|zatwierdzenia)\b",
+    re.I,
+)
+
+
+def _text_step(text: str) -> dict[str, Any]:
+    return _step(text, approval="required" if _APPROVAL_MENTION.search(text) else "none")
 
 
 def _short(s: str, n: int = 60) -> str:
@@ -135,15 +158,15 @@ def _get(d: dict, keys) -> tuple[Any, Any]:
     return None, None
 
 
-def _item_to_texts(item: Any) -> list[str]:
-    """Jeden element listy kroków -> 1+ tekstów kroków (podkroki idą osobno, po rodzicu)."""
+def _item_to_steps(item: Any) -> list[dict[str, Any]]:
+    """Jeden element listy kroków -> 1+ słowników kroków (podkroki idą osobno, po rodzicu)."""
     if item is None:
         return []
     if isinstance(item, list):
-        return [t for x in item for t in _item_to_texts(x)]
+        return [s for x in item for s in _item_to_steps(x)]
     if not isinstance(item, dict):
         text = _fmt_value(item)
-        return [text] if text else []
+        return [_text_step(text)] if text else []
 
     used: set = set()
     main = None
@@ -159,8 +182,11 @@ def _item_to_texts(item: Any) -> list[str]:
 
     prefix = ""
     approval = False
+    approval_explicit = False
+    action_name: str | None = None
+    params: dict[str, Any] = {}
     extras: list[str] = []
-    substeps: list[str] = []
+    substeps: list[dict[str, Any]] = []
     for k, v in item.items():
         kl = str(k).lower()
         if k in used or kl in _SKIP_KEYS or v in (None, "", [], {}):
@@ -168,15 +194,23 @@ def _item_to_texts(item: Any) -> list[str]:
         if kl in _COND_KEYS and not isinstance(v, (dict, list)) and not prefix:
             prefix = f"{_COND_KEYS[kl]} {_fmt_value(v)}: "      # if: "retry fails twice" -> "If retry fails twice: "
         elif kl in _APPROVAL_KEYS:
+            approval_explicit = True
             approval = approval or _is_approval(v)
         elif kl in _SUBSTEP_KEYS and isinstance(v, list):
-            substeps += _item_to_texts(v)
+            substeps += _item_to_steps(v)
         elif kl in _PARAM_KEYS and isinstance(v, dict):
             extras += [f"{pk}: {_fmt_value(pv)}" for pk, pv in v.items()]
-        elif kl == "action" and main is None and not isinstance(v, (dict, list)):
-            main = _humanize(v)                                  # action: retry_workflow -> "Retry workflow"
+            for pk, pv in v.items():
+                params[str(pk)] = pv
+        elif kl == "action" and not isinstance(v, (dict, list)):
+            action_name = str(v).strip() or None
+            if main is None:
+                main = _humanize(v)                              # action: retry_workflow -> "Retry workflow"
+            else:
+                extras.append(f"{k}: {_fmt_value(v)}")
         else:
             extras.append(f"{k}: {_fmt_value(v)}")
+            params[str(k)] = v
 
     if main is None:
         if len(extras) == 1 and not substeps:                    # "- check: settlement health"
@@ -190,9 +224,17 @@ def _item_to_texts(item: Any) -> list[str]:
     text = prefix + main
     if extras:
         text += f" ({'; '.join(extras)})"
+    if not approval_explicit and _APPROVAL_MENTION.search(text):
+        approval = True
     if approval:
         text += " (requires approval)"
-    return [text] + substeps
+    step_obj = _step(
+        text,
+        action=action_name,
+        params=params,
+        approval="required" if approval else "none",
+    )
+    return [step_obj] + substeps
 
 
 def _find_step_list(doc: Any, depth: int = 0) -> Any:
@@ -259,7 +301,7 @@ def _structured(doc: Any, fmt: str) -> ParseResult:
             steps_list = [doc]
         else:
             steps_list = []
-    result.steps = [_step(t) for t in _item_to_texts(steps_list) if t.strip()]
+    result.steps = [s for s in _item_to_steps(steps_list) if s["text"].strip()]
     return result
 
 
@@ -373,7 +415,7 @@ def _parse_html(raw: str) -> ParseResult:
         result = _parse_text("\n".join(parser.loose))
         result.format = "html"
         return result
-    result = ParseResult(format="html", steps=[_step(t) for t in items])
+    result = ParseResult(format="html", steps=[_text_step(t) for t in items])
     if parser.loose:
         result.warnings.append(_ignored_warning(parser.loose))
     return result
@@ -445,7 +487,7 @@ def _parse_markdown(raw: str) -> ParseResult:
             ignored.append(stripped)               # zwykły akapit między / po listach
     if in_code and code:                           # niezamknięty blok kodu
         attach_code()
-    result = ParseResult(format="markdown", steps=[_step(t) for t in steps if t.strip()])
+    result = ParseResult(format="markdown", steps=[_text_step(t) for t in steps if t.strip()])
     if ignored:
         result.warnings.append(_ignored_warning(ignored))
     return result
@@ -492,7 +534,7 @@ def _parse_text(raw: str) -> ParseResult:
             for part in _split_clauses(sentence):
                 part = _strip_leading_words(part.strip(" ."))
                 if part:
-                    steps.append(_step(part[0].upper() + part[1:]))
+                    steps.append(_text_step(part[0].upper() + part[1:]))
     return ParseResult(format="text", steps=steps)
 
 
@@ -593,12 +635,31 @@ def parse_runbook(raw: str, fmt: str = "auto") -> list[dict[str, Any]]:
 
 # ---------------------------------------------------------------- podstawianie wartości
 
+def _fill_value(val: Any, event_payload: Any) -> Any:
+    from services.rules_engine import render_template
+
+    if isinstance(val, str):
+        return render_template(val, event_payload)
+    if isinstance(val, list):
+        return [_fill_value(item, event_payload) for item in val]
+    if isinstance(val, dict):
+        return {k: _fill_value(v, event_payload) for k, v in val.items()}
+    return val
+
+
 def fill_steps(steps: list[dict[str, Any]], event_payload: Any) -> list[dict[str, Any]]:
-    """Podstawia {{workflowId}} itd. wartościami ze zdarzenia. Nie zmienia oryginału."""
+    """Podstawia {{workflowId}} itd. wartościami ze zdarzenia w treści i parametrach. Nie zmienia oryginału."""
     from services.rules_engine import render_template  # import tutaj, żeby uniknąć importu cyklicznego
+
     out = []
     for step in steps or []:
-        filled = _step(render_template(step.get("text", ""), event_payload) or "")
+        raw_params = step.get("params") if isinstance(step.get("params"), dict) else {}
+        filled = _step(
+            render_template(step.get("text", ""), event_payload) or "",
+            action=step.get("action"),
+            params=_fill_value(raw_params, event_payload),
+            approval=step.get("approval", "none"),
+        )
         filled["done"] = False
         out.append(filled)
     return out

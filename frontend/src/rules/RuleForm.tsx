@@ -5,7 +5,7 @@ import {
   CHANNELS, COLOR_DOT, Channel, Condition, Operator,
   Rule, SEVERITY_OPTIONS, Severity, colorForSeverity, groupItems, groupMode, isFlat, isLeaf,
 } from './ruleTypes';
-import { FieldHint, PlannedRecipient, errorMessage, rulesApi } from './rulesApi';
+import { FieldHint, PlannedRecipient, RunbookSummary, errorMessage, rulesApi } from './rulesApi';
 import RuleConditions from './RuleConditions';
 import ConditionEditor, { ConditionRow, EMPTY_ROW } from './ConditionEditor';
 
@@ -50,18 +50,21 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
   const [groupMinutes, setGroupMinutes] = useState(
     initial?.group_window_s ? String(initial.group_window_s / 60) : '',
   );
+  const [runbookId, setRunbookId] = useState<number | null>(initial?.runbook_id ?? null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   // Rules with nested groups (created via the API) keep their conditions unchanged in this form
   const nested = initial ? !isFlat(initial.condition) : false;
   const [targets, setTargets] = useState<{ teams: string[]; people: string[] }>({ teams: [], people: [] });
   const [fieldHints, setFieldHints] = useState<FieldHint[]>([]);
+  const [runbooks, setRunbooks] = useState<RunbookSummary[]>([]);
   const [recipients, setRecipients] = useState<PlannedRecipient[] | null>(null);
 
-  // Suggestions: teams/people and field names from real events
+  // Suggestions: teams/people, runbooks and field names from real events
   useEffect(() => {
     rulesApi.teams().then(setTargets).catch(() => {});
     rulesApi.fields().then(setFieldHints).catch(() => {});
+    rulesApi.runbooks().then(setRunbooks).catch(() => {});
   }, []);
 
   // "Who will be notified" preview, refreshed half a second after the last change
@@ -96,6 +99,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
       color: colorForSeverity(severity), // the colour always follows the urgency
       group_by: groupBy.trim() || undefined,
       group_window_s: groupBy.trim() && minutes > 0 ? minutes * 60 : undefined,
+      runbook_id: runbookId,
     };
   }
 
@@ -238,6 +242,27 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
           </div>
         </div>
         <p className={hintClass}>One alert with a counter instead of many</p>
+      </div>
+
+      {/* 7. Attached runbook (optional) */}
+      <div>
+        <label className={labelClass}>Attach runbook (optional)</label>
+        <select
+          className={inputClass}
+          value={runbookId ?? ''}
+          onChange={(e) => setRunbookId(e.target.value ? Number(e.target.value) : null)}
+        >
+          <option value="">No fixed runbook (auto-match by event if available)</option>
+          {runbookId !== null && !runbooks.some((rb) => rb.id === runbookId) && (
+            <option value={runbookId}>Runbook #{runbookId}</option>
+          )}
+          {runbooks.map((rb) => (
+            <option key={rb.id} value={rb.id}>
+              {rb.name} ({rb.format}, {rb.steps.length} steps)
+            </option>
+          ))}
+        </select>
+        <p className={hintClass}>Steps from this runbook will be filled with event values and shown on triggered alerts.</p>
       </div>
 
       {/* Who gets alerts from this rule, computed by the backend from people's preferences */}

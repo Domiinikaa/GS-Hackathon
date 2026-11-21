@@ -409,6 +409,7 @@ export default function SourcesPage() {
                     <div className="space-y-1.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-base font-bold text-white">{src.name}</h3>
+                        <span className="text-xs text-slate-300 bg-slate-800 px-2 py-0.5 rounded">{src.team}</span>
                         <SourceKindBadge kind={src.kind} label={spec?.label} />
                         {spec && (
                           <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-400">

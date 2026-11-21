@@ -20,16 +20,24 @@ from services.people_service import recipients_for
 from services.rules_engine import evaluate
 
 
-def process_event(db: Session, event: Event) -> list[int]:
+def process_event(
+    db: Session,
+    event: Event,
+    *,
+    rules: list[Rule] | None = None,
+    commit: bool = True,
+) -> list[int]:
     """Zwraca id alertów, które to zdarzenie utworzyło lub zaktualizowało."""
-    rules = db.query(Rule).filter(Rule.enabled.is_(True)).all()
+    active_rules = rules if rules is not None else db.query(Rule).filter(Rule.enabled.is_(True)).all()
     alert_ids: list[int] = []
-    for match in evaluate(event, rules):
+    for match in evaluate(event, active_rules, db=db):
         alert = upsert_alert(db, match)
         if alert is None:
             continue
         alert_ids.append(alert.id)
-        recipients = recipients_for(db, alert, match.channels)
-        enqueue_deliveries(db, alert, recipients)
-    db.commit()
+        if getattr(alert, "_is_new", alert.count == 1):
+            recipients = recipients_for(db, alert, match.channels)
+            enqueue_deliveries(db, alert, recipients)
+    if commit:
+        db.commit()
     return alert_ids

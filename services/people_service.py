@@ -53,6 +53,8 @@ def _resolve_channel(person: Person, channel: str, now: time) -> tuple[str | Non
     current: str | None = channel
     while current and current not in seen:
         seen.add(current)
+        if current == "ui":
+            return "ui", notes
         if current == "phone" and not person.on_call:
             notes.append("phone only for on-call → sms")
             current = "sms"
@@ -104,11 +106,16 @@ def plan_recipients(
     seen: set[tuple[int, str]] = set()
     for person in _audience(db, target):
         prefs = (person.channel_prefs or {}).get(severity)
-        wanted = [c for c in personal_rule if c in prefs] if prefs else []
-        base_reason = f"prefers {', '.join(prefs)} for {severity}" if prefs else f"no preference for {severity}"
-        if not wanted:
+        if prefs:
+            matched_any = [c for c in rule_channels if c in prefs]
+            wanted = [c for c in personal_rule if c in prefs]
+            base_reason = f"prefers {', '.join(prefs)} for {severity}"
+            if not matched_any:
+                wanted = personal_rule
+                base_reason += "; using rule channels"
+        else:
             wanted = personal_rule
-            base_reason += "; using rule channels"
+            base_reason = f"no preference for {severity}; using rule channels"
 
         for channel in wanted:
             final, notes = _resolve_channel(person, channel, now_t)

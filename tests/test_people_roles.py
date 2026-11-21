@@ -33,13 +33,13 @@ def test_seed_adds_members_and_leads_once():
     seed_people(db)
     db.commit()
     assert db.query(Person).filter(Person.role == "member").count() == 3
-    assert [p.name for p in team_leads(db, "IT")] == ["Marek"]
+    assert [p.name for p in team_leads(db, "Pricing")] == ["Marek"]
 
     db.query(Person).filter(Person.role == "lead").delete()  # someone removes all leads on purpose...
     db.commit()
-    db.add(Person(name="New lead", team="IT", role="lead"))
+    db.add(Person(name="New lead", team="Pricing", role="lead"))
     db.commit()
     seed_people(db)  # ...and adds their own: the seed must not bring the old leads back
     db.commit()
     assert {p.name for p in db.query(Person).filter(Person.role == "lead")} == {"New lead"}
-    assert len(TEAM_LEADS) == 3
+    assert len(TEAM_LEADS) == 4

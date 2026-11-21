@@ -43,7 +43,7 @@ const BASE_TABS: TabItem[] = [
 ];
 
 function getInitialTab(): string {
-  const hash = window.location.hash.replace('#', '');
+  const hash = window.location.hash.replace('#', '').split('/')[0];
   if (hash) return hash;
   const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
   if (path === 'admin') return 'admin';
@@ -75,7 +75,7 @@ export default function App() {
   // Listen to hash changes
   useEffect(() => {
     const onHashChange = () => {
-      const hash = window.location.hash.replace('#', '');
+      const hash = window.location.hash.replace('#', '').split('/')[0];
       if (hash) setActiveTabId(hash);
     };
     window.addEventListener('hashchange', onHashChange);

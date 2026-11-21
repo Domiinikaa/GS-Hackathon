@@ -459,6 +459,7 @@ def simulate_source_events(
             raw_ev = generate_simulated_event(preset, src.kind, cfg)
 
         # For logfile sources, also append to the configured file on disk for realism
+        # and advance the tailer offset so the background worker does not double-ingest it.
         if src.kind == "logfile" and cfg.get("file_path"):
             try:
                 p = Path(str(cfg["file_path"]))
@@ -466,6 +467,7 @@ def simulate_source_events(
                 line = raw_ev if isinstance(raw_ev, str) else json.dumps(raw_ev)
                 with p.open("a", encoding="utf-8") as fh:
                     fh.write(line + "\n")
+                ingest_manager.advance_logfile_offset(src.id, p.stat().st_size)
             except Exception:
                 pass
 

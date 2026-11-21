@@ -7,14 +7,16 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Alert
+from models import Alert, Person, User
 from routers.deps import get_optional_current_user
 from services import live
 from services.alert_service import upsert_alert
 from services.contracts import Match
+from services.people_service import team_leads
 
 router = APIRouter(prefix="/api/alerts", tags=["Alerts (Osoba 1)"])
 
@@ -124,11 +126,46 @@ def resolve(alert_id: int, db: Session = Depends(get_db), user=Depends(get_optio
     return _change_status(db, alert_id, "resolved", ["open", "acknowledged"], user)
 
 
+def _check_approve_permission(db: Session, alert: Alert, user: Optional[User]) -> None:
+    """
+    Only a team lead of the alert's team (or an administrator) may approve risky steps.
+    Demo fallbacks:
+      - anonymous API calls (`user is None`) are permitted for CLI/Swagger testing;
+      - logged-in users without a matching `Person` profile are permitted so demo testers aren't locked out.
+    """
+    if user is None or user.is_admin:
+        return
+
+    person = (
+        db.query(Person)
+        .filter(
+            (func.lower(Person.email) == user.email.lower())
+            | (func.lower(Person.name) == user.uname.lower())
+        )
+        .first()
+    )
+    if person is None:
+        return
+
+    target_person = db.query(Person).filter(func.lower(Person.name) == alert.team.lower()).first()
+    alert_team = target_person.team if target_person else alert.team
+
+    if person.role == "lead" and person.team.lower() == alert_team.lower():
+        return
+
+    leads = team_leads(db, alert_team)
+    lead_names = ", ".join(lead.name for lead in leads)
+    hint = f" ({lead_names})" if lead_names else ""
+    raise HTTPException(
+        403,
+        f"Only a team lead for '{alert_team}'{hint} or an administrator can approve risky steps.",
+    )
+
+
 def _update_step(db, alert_id, step_index, user, action):
     """
     Wspólne dla approve i done: zmień jeden krok runbooka i dopisz do historii kto i kiedy.
     Ryzykowny krok (approval == "required") trzeba najpierw zatwierdzić, dopiero potem oznaczyć jako zrobiony.
-    Approve zapisuje zgodę – samo wykonanie akcji (np. retry workflow) to część silnika runbooków (Osoba 4).
     """
     alert = db.get(Alert, alert_id)
     if not alert:
@@ -148,6 +185,7 @@ def _update_step(db, alert_id, step_index, user, action):
             raise HTTPException(409, "This step does not need approval")
         if step.get("approved_by"):
             raise HTTPException(409, "Step already approved")
+        _check_approve_permission(db, alert, user)
         step["approved_by"], step["approved_at"] = who, now
         what = f"approved step {step_index + 1}: {step.get('text', '')}"
     else:  # done

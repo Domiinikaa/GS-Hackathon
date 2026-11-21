@@ -148,6 +148,14 @@ def test_or_and_nested_groups():
     assert check_group(d, {"and": []}) and check_group(d, None)
 
 
+def test_not_condition():
+    d = {"level": "ERROR", "env": "prod"}
+    assert check_group(d, {"and": [{"not": {"field": "env", "op": "eq", "value": "uat"}}]})
+    assert not check_group(d, {"and": [{"not": {"field": "env", "op": "eq", "value": "prod"}}]})
+    assert check_group(d, {"not": {"or": [{"field": "env", "op": "eq", "value": "uat"},
+                                          {"field": "level", "op": "eq", "value": "INFO"}]}})
+
+
 def test_templates_and_fields():
     d = {"meta.schema": "literal-dot-key", "x": {"y": 1.0}}
     assert get_field(d, "meta.schema") == "literal-dot-key"
@@ -283,15 +291,30 @@ def test_appendix_b_yaml():
         "Retry workflow (workflowId: {{workflowId}})",
         "If retry fails twice: Escalate (team: counterparty-support) (requires approval)",
     ]
+    assert r.steps[0]["action"] == "http_get"
+    assert r.steps[0]["params"] == {"url": "http://counterparty-service/health"}
+    assert r.steps[0]["approval"] == "none"
+    assert r.steps[1]["action"] == "retry_workflow"
+    assert r.steps[1]["params"] == {"workflowId": "{{workflowId}}"}
+    assert r.steps[1]["approval"] == "none"
+    assert r.steps[2]["action"] == "escalate"
+    assert r.steps[2]["params"] == {"team": "counterparty-support"}
+    assert r.steps[2]["approval"] == "required"
     assert r.matches == {"and": [{"field": "type", "op": "eq", "value": "WORKFLOW_FAILED"},
                                  {"field": "error.code", "op": "eq", "value": "TIMEOUT"}]}
-    assert fill_steps(r.steps, {"workflowId": "WF-7"})[1]["text"] == "Retry workflow (workflowId: WF-7)"
+    filled = fill_steps(r.steps, {"workflowId": "WF-7"})
+    assert filled[1]["text"] == "Retry workflow (workflowId: WF-7)"
+    assert filled[1]["params"] == {"workflowId": "WF-7"}
+    assert filled[1]["action"] == "retry_workflow"
+    assert filled[2]["approval"] == "required"
 
 
 def test_appendix_b_markdown():
     r = parse_runbook_full(APPENDIX_MD, "auto")
     assert r.format == "markdown" and not r.warnings
     assert len(r.steps) == 4
+    assert r.steps[0]["approval"] == "none"
+    assert r.steps[1]["approval"] == "required"
     assert r.steps[1]["text"] == ("If one region: fail traffic over to the other region "
                                   "(needs approval from the team lead).")
 

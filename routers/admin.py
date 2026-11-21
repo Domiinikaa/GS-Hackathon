@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db
-from models import User, InviteCode, Department
+from models import Alert, Department, InviteCode, Person, Rule, Source, User
 from schemas import (
     InviteCodeResponse,
     InviteCodeCreateResponse,
@@ -119,8 +119,12 @@ def update_department(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Department '{new_name}' already exists.")
         dept.name = new_name
 
-        # Cascade name update to users
+        # Cascade name update to users and alerting entities
         db.query(User).filter(User.dzial == old_name).update({User.dzial: new_name})
+        db.query(Person).filter(Person.team == old_name).update({Person.team: new_name})
+        db.query(Rule).filter(Rule.team == old_name).update({Rule.team: new_name})
+        db.query(Source).filter(Source.team == old_name).update({Source.team: new_name})
+        db.query(Alert).filter(Alert.team == old_name).update({Alert.team: new_name})
 
     if payload.description is not None:
         dept.description = payload.description.strip() if payload.description else None

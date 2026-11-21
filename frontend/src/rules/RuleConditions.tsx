@@ -25,6 +25,11 @@ function Group({ items }: { items: ConditionNode[] }) {
         <li key={i}>
           {isLeaf(node) ? (
             <ConditionLine c={node} />
+          ) : 'not' in node ? (
+            <>
+              <span className="text-xs font-semibold text-rose-400">NOT:</span>
+              <Group items={[node.not]} />
+            </>
           ) : (
             <>
               <span className="text-xs font-semibold text-slate-400">{'and' in node ? 'ALL' : 'ANY'} of these:</span>

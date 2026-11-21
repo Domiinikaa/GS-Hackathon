@@ -75,23 +75,25 @@ def upsert_alert(db: Session, match: Match) -> Alert | None:
         last_seen=now,
     )
 
-    alert_id = _atomic_upsert(db, new_row, match, now)
-    if alert_id is None:
-        alert_id = _fallback_upsert(db, new_row, match, now)
+    result = _atomic_upsert(db, new_row, match, now)
+    if result is None:
+        result = _fallback_upsert(db, new_row, match, now)
+    alert_id, is_new = result
 
     # populate_existing: jeśli ten alert jest już w pamięci sesji, nadpisz go świeżymi danymi z bazy
     alert = db.get(Alert, alert_id, populate_existing=True)
-
-    # Powiadom przeglądarki na żywo (przed commit – patrz services/live.py)
-    live.publish(alert)
+    if alert is not None:
+        alert._is_new = is_new  # transient flag: True only when a new alert was created (not dedup increment)
+        # Powiadom przeglądarki na żywo (przed commit – patrz services/live.py)
+        live.publish(alert)
     return alert
 
 
-def _atomic_upsert(db: Session, new_row: dict, match: Match, now: datetime) -> int | None:
+def _atomic_upsert(db: Session, new_row: dict, match: Match, now: datetime) -> tuple[int, bool] | None:
     """
     Jedno polecenie: wstaw nowy alert, a jeśli istnieje już nierozwiązany z tym dedup_key –
     zwiększ mu licznik W BAZIE (count = alerts.count + 1, nie w Pythonie).
-    Zwraca id alertu albo None, gdy baza tego nie obsługuje (brak indeksu / inna baza).
+    Zwraca (alert_id, is_new) albo None, gdy baza tego nie obsługuje (brak indeksu / inna baza).
     """
     insert = _insert_for(db)
     if insert is None:
@@ -104,17 +106,18 @@ def _atomic_upsert(db: Session, new_row: dict, match: Match, now: datetime) -> i
             index_where=Alert.status != "resolved",
             set_={"count": Alert.count + 1, "last_seen": now, "last_event_id": match.event_id},
         )
-        .returning(Alert.id)
+        .returning(Alert.id, Alert.count)
     )
     try:
         with db.begin_nested():  # savepoint: błąd nie psuje reszty transakcji
-            return db.execute(stmt).scalar_one()
+            alert_id, count = db.execute(stmt).one()
+            return alert_id, (count == 1)
     except DBAPIError as exc:
         log.warning("alerts: atomic upsert unavailable, using fallback: %s", exc.orig)
         return None
 
 
-def _fallback_upsert(db: Session, new_row: dict, match: Match, now: datetime) -> int:
+def _fallback_upsert(db: Session, new_row: dict, match: Match, now: datetime) -> tuple[int, bool]:
     """Stara ścieżka "sprawdź, potem zapisz" – tylko gdy indeksu nie da się założyć. Nieodporna na wyścigi."""
     alert = (
         db.query(Alert)
@@ -125,8 +128,10 @@ def _fallback_upsert(db: Session, new_row: dict, match: Match, now: datetime) ->
         alert.count = Alert.count + 1  # nawet tutaj liczymy w bazie, nie w Pythonie
         alert.last_seen = now
         alert.last_event_id = match.event_id
+        is_new = False
     else:
         alert = Alert(**new_row)
         db.add(alert)
+        is_new = True
     db.flush()
-    return alert.id
+    return alert.id, is_new

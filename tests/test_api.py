@@ -48,11 +48,15 @@ def engine(event, **extra):
 
 def test_seed_runbooks_attached_to_rules():
     runbooks = {rb["name"]: rb for rb in ok(client.get("/api/runbooks"))}
-    assert set(runbooks) == {"settlement-timeout", "pricing-warnings"}
+    assert set(runbooks) == {"settlement-timeout", "payments-high-error-rate", "pricing-warnings"}
     rules = rules_by_id()
     assert rules["settlements-prod"]["runbook_id"] == runbooks["settlement-timeout"]["id"]
+    assert rules["anna-payments-critical"]["runbook_id"] == runbooks["payments-high-error-rate"]["id"]
     assert rules["pricing-warnings"]["runbook_id"] == runbooks["pricing-warnings"]["id"]
-    assert all(s["approval"] == "none" and s["action"] is None for rb in runbooks.values() for s in rb["steps"])
+    assert runbooks["settlement-timeout"]["steps"][0]["action"] == "http_get"
+    assert runbooks["settlement-timeout"]["steps"][2]["approval"] == "required"
+    assert runbooks["payments-high-error-rate"]["steps"][1]["approval"] == "required"
+    assert all(s["approval"] == "none" and s["action"] is None for s in runbooks["pricing-warnings"]["steps"])
 
 
 def test_restart_does_not_duplicate_seed():
@@ -63,7 +67,7 @@ def test_restart_does_not_duplicate_seed():
         seed_all(db)  # drugi start serwera
     finally:
         db.close()
-    assert len(ok(client.get("/api/runbooks"))) == 2
+    assert len(ok(client.get("/api/runbooks"))) == 3
 
 
 # ---------------------------------------------------------------- podgląd parsowania
@@ -142,15 +146,20 @@ def test_parse_preview_returns_warnings_name_and_matches():
 
 
 def test_appendix_b_yaml_runbook_attaches_itself_by_matches():
-    yaml_rb = ("runbook: settlement-timeout-b\nmatches:\n  type: WORKFLOW_FAILED\n  \"error.code\": TIMEOUT\n"
+    yaml_rb = ("runbook: settlement-timeout-b\nmatches:\n  type: WORKFLOW_FAILED\n  \"error.code\": CIRCUIT_OPEN\n"
                "steps:\n  - action: retry_workflow\n    workflowId: \"{{workflowId}}\"\n")
     rb = ok(client.post("/api/runbooks", json={"name": "settlement-timeout-b", "raw": yaml_rb}))
-    assert rb["matches"]["and"][1] == {"field": "error.code", "op": "eq", "value": "TIMEOUT"}
+    assert rb["matches"]["and"][1] == {"field": "error.code", "op": "eq", "value": "CIRCUIT_OPEN"}
 
     seed_rb = rules_by_id()["settlements-prod"]["runbook_id"]
     ok(client.delete(f"/api/runbooks/{seed_rb}/attach/settlements-prod"))   # reguła bez własnego runbooka
     try:
-        [m] = engine(SETTLEMENT)["matched"]                                   # error.code = TIMEOUT
+        # seed runbook's own `matches` auto-attaches for TIMEOUT
+        [m_seed] = engine(SETTLEMENT)["matched"]
+        assert len(m_seed["steps"]) == 3
+        # newly created YAML runbook auto-attaches for CIRCUIT_OPEN
+        circuit = {**SETTLEMENT, "error": {"code": "CIRCUIT_OPEN", "message": "x"}}
+        [m] = engine(circuit)["matched"]
         assert [s["text"] for s in m["steps"]] == ["Retry workflow (workflowId: WF-1)"]
         other = {**SETTLEMENT, "error": {"code": "DB_DOWN", "message": "x"}}
         assert engine(other)["matched"][0]["steps"] == []                     # matches nie pasuje
@@ -173,8 +182,11 @@ def test_engine_test_settlement_details():
     [m] = engine(SETTLEMENT)["matched"]
     assert m["title"] == "Workflow order-settlement failed at step book-cash" and m["body"] == "Timed out"
     assert m["severity"] == "critical" and m["channels"] == ["phone", "sms", "ui"]
-    assert [s["text"] for s in m["steps"]][1] == "Retry workflow WF-1 from step book-cash"
-    assert m["steps"][3]["text"] == "Open a JIRA ticket with error TIMEOUT"
+    assert m["steps"][0]["action"] == "http_get"
+    assert m["steps"][1]["text"] == "Retry workflow (workflowId: WF-1)"
+    assert m["steps"][1]["params"] == {"workflowId": "WF-1"}
+    assert m["steps"][2]["action"] == "escalate"
+    assert m["steps"][2]["approval"] == "required"
 
 
 def test_engine_test_no_match_and_odd_events():
@@ -187,10 +199,13 @@ def test_engine_test_no_match_and_odd_events():
 def test_engine_test_rule_filter_and_draft_rule():
     r = engine(SETTLEMENT, rule_ids=["rates-big-rejections"])
     assert r["checked"] == ["rates-big-rejections"] and r["matched"] == []
+    runbooks = {rb["name"]: rb for rb in ok(client.get("/api/runbooks"))}
     draft = {"name": "Draft", "team": "QA", "title": "Got {{type}}",
+             "runbook_id": runbooks["settlement-timeout"]["id"],
              "condition": {"or": [{"field": "type", "op": "eq", "value": "WORKFLOW_FAILED"}]}, "unknown": 1}
     [m] = engine(SETTLEMENT, rule=draft)["matched"]
     assert m["rule_id"] == "draft" and m["title"] == "Got WORKFLOW_FAILED"
+    assert len(m["steps"]) == 3 and m["steps"][1]["params"]["workflowId"] == "WF-1"
 
 
 def test_disabled_rule_is_skipped_by_engine():
@@ -210,6 +225,9 @@ def test_disabled_rule_is_skipped_by_engine():
 # ---------------------------------------------------------------- pełna droga przez /api/ingest
 
 def test_ingest_end_to_end_hands_matches_to_person_1():
+    demo_src = ok(client.post("/api/sources", json={
+        "name": "demo", "key": "demo", "team": "Settlements", "kind": "webhook", "enabled": True
+    }))
     captured = []
     real = pipeline.upsert_alert
     pipeline.upsert_alert = lambda db, match: captured.append(match)  # udajemy Osobę 1
@@ -219,11 +237,13 @@ def test_ingest_end_to_end_hands_matches_to_person_1():
         ok(client.post("/api/ingest/demo", json=SETTLEMENT))
     finally:
         pipeline.upsert_alert = real
+        ok(client.delete(f"/api/sources/{demo_src['id']}"))
 
     assert [m.rule_id for m in captured] == ["rates-big-rejections", "rates-big-rejections", "settlements-prod"]
     assert captured[0].dedup_key == captured[1].dedup_key          # ten sam problem -> ten sam alert
     assert captured[0].event_id != captured[1].event_id
-    assert captured[2].steps[1]["text"] == "Retry workflow WF-1 from step book-cash"  # runbook z bazy
+    assert captured[2].steps[1]["text"] == "Retry workflow (workflowId: WF-1)"  # runbook z bazy
+    assert captured[2].steps[2]["approval"] == "required"
     events = ok(client.get("/api/events?limit=10"))
     assert len(events) >= 4
 

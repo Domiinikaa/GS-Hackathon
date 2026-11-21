@@ -84,3 +84,22 @@ def test_unknown_team_gets_only_ui(db):
 def test_in_window(now, start, end, expected):
     h, m = map(int, now.split(":"))
     assert in_window(datetime(2026, 1, 1, h, m).time(), start, end) is expected
+
+
+def test_quiet_hours_fallback_to_ui(db):
+    db.add(Person(
+        name="Jan", team="Ops", email="jan@example.com",
+        channel_prefs={"warning": ["email"]},
+        quiet_hours={"email": {"from": "08:00", "to": "20:00", "else": "ui"}},
+    ))
+    db.commit()
+    assert simple(plan_recipients(db, "Ops", "warning", ["email"], NIGHT)) == [("Jan", "ui")]
+
+
+def test_info_ui_only_preference_not_overridden_by_rule_email(db):
+    db.add(Person(
+        name="Elena", team="Core", email="elena@example.com",
+        channel_prefs={"info": ["ui"]},
+    ))
+    db.commit()
+    assert simple(plan_recipients(db, "Core", "info", ["email", "ui"], DAY)) == [("team:Core", "ui")]

@@ -12,7 +12,7 @@ from routers import people, rules
 from models import Department
 from seed import seed_people, seed_rules
 
-DEPARTMENTS = ["Business", "Finance", "IT", "Management", "Sales"]
+DEPARTMENTS = sorted(["Business", "Finance", "IT", "Management", "Payments", "Pricing", "Rates", "Sales", "Settlements"])
 
 
 @pytest.fixture()
@@ -42,7 +42,7 @@ def client():
 
 NEW_RULE = {
     "name": "Big EUR rejections",
-    "team": "Finance",
+    "team": "Rates",
     "condition": {"or": [{"field": "payload.currency", "op": "eq", "value": "EUR"},
                          {"field": "payload.reason", "op": "in", "value": "LIMIT_BREACH, TIMEOUT"}]},
     "channels": ["email", "ui", "email"],
@@ -88,7 +88,7 @@ def test_rule_validation(client, bad):
 
 def test_nested_and_or_allowed(client):
     cond = {"or": [
-        {"and": [{"field": "a", "op": "eq", "value": 1}, {"field": "b", "op": "eq", "value": 2}]},
+        {"and": [{"field": "a", "op": "eq", "value": 1}, {"not": {"field": "b", "op": "eq", "value": 2}}]},
         {"field": "c", "op": "neq", "value": 3},
     ]}
     res = client.post("/api/rules", json={**NEW_RULE, "condition": cond})
@@ -98,9 +98,8 @@ def test_nested_and_or_allowed(client):
 
 @pytest.mark.parametrize("cond", [
     {"not": {"field": "a", "op": "eq", "value": 1}},          # top level must be and / or
-    {"and": [{"not": {"field": "a", "op": "eq", "value": 1}}]},  # "not" is not supported by the engine yet
     {"and": [{"or": []}]},                                    # empty nested group
-    {"and": [{"not": {"xor": []}}]},                          # unknown node
+    {"and": [{"not": {"xor": []}}]},                          # unknown node inside not
     {"and": [{"and": [{"and": [{"and": [{"and": [{"and": [{"field": "a", "op": "eq", "value": 1}]}]}]}]}]}]},
 ])
 def test_bad_nested_conditions_rejected(client, cond):
@@ -108,7 +107,7 @@ def test_bad_nested_conditions_rejected(client, cond):
 
 
 NEW_PERSON = {
-    "name": "Ola", "team": "Finance", "email": "ola@example.com", "phone": "+48 600 000 009",
+    "name": "Ola", "team": "Rates", "email": "ola@example.com", "phone": "+48 600 000 009",
     "on_call": True,
     "channel_prefs": {"critical": ["phone", "sms"], "warning": ["email"], "info": ["ui"]},
     "quiet_hours": {"sms": {"from": "08:00", "to": "20:00", "else": "email"}},
@@ -116,13 +115,13 @@ NEW_PERSON = {
 
 
 def test_people_crud(client):
-    assert len(client.get("/api/people").json()) == 6  # 3 members + 3 team leads from the seed
+    assert len(client.get("/api/people").json()) == 7  # 3 members + 4 team leads from the seed
     created = client.post("/api/people", json=NEW_PERSON)
     assert created.status_code == 201, created.text
     person = created.json()
     assert person["quiet_hours"]["sms"] == {"from": "08:00", "to": "20:00", "else": "email"}
 
-    assert len(client.get("/api/people", params={"team": "Finance"}).json()) == 3  # Kasia, Piotr, Ola
+    assert len(client.get("/api/people", params={"team": "Rates"}).json()) == 3  # Kasia, Piotr, Ola
     updated = client.put(f"/api/people/{person['id']}", json={**NEW_PERSON, "on_call": False})
     assert updated.json()["on_call"] is False
     assert client.delete(f"/api/people/{person['id']}").json() == {"deleted": True}
@@ -166,22 +165,22 @@ def test_field_hints_shape(client):
 
 
 def test_team_must_be_a_department(client):
-    assert client.post("/api/people", json={**NEW_PERSON, "team": "Payments"}).status_code == 422
+    assert client.post("/api/people", json={**NEW_PERSON, "team": "UnknownTeam"}).status_code == 422
     # case-insensitive, stored with the department's exact name
-    assert client.post("/api/people", json={**NEW_PERSON, "team": "finance"}).json()["team"] == "Finance"
+    assert client.post("/api/people", json={**NEW_PERSON, "team": "rates"}).json()["team"] == "Rates"
 
 
 def test_rule_target_is_team_or_person(client):
-    assert client.post("/api/rules", json={**NEW_RULE, "team": "Payments"}).status_code == 422
-    assert client.post("/api/rules", json={**NEW_RULE, "team": "it"}).json()["team"] == "IT"
+    assert client.post("/api/rules", json={**NEW_RULE, "team": "UnknownTeam"}).status_code == 422
+    assert client.post("/api/rules", json={**NEW_RULE, "team": "settlements"}).json()["team"] == "Settlements"
     assert client.post("/api/rules", json={**NEW_RULE, "name": "Personal", "team": "Anna"}).json()["team"] == "Anna"
 
 
 def test_role_defaults_to_member_and_lead_filter(client):
     member = client.post("/api/people", json=NEW_PERSON).json()
     assert member["role"] == "member"
-    lead = client.post("/api/people", json={**NEW_PERSON, "name": "Lead Finance", "role": "lead"}).json()
+    lead = client.post("/api/people", json={**NEW_PERSON, "name": "Lead Rates", "role": "lead"}).json()
     assert lead["role"] == "lead"
-    leads = client.get("/api/people", params={"team": "Finance", "role": "lead"}).json()
-    assert {p["name"] for p in leads} == {"Piotr", "Lead Finance"}  # Piotr comes from the seed
+    leads = client.get("/api/people", params={"team": "Rates", "role": "lead"}).json()
+    assert {p["name"] for p in leads} == {"Piotr", "Lead Rates"}  # Piotr comes from the seed
     assert client.post("/api/people", json={**NEW_PERSON, "role": "boss"}).status_code == 422

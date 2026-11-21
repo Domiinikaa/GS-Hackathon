@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from database import DATABASE_URL, SessionLocal, engine
-from models import Event, Source
+from models import Event, Rule, Source
 from services.connectors.parser import get_by_path, parse_raw_payload
 from services.connectors.simulator import generate_simulated_event
 from services.pipeline import process_event
@@ -52,16 +52,21 @@ def ingest_records(db: Session, source: Source, raw_payload: Any) -> dict[str, A
     if not records:
         return {"accepted": 0, "alerts": [], "parsed": []}
 
+    source_id = source.id
+    source_enabled = bool(source.enabled)
+    cfg = dict(source.config or {})
+    needs_sample = source.sample_event is None
+    enabled_rules = db.query(Rule).filter(Rule.enabled.is_(True)).all()
+
     alert_ids: list[int] = []
     for item in records:
-        event = Event(source_id=source.id, payload=item)
+        event = Event(source_id=source_id, payload=item)
         db.add(event)
         db.flush()
-        alert_ids += process_event(db, event)
+        alert_ids += process_event(db, event, rules=enabled_rules, commit=False)
 
     now = datetime.utcnow()
-    cfg = source.config or {}
-    next_status = ("simulating" if cfg.get("simulate") else "active") if source.enabled else "paused"
+    next_status = ("simulating" if cfg.get("simulate") else "active") if source_enabled else "paused"
 
     update_values: dict[Any, Any] = {
         Source.events_count: func.coalesce(Source.events_count, 0) + len(records),
@@ -69,10 +74,10 @@ def ingest_records(db: Session, source: Source, raw_payload: Any) -> dict[str, A
         Source.last_error: None,
         Source.status: next_status,
     }
-    if source.sample_event is None and records:
+    if needs_sample and records:
         update_values[Source.sample_event] = records[0]
 
-    db.query(Source).filter(Source.id == source.id).update(
+    db.query(Source).filter(Source.id == source_id).update(
         update_values,
         synchronize_session=False,
     )
@@ -162,8 +167,13 @@ class IngestManager:
     def __init__(self) -> None:
         self._tasks: dict[int, asyncio.Task[Any]] = {}
         self._fingerprints: dict[int, str] = {}
+        self._logfile_offsets: dict[int, int] = {}
         self._reconcile_task: asyncio.Task[Any] | None = None
         self._running = False
+
+    def advance_logfile_offset(self, source_id: int, new_offset: int) -> None:
+        """Advance tracked file offset after manual simulate writes to a log file."""
+        self._logfile_offsets[source_id] = max(self._logfile_offsets.get(source_id, 0), new_offset)
 
     def is_worker_running(self, source_id: int) -> bool:
         task = self._tasks.get(source_id)
@@ -196,9 +206,11 @@ class IngestManager:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()
         self._fingerprints.clear()
+        self._logfile_offsets.clear()
 
     async def stop_source(self, source_id: int) -> None:
         self._fingerprints.pop(source_id, None)
+        self._logfile_offsets.pop(source_id, None)
         task = self._tasks.pop(source_id, None)
         if task and not task.done():
             task.cancel()
@@ -485,9 +497,10 @@ class IngestManager:
                 _record_source_error(source_id, f"Cannot prepare simulated log file '{file_path}': {exc}")
                 return
 
-        offset = 0
+        initial_offset = 0
         if path.exists() and not from_beginning:
-            offset = path.stat().st_size
+            initial_offset = path.stat().st_size
+        self._logfile_offsets[source_id] = initial_offset
 
         last_sim = 0.0
 
@@ -507,16 +520,19 @@ class IngestManager:
                 if path.exists():
                     try:
                         size = path.stat().st_size
+                        offset = self._logfile_offsets.get(source_id, 0)
                         if size < offset:
                             offset = 0
+                            self._logfile_offsets[source_id] = 0
                         if size > offset:
                             with path.open("r", encoding="utf-8", errors="replace") as fh:
                                 fh.seek(offset)
                                 chunk = fh.read()
-                                offset = fh.tell()
+                                new_offset = fh.tell()
                             lines = [ln for ln in chunk.splitlines() if ln.strip()]
                             if lines:
                                 await asyncio.to_thread(_ingest_in_fresh_session, source_id, lines)
+                            self._logfile_offsets[source_id] = max(self._logfile_offsets.get(source_id, 0), new_offset)
                     except Exception as exc:
                         _record_source_error(source_id, f"Error reading log file: {exc}")
                 elif not simulate:

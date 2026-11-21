@@ -15,7 +15,9 @@ from services.security import hash_password
 from services.connectors import ingest_manager
 from routers import api, auth, admin, alerts, rules, people, sources, deliveries, runbooks
 from seed import seed_all
-from sqlalchemy import text
+from services.alert_service import ensure_open_dedup_index
+from services.people_service import ensure_people_role_column
+from sqlalchemy import inspect, text
 
 # Tabele (SQLite / PostgreSQL) są tworzone niżej, w bloku startowym pod startup_lock()
 
@@ -53,10 +55,31 @@ def ensure_sqlite_columns():
             except Exception:
                 pass
 
-from services.alert_service import ensure_open_dedup_index  # noqa: E402  (Osoba 1: ochrona przed duplikatami alertów)
-ensure_open_dedup_index(engine)
-from services.people_service import ensure_people_role_column  # noqa: E402  (Osoba 2: people.role for older databases)
-ensure_people_role_column(engine)
+
+def ensure_sources_columns(bind) -> None:
+    """Adds new Source columns on existing SQLite or PostgreSQL databases."""
+    insp = inspect(bind)
+    if "sources" not in insp.get_table_names():
+        return
+    existing = {col["name"] for col in insp.get_columns("sources")}
+    is_pg = bind.dialect.name == "postgresql"
+    column_ddls = (
+        ("enabled", "ALTER TABLE sources ADD COLUMN enabled BOOLEAN NOT NULL DEFAULT TRUE"
+         if is_pg else "ALTER TABLE sources ADD COLUMN enabled BOOLEAN DEFAULT 1"),
+        ("status", "ALTER TABLE sources ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active'"
+         if is_pg else "ALTER TABLE sources ADD COLUMN status VARCHAR(20) DEFAULT 'active'"),
+        ("last_error", "ALTER TABLE sources ADD COLUMN last_error TEXT"),
+        ("last_event_at", "ALTER TABLE sources ADD COLUMN last_event_at TIMESTAMP"
+         if is_pg else "ALTER TABLE sources ADD COLUMN last_event_at DATETIME"),
+        ("events_count", "ALTER TABLE sources ADD COLUMN events_count INTEGER NOT NULL DEFAULT 0"
+         if is_pg else "ALTER TABLE sources ADD COLUMN events_count INTEGER DEFAULT 0"),
+    )
+    missing = [sql for name, sql in column_ddls if name not in existing]
+    if not missing:
+        return
+    with bind.begin() as conn:
+        for sql in missing:
+            conn.execute(text(sql))
 
 
 def purge_demo_user():
@@ -83,6 +106,10 @@ def seed_default_departments():
     try:
         if db.query(models.Department).count() == 0:
             default_depts = [
+                models.Department(name="Settlements", description="Order settlement workflows and counterparty operations"),
+                models.Department(name="Pricing", description="Pricing engine services and market data latency"),
+                models.Department(name="Rates", description="Rates trading desk and trade gateway monitoring"),
+                models.Department(name="Payments", description="Payments API reliability and regional failover"),
                 models.Department(name="Management", description="Executive leadership and strategic planning"),
                 models.Department(name="IT", description="Engineering, software architecture, and infrastructure"),
                 models.Department(name="Finance", description="Capital markets, quantitative analysis, and treasury"),
@@ -144,6 +171,9 @@ def init_admin_from_env():
 with startup_lock():
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_columns()
+    ensure_sources_columns(engine)
+    ensure_open_dedup_index(engine)
+    ensure_people_role_column(engine)
     purge_demo_user()
     seed_default_departments()
     init_admin_from_env()

@@ -1,13 +1,14 @@
 // Rules page.
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { BookOpen, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { CHANNELS, COLOR_DOT, Rule } from './ruleTypes';
 import RuleConditions from './RuleConditions';
-import { errorMessage, rulesApi } from './rulesApi';
+import { RunbookSummary, errorMessage, rulesApi } from './rulesApi';
 import RuleForm from './RuleForm';
 
 export default function RulesPage() {
   const [rules, setRules] = useState<Rule[]>([]);
+  const [runbooks, setRunbooks] = useState<RunbookSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -19,7 +20,12 @@ export default function RulesPage() {
     setLoading(true);
     setError('');
     try {
-      setRules(await rulesApi.list());
+      const [rulesList, runbooksList] = await Promise.all([
+        rulesApi.list(),
+        rulesApi.runbooks().catch(() => [] as RunbookSummary[]),
+      ]);
+      setRules(rulesList);
+      setRunbooks(runbooksList);
     } catch (e) {
       setError(`Could not load rules: ${errorMessage(e)}`);
     } finally {
@@ -74,6 +80,11 @@ export default function RulesPage() {
       setError(errorMessage(e));
     }
   }
+
+  const runbookNameById = useMemo(
+    () => new Map(runbooks.map((rb) => [rb.id, rb.name])),
+    [runbooks],
+  );
 
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -135,6 +146,12 @@ export default function RulesPage() {
                 <h3 className="font-bold text-white">{rule.name}</h3>
                 <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">{rule.team}</span>
                 <span className="text-xs uppercase text-slate-500">{rule.severity}</span>
+                {rule.runbook_id && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-sky-500/10 border border-sky-500/30 text-sky-300 px-2 py-0.5 rounded">
+                    <BookOpen className="w-3 h-3" />
+                    {runbookNameById.get(rule.runbook_id) ?? `Runbook #${rule.runbook_id}`}
+                  </span>
+                )}
               </div>
               <p className="text-sm text-slate-400">
                 Send to <b className="text-slate-200">{rule.team}</b> via{' '}
