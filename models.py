@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Float, JSON, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, Float, JSON, String, Text, text
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -144,6 +144,7 @@ class Person(Base):
     on_call = Column(Boolean, default=False)
     channel_prefs = Column(JSON, default=dict)             # {"critical": ["phone","sms"], ...}
     quiet_hours = Column(JSON, default=dict)               # {"sms": {"from": "08:00", "to": "20:00"}}
+    role = Column(String(20), nullable=False, default="member", server_default="member")  # member | lead (approves risky steps)
 
 
 class Runbook(Base):
@@ -177,6 +178,15 @@ class Alert(Base):
     history = Column(JSON, default=list)                   # [{"at","who","what"}]
     first_seen = Column(DateTime, default=datetime.utcnow)
     last_seen = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Zasada w bazie: jeden dedup_key = najwyżej jeden NIEROZWIĄZANY alert.
+    # Chroni przed duplikatami, gdy kilka kopii serwera dostanie to samo zdarzenie naraz.
+    # Dla istniejących baz indeks zakłada services/alert_service.ensure_open_dedup_index().
+    __table_args__ = (
+        Index("uq_alerts_open_dedup", "dedup_key", unique=True,
+              sqlite_where=text("status != 'resolved'"),
+              postgresql_where=text("status != 'resolved'")),
+    )
 
 
 class Delivery(Base):
