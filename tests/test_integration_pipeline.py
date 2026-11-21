@@ -189,7 +189,7 @@ def test_pricing_logfile_key_value_and_grouping():
     assert len(d["steps"]) == 4  # Appendix B pricing text splits into 4 steps
     alert = ok(client.get(f"/api/alerts/{d['alert_id']}"))
     assert alert["count"] == 2
-    assert alert["dedup_key"].startswith("pricing-warnings|EURUSD|w")
+    assert alert["dedup_key"] == "pricing-warnings"  # repeats of the same rule share one alert
 
 
 def test_rates_webhook_ingest():
