@@ -10,6 +10,10 @@ export interface RunbookStep {
   params: Record<string, unknown>;
   approval: 'none' | 'required';
   done?: boolean;
+  done_by?: string;               // kto oznaczył krok jako zrobiony
+  done_at?: string;
+  approved_by?: string;           // kto zatwierdził ryzykowny krok
+  approved_at?: string;
 }
 
 export interface Alert {

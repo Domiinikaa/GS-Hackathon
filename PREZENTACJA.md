@@ -48,6 +48,18 @@ Dopisujemy na bieżąco.
 - Dozwolone przejścia statusu pilnowane w backendzie (błąd 409 przy próbie np. ack na rozwiązanym alercie).
 - Po Resolve to samo zdarzenie tworzy **nowy** alert – stary problem został zamknięty, nowy jest nowym incydentem.
 
+## 3b. Alert mówi, co robić dalej – kroki runbooka z zatwierdzaniem ⭐ (2.6)
+
+- **Co:** po kliknięciu karta się rozwija: treść, **kroki runbooka**, historia. Zwykły krok → „Mark done”.
+  Ryzykowny krok (np. „przełącz ruch na inny region”) → najpierw **Approve**, dopiero potem można go oznaczyć jako zrobiony.
+- Backend pilnuje zasad (nie tylko UI): Mark done ryzykownego kroku bez zgody → 409 „Approve this step first”;
+  nie można zatwierdzić dwa razy ani zmieniać rozwiązanego alertu. Przetestowane 8 scenariuszy.
+- Każde kliknięcie → wpis w historii „kto i kiedy” + zmiana na żywo we wszystkich przeglądarkach.
+- **Link do alertu** `…/#alerts/<id>` otwiera stronę od razu z rozwiniętym alertem – gotowe pod „short link in an SMS” (2.6).
+- **Do powiedzenia:** „Alert to nie tylko informacja, co się zepsuło – prowadzi człowieka przez runbook, a ryzykowne
+  akcje wymagają zatwierdzenia, które zostaje w historii.”
+- Uczciwie: Approve zapisuje zgodę; samo wykonanie akcji (retry, restart) to silnik runbooków (Osoba 4).
+
 ## 4. Czytelne alerty (UX, 2.2 "per-rule presentation")
 
 - Kolor i ważność biorą się z reguły (czerwony pasek + CRITICAL, bursztynowy + WARNING).

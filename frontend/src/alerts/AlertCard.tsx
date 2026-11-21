@@ -1,7 +1,9 @@
 // OSOBA 1 – wygląd JEDNEGO alertu na liście.
 // Kolor i ważność biorą się z reguły (wymaganie 2.2 "per-rule presentation").
+import { ChevronDown } from 'lucide-react';
 import type { Alert } from '../shared/types';
 import type { Color } from '../rules/ruleTypes';
+import AlertDetails from './AlertDetails';
 
 // Tailwind potrzebuje pełnych nazw klas wpisanych w kodzie, dlatego mapy zamiast `bg-${color}-500`
 const BAR: Record<Color, string> = {
@@ -28,7 +30,7 @@ const STATUS: Record<Alert['status'], string> = {
 
 // Backend zapisuje czas w UTC bez strefy ("2026-11-20T22:02:06"). Dopisujemy "Z",
 // żeby przeglądarka nie potraktowała go jako czasu lokalnego.
-function parseUtc(iso: string): Date {
+export function parseUtc(iso: string): Date {
   return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z');
 }
 
@@ -43,22 +45,27 @@ export function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)} d ago`;
 }
 
-export type AlertAction = 'ack' | 'resolve';
+// ack/resolve dotyczą całego alertu, approve/done – jednego kroku runbooka (stepIndex)
+export type AlertAction = 'ack' | 'resolve' | 'approve' | 'done';
+export type OnAlertAction = (alert: Alert, action: AlertAction, stepIndex?: number) => void;
 
 interface Props {
   alert: Alert;
-  onAction: (alert: Alert, action: AlertAction) => void;
-  busy?: boolean; // true = trwa wysyłanie kliknięcia, przyciski wyłączone
+  onAction: OnAlertAction;
+  busy?: boolean;       // true = trwa wysyłanie kliknięcia, przyciski wyłączone
+  expanded?: boolean;   // czy pokazać szczegóły (kroki runbooka, historia)
+  onToggle?: () => void;
 }
 
-export default function AlertCard({ alert, onAction, busy = false }: Props) {
+export default function AlertCard({ alert, onAction, busy = false, expanded = false, onToggle }: Props) {
   const color = BAR[alert.color] ? alert.color : 'slate'; // nieznany kolor z backendu → szary
-  // Kto ostatnio zmienił status – ostatni wpis historii (pomijamy "system created")
-  const last = alert.history?.length ? alert.history[alert.history.length - 1] : null;
-  const changedBy = last && last.who !== 'system' ? last.who : null;
+  // Kto ustawił obecny status – ostatni wpis historii o TYM statusie (pomijamy kroki runbooka i "created")
+  const statusEntry = [...(alert.history ?? [])].reverse().find((h) => h.what === alert.status);
+  const changedBy = statusEntry && statusEntry.who !== 'system' ? statusEntry.who : null;
 
   return (
-    <div className="relative bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+    <div id={`alert-${alert.id}`}
+      className={`relative bg-slate-900 border rounded-xl overflow-hidden ${expanded ? 'border-slate-600' : 'border-slate-800'}`}>
       {/* kolorowy pasek z lewej */}
       <div className={`absolute inset-y-0 left-0 w-1.5 ${BAR[color]}`} />
 
@@ -67,14 +74,19 @@ export default function AlertCard({ alert, onAction, busy = false }: Props) {
           {alert.severity}
         </span>
 
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-white truncate">{alert.title}</p>
-          {alert.body && <p className="text-sm text-slate-400 mt-0.5">{alert.body}</p>}
+        {/* klik w treść karty rozwija / zwija szczegóły */}
+        <button type="button" onClick={onToggle} aria-expanded={expanded}
+          className="flex-1 min-w-0 text-left group">
+          <p className="font-semibold text-white truncate flex items-center gap-1.5">
+            <span className="truncate group-hover:underline">{alert.title}</span>
+            <ChevronDown className={`w-4 h-4 shrink-0 text-slate-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </p>
+          {alert.body && !expanded && <p className="text-sm text-slate-400 mt-0.5 truncate">{alert.body}</p>}
           <p className="text-xs text-slate-500 mt-2">
             {alert.team} · <span className={STATUS[alert.status]}>{alert.status}</span>
             {changedBy && <> by {changedBy}</>} · last seen {timeAgo(alert.last_seen)}
           </p>
-        </div>
+        </button>
 
         <div className="shrink-0 flex flex-col items-end gap-2">
           {/* licznik deduplikacji – tylko gdy alert się powtórzył */}
@@ -102,6 +114,8 @@ export default function AlertCard({ alert, onAction, busy = false }: Props) {
           </div>
         </div>
       </div>
+
+      {expanded && <AlertDetails alert={alert} onAction={onAction} busy={busy} />}
     </div>
   );
 }

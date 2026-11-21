@@ -124,6 +124,56 @@ def resolve(alert_id: int, db: Session = Depends(get_db), user=Depends(get_optio
     return _change_status(db, alert_id, "resolved", ["open", "acknowledged"], user)
 
 
+def _update_step(db, alert_id, step_index, user, action):
+    """
+    Wspólne dla approve i done: zmień jeden krok runbooka i dopisz do historii kto i kiedy.
+    Ryzykowny krok (approval == "required") trzeba najpierw zatwierdzić, dopiero potem oznaczyć jako zrobiony.
+    Approve zapisuje zgodę – samo wykonanie akcji (np. retry workflow) to część silnika runbooków (Osoba 4).
+    """
+    alert = db.get(Alert, alert_id)
+    if not alert:
+        raise HTTPException(404, "Alert not found")
+    if alert.status == "resolved":
+        raise HTTPException(409, "Alert is already resolved")
+    steps = list(alert.steps or [])
+    if not 0 <= step_index < len(steps):
+        raise HTTPException(404, "No such step")
+
+    step = dict(steps[step_index])  # kopia kroku
+    who = user.uname if user else "anonymous"
+    now = datetime.utcnow().isoformat()
+
+    if action == "approve":
+        if step.get("approval") != "required":
+            raise HTTPException(409, "This step does not need approval")
+        if step.get("approved_by"):
+            raise HTTPException(409, "Step already approved")
+        step["approved_by"], step["approved_at"] = who, now
+        what = f"approved step {step_index + 1}: {step.get('text', '')}"
+    else:  # done
+        if step.get("approval") == "required" and not step.get("approved_by"):
+            raise HTTPException(409, "Approve this step first")
+        if step.get("done"):
+            raise HTTPException(409, "Step already done")
+        step["done"], step["done_by"], step["done_at"] = True, who, now
+        what = f"marked step {step_index + 1} as done"
+
+    steps[step_index] = step
+    alert.steps = steps  # NOWA lista – tak jak przy history
+    alert.history = (alert.history or []) + [{"at": now, "who": who, "what": what}]
+    live.publish(alert)  # przed commit – patrz services/live.py
+    db.commit()
+    db.refresh(alert)
+    return alert
+
+
 @router.post("/{alert_id}/steps/{step_index}/approve")
-def approve_step(alert_id: int, step_index: int, db: Session = Depends(get_db)):
-    raise HTTPException(501, "TODO (Osoba 1 + 4): zatwierdzenie ryzykownego kroku runbooka")
+def approve_step(alert_id: int, step_index: int, db: Session = Depends(get_db),
+                 user=Depends(get_optional_current_user)):
+    return _update_step(db, alert_id, step_index, user, "approve")
+
+
+@router.post("/{alert_id}/steps/{step_index}/done")
+def mark_step_done(alert_id: int, step_index: int, db: Session = Depends(get_db),
+                   user=Depends(get_optional_current_user)):
+    return _update_step(db, alert_id, step_index, user, "done")

@@ -7,16 +7,51 @@ import AlertCard, { AlertAction } from './AlertCard';
 
 type StatusFilter = AlertStatus | 'all';
 
+// Link do konkretnego alertu (np. w SMS-ie): #alerts/5 – otwiera stronę z rozwiniętym alertem nr 5
+function alertIdFromUrl(): number | null {
+  const m = window.location.hash.match(/^#alerts\/(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
 export default function AlertsPage() {
   // "Pamięć" strony
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [status, setStatus] = useState<StatusFilter>('open');
+  const linkedId = alertIdFromUrl();
+  // Wejście z linku: pokaż wszystkie statusy, żeby alert był widoczny nawet gdy już acknowledged
+  const [status, setStatus] = useState<StatusFilter>(linkedId ? 'all' : 'open');
   const [team, setTeam] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null); // który alert właśnie się zapisuje
   const [live, setLive] = useState(false);                    // czy "radio" jest podłączone
   const [liveMode, setLiveMode] = useState<string>('');       // in-memory / postgres-notify
+  const [expandedId, setExpandedId] = useState<number | null>(linkedId); // który alert ma rozwinięte szczegóły
+
+  // Rozwiń / zwiń alert. Adres w pasku zmienia się na #alerts/<id>, więc można go skopiować i wysłać.
+  // replaceState zamiast location.hash – nie przełącza zakładek w App.tsx.
+  function toggle(id: number) {
+    const next = expandedId === id ? null : id;
+    setExpandedId(next);
+    window.history.replaceState(null, '', next ? `#alerts/${next}` : '#alerts');
+  }
+
+  // Link #alerts/<id> wklejony do już otwartej strony (zmienia się tylko # – strona się nie przeładowuje)
+  useEffect(() => {
+    const onHash = () => {
+      const id = alertIdFromUrl();
+      if (id) {
+        setStatus('all');
+        setExpandedId(id);
+      }
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  // Przewiń do rozwiniętego alertu, gdy jest już na liście
+  useEffect(() => {
+    if (expandedId) document.getElementById(`alert-${expandedId}`)?.scrollIntoView({ block: 'nearest' });
+  }, [expandedId, alerts.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pobierz alerty z backendu. Filtr statusu robi backend (?status=…), zespołu – my niżej.
   async function load() {
@@ -32,12 +67,15 @@ export default function AlertsPage() {
     }
   }
 
-  // Kliknięcie Acknowledge / Resolve: POST /api/alerts/{id}/ack|resolve, potem odśwież listę
-  async function handleAction(alert: Alert, action: AlertAction) {
+  // Kliknięcie Acknowledge / Resolve (cały alert) albo Approve / Mark done (jeden krok runbooka)
+  async function handleAction(alert: Alert, action: AlertAction, stepIndex?: number) {
     setBusyId(alert.id);
     setError(null);
+    const path = action === 'approve' || action === 'done'
+      ? `/alerts/${alert.id}/steps/${stepIndex}/${action}`
+      : `/alerts/${alert.id}/${action}`;
     try {
-      await api<Alert>(`/alerts/${alert.id}/${action}`, { method: 'POST' });
+      await api<Alert>(path, { method: 'POST' });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -68,9 +106,12 @@ export default function AlertsPage() {
     source.onmessage = (e) => {
       const changed: Alert = JSON.parse(e.data);
       setAlerts((prev) => {
-        const rest = prev.filter((a) => a.id !== changed.id);         // wyrzuć starą wersję tej karty
         const fits = status === 'all' || changed.status === status;   // czy pasuje do filtra statusu
-        return fits ? [changed, ...rest] : rest;                      // nowa wersja na górę listy
+        if (!fits) return prev.filter((a) => a.id !== changed.id);    // np. rozwiązany przy filtrze Open – znika
+        const known = prev.some((a) => a.id === changed.id);
+        return known
+          ? prev.map((a) => (a.id === changed.id ? changed : a))      // znany alert: podmień w miejscu (karta nie skacze)
+          : [changed, ...prev];                                        // nowy alert: na górę listy
       });
     };
 
@@ -126,7 +167,8 @@ export default function AlertsPage() {
 
       <div className="space-y-3">
         {visible.map((a) => (
-          <AlertCard key={a.id} alert={a} onAction={handleAction} busy={busyId === a.id} />
+          <AlertCard key={a.id} alert={a} onAction={handleAction} busy={busyId === a.id}
+            expanded={expandedId === a.id} onToggle={() => toggle(a.id)} />
         ))}
 
         {!loading && !error && visible.length === 0 && (
