@@ -19,25 +19,25 @@ def seed_rules(db: Session) -> None:  # Osoba 2 – te same 4 reguły co fronten
     if db.query(Rule).count() > 0:
         return
     db.add_all([
-        Rule(id="settlements-prod", name="Settlement workflow failed in prod", team="Settlements",
+        Rule(id="settlements-prod", name="Settlement workflow failed in prod", team="Business",
              condition={"and": [{"field": "type", "op": "eq", "value": "WORKFLOW_FAILED"},
                                 {"field": "workflowName", "op": "eq", "value": "order-settlement"},
                                 {"field": "environment", "op": "eq", "value": "prod"}]},
              channels=["phone", "sms", "ui"], title="Workflow {{workflowName}} failed at step {{step}}",
              body="{{error.message}}", severity="critical", color="red"),
-        Rule(id="pricing-warnings", name="Pricing engine warnings", team="Pricing",
+        Rule(id="pricing-warnings", name="Pricing engine warnings", team="IT",
              condition={"and": [{"field": "service", "op": "wildcard", "value": "pricing-engine-*"},
                                 {"field": "level", "op": "in", "value": ["WARN", "ERROR", "FATAL"]}]},
              channels=["ui"], title="Pricing warnings for {{instrument}}", severity="warning", color="amber",
              group_by="instrument", group_window_s=300),
-        Rule(id="rates-big-rejections", name="Large rejected trades (rates desk)", team="Rates",
+        Rule(id="rates-big-rejections", name="Large rejected trades (rates desk)", team="Finance",
              condition={"and": [{"field": "meta.schema", "op": "wildcard", "value": "trade.rejected.*"},
                                 {"field": "payload.desk", "op": "eq", "value": "rates"},
                                 {"field": "payload.notional", "op": "gt", "value": 10000000}]},
              channels=["email", "ui"],
              title="Rejected {{payload.currency}} {{payload.notional}} — {{payload.reason}}",
              severity="warning", color="amber"),
-        Rule(id="anna-payments-critical", name="Critical payments-api alerts", team="Payments",
+        Rule(id="anna-payments-critical", name="Critical payments-api alerts", team="Anna",
              condition={"and": [{"field": "labels.service", "op": "eq", "value": "payments-api"},
                                 {"field": "labels.severity", "op": "eq", "value": "critical"}]},
              channels=["sms"], title="{{alertname}} on {{labels.service}}", body="{{annotations.summary}}",
@@ -46,16 +46,36 @@ def seed_rules(db: Session) -> None:  # Osoba 2 – te same 4 reguły co fronten
 
 
 def seed_people(db: Session) -> None:  # Osoba 2
-    if db.query(Person).count() > 0:
-        return
+    if db.query(Person).count() == 0:
+        _seed_members(db)
+    seed_team_leads(db)
+
+
+def _seed_members(db: Session) -> None:
     db.add_all([
-        Person(name="Anna", team="Payments", email="anna@example.com", phone="+48 600 000 001",
+        Person(name="Anna", team="IT", email="anna@example.com", phone="+48 600 000 001",
                channel_prefs={"critical": ["sms"], "warning": ["email"], "info": ["ui"]},
                quiet_hours={"sms": {"from": "08:00", "to": "20:00", "else": "email"}}),
-        Person(name="Tom", team="Settlements", email="tom@example.com", phone="+48 600 000 002", on_call=True,
+        Person(name="Tom", team="Business", email="tom@example.com", phone="+48 600 000 002", on_call=True,
                channel_prefs={"critical": ["phone", "sms"], "warning": ["email"], "info": ["ui"]}),
-        Person(name="Kasia", team="Rates", email="kasia@example.com",
+        Person(name="Kasia", team="Finance", email="kasia@example.com",
                channel_prefs={"critical": ["email"], "warning": ["email"], "info": ["ui"]}),
+    ])
+
+
+TEAM_LEADS = [  # one lead per team that has example rules; leads approve risky runbook steps
+    dict(name="Marek", team="IT", email="marek@example.com", phone="+48 600 000 011"),
+    dict(name="Ewa", team="Business", email="ewa@example.com", phone="+48 600 000 012"),
+    dict(name="Piotr", team="Finance", email="piotr@example.com", phone="+48 600 000 013"),
+]
+
+
+def seed_team_leads(db: Session) -> None:  # Osoba 2 – runs once, also on databases created before roles existed
+    if db.query(Person).filter(Person.role == "lead").count() > 0:
+        return
+    db.add_all([
+        Person(role="lead", channel_prefs={"critical": ["sms"], "warning": ["email"], "info": ["ui"]}, **lead)
+        for lead in TEAM_LEADS
     ])
 
 

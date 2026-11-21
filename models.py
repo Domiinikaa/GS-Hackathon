@@ -139,6 +139,7 @@ class Person(Base):
     on_call = Column(Boolean, default=False)
     channel_prefs = Column(JSON, default=dict)             # {"critical": ["phone","sms"], ...}
     quiet_hours = Column(JSON, default=dict)               # {"sms": {"from": "08:00", "to": "20:00"}}
+    role = Column(String(20), nullable=False, default="member", server_default="member")  # member | lead (approves risky steps)
 
 
 class Runbook(Base):

@@ -39,6 +39,8 @@ def ensure_sqlite_columns():
 
 from services.alert_service import ensure_open_dedup_index  # noqa: E402  (Osoba 1: ochrona przed duplikatami alertów)
 ensure_open_dedup_index(engine)
+from services.people_service import ensure_people_role_column  # noqa: E402  (Osoba 2: people.role for older databases)
+ensure_people_role_column(engine)
 
 
 def purge_demo_user():

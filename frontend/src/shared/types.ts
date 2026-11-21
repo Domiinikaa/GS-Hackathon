@@ -40,6 +40,7 @@ export interface Person {
   email: string | null;
   phone: string | null;
   on_call: boolean;
+  role: 'member' | 'lead';       // lead approves risky runbook steps for the team
   channel_prefs: Partial<Record<Severity, Channel[]>>;
   quiet_hours: Partial<Record<Channel, { from: string; to: string; else: Channel }>>;
 }
