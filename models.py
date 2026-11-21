@@ -66,6 +66,8 @@ class InviteCode(Base):
     code = Column(String(64), unique=True, index=True, nullable=False)
     is_used = Column(Boolean, default=False, nullable=False)
     is_admin_invite = Column(Boolean, default=False, nullable=False)
+    role = Column(String(20), default="member", server_default="member", nullable=False)
+    team = Column(String(100), nullable=True)
     created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     used_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -249,30 +251,7 @@ class ChannelSetting(Base):
     down = Column(Boolean, default=False, nullable=False)
 
 
-# --- OSOBA 4: wykonywanie kroków runbooka (services/runbook_runner.py) i symulator (services/simulator.py) ---
-
-class StepJob(Base):
-    """
-    Kolejka kroków runbooka do wykonania przez aplikację. Leży w bazie, więc działa na wielu kopiach serwera:
-    zadanie bierze jedna kopia (warunkowy UPDATE 'queued' -> 'running'), a unikalna trójka
-    (alert, krok, podejście) sprawia, że ten sam krok nie trafi do kolejki dwa razy.
-    """
-    __tablename__ = "step_jobs"
-
-    id = Column(Integer, primary_key=True)
-    alert_id = Column(Integer, ForeignKey("alerts.id"), nullable=False, index=True)
-    step_index = Column(Integer, nullable=False)
-    run_no = Column(Integer, nullable=False, default=1)     # 2, 3… po kliknięciu "Ponów"
-    status = Column(String(20), nullable=False, default="queued", index=True)  # queued | running | finished
-    run_after = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)  # krok "wait" = później
-    claimed_at = Column(DateTime, nullable=True)
-    claimed_by = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    __table_args__ = (
-        Index("uq_step_jobs_once", "alert_id", "step_index", "run_no", unique=True),
-    )
-
+# --- OSOBA 4: symulator systemów docelowych dla kroków runbooka (services/simulator.py) ---
 
 class SimService(Base):
     """Udawany system docelowy (counterparty-service, settlement…). Stan w bazie = ten sam na każdej kopii."""

@@ -18,11 +18,56 @@ const FORMATS: { value: RunbookFormat; label: string }[] = [
   { value: 'link', label: 'Link' },
 ];
 
-const EXAMPLE = `# Settlement workflow failed
+// Przykłady w różnych formatach – pokazują, że runbook można wkleić w dowolnej postaci (kartka: Appendix B)
+const EXAMPLES: { label: string; hint: string; raw: string }[] = [
+  {
+    label: 'Numbered list',
+    hint: 'Markdown or a checklist copied from a doc',
+    raw: `# Settlement workflow failed
 1. Check settlement service health at https://settlement.internal/health
 2. Retry workflow {{workflowId}} from step {{step}}
 3. If the retry fails, call the Settlements on-call
-4. Open a JIRA ticket with error {{error.code}}`;
+4. Open a JIRA ticket with error {{error.code}}`,
+  },
+  {
+    label: 'YAML',
+    hint: 'Structured steps with actions and approvals',
+    raw: `runbook: settlement-timeout
+matches:
+  type: WORKFLOW_FAILED
+  "error.code": TIMEOUT
+steps:
+  - check: "Is counterparty-service healthy?"
+    action: http_get
+    url: "http://counterparty-service/health"
+  - action: retry_workflow
+    workflowId: "{{workflowId}}"
+    approval: none
+  - if: "retry fails twice"
+    action: escalate
+    team: counterparty-support
+    approval: required`,
+  },
+  {
+    label: 'Free text',
+    hint: 'A paragraph from a wiki or a chat message',
+    raw: `When pricing latency goes over a second, it's usually the cache. Restart the pricing-engine instance named in the alert, wait 2 minutes, and if latency is still high, call the pricing on-call person.`,
+  },
+  {
+    label: 'Wiki link',
+    hint: 'Just a link to Confluence or a wiki page',
+    raw: 'https://wiki.example.com/runbooks/payments-high-error-rate',
+  },
+];
+
+const PLACEHOLDER = `Paste a runbook in any format, for example:
+
+  1. Check service health at http://...    <- numbered list
+  steps:  - action: retry_workflow         <- YAML
+  When X happens, restart Y, then ...      <- free text
+  https://wiki.example.com/runbook         <- link
+
+No idea where to start? Click one of the example buttons under this box.`;
 
 const inputClass =
   'w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500';
@@ -36,6 +81,7 @@ export default function RunbooksPage() {
   const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState<Editing>(null);
   const [notice, setNotice] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);  // id runbooka czekającego na "Yes"
 
   // krótki komunikat po akcji (np. "Saved"), znika sam po 4 s
   useEffect(() => {
@@ -76,14 +122,16 @@ export default function RunbooksPage() {
     setNotice(message);
   }
 
+  // potwierdzenie na karcie, nie window.confirm() – niektóre przeglądarki (np. wbudowane) go nie pokazują
   async function handleDelete(rb: Runbook) {
-    if (!confirm(`Delete runbook "${rb.name}"? Rules using it will be detached.`)) return;
+    setConfirmDelete(null);
     try {
       await runbookApi.remove(rb.id);
       if (editing !== null && editing !== 'new' && editing.id === rb.id) setEditing(null);
       await reload();
+      setNotice(`Deleted "${rb.name}".`);
     } catch (e) {
-      alert(errorText(e));
+      setLoadError(`Could not delete "${rb.name}": ${errorText(e)}`);
     }
   }
 
@@ -158,10 +206,21 @@ export default function RunbooksPage() {
                     ))}
                 </div>
               </div>
-              <button onClick={(e) => { e.stopPropagation(); handleDelete(rb); }}
-                className="text-slate-400 hover:text-red-400 self-start" title="Delete">
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {confirmDelete === rb.id ? (
+                <div onClick={(e) => e.stopPropagation()} className="self-start flex items-center gap-2 text-xs cursor-default">
+                  <span className="text-slate-300">
+                    Delete?{attached.length > 0 && ` ${attached.length} rule${attached.length > 1 ? 's' : ''} will be detached.`}
+                  </span>
+                  <button onClick={() => handleDelete(rb)}
+                    className="px-2 py-1 rounded bg-red-500/20 border border-red-500/50 text-red-300 hover:bg-red-500/30">Yes, delete</button>
+                  <button onClick={() => setConfirmDelete(null)} className="px-2 py-1 rounded text-slate-400 hover:text-white">No</button>
+                </div>
+              ) : (
+                <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(rb.id); }}
+                  className="text-slate-400 hover:text-red-400 self-start" title="Delete">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           );
         })}
@@ -190,7 +249,7 @@ interface EditorProps {
 function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: EditorProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [format, setFormat] = useState<RunbookFormat>(initial ? (initial.format as RunbookFormat) : 'auto');
-  const [raw, setRaw] = useState(initial?.raw ?? EXAMPLE);
+  const [raw, setRaw] = useState(initial?.raw ?? '');
   const [preview, setPreview] = useState<RunbookStep[]>(initial?.steps ?? []);
   const [detected, setDetected] = useState('');
   const [parseError, setParseError] = useState('');
@@ -305,8 +364,19 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
       <div className="grid lg:grid-cols-2 gap-4">
         <div>
           <label className={labelClass}>Runbook content</label>
-          <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={14} spellCheck={false}
+          <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={14} spellCheck={false} placeholder={PLACEHOLDER}
             className={`${inputClass} font-mono text-xs`} />
+          {!raw.trim() && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-400">Start from an example:</span>
+              {EXAMPLES.map((ex) => (
+                <button key={ex.label} type="button" title={ex.hint} onClick={() => { setFormat('auto'); setRaw(ex.raw); }}
+                  className="text-xs px-2.5 py-1 rounded-full border border-slate-700 text-slate-300 hover:border-amber-500 hover:text-amber-300">
+                  {ex.label}
+                </button>
+              ))}
+            </div>
+          )}
           <p className="text-xs text-slate-500 mt-1">
             Use <code className="text-slate-300">{'{{field}}'}</code> to insert values from the event, e.g.{' '}
             <code className="text-slate-300">{'{{workflowId}}'}</code>.

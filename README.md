@@ -116,7 +116,7 @@ Designed around a **declarative Connector Registry** (`CONNECTOR_REGISTRY`) so n
     - `POST /api/channels/phone/inbound`: press `1` to acknowledge the latest alert call.
 
 ### 6. Security, Access Control & Seed Data (`seed.py`, `routers/auth.py`)
-- JWT authentication (`HS256`), single-use invite-code registration (`GS-XXXX-XXXX`), and environment/CLI admin provisioning (`ADMIN_UNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` or `create_admin.py`).
+- JWT authentication (`HS256`), single-use invite-code registration (`GS-XXXX-XXXX`), and CLI admin provisioning (`create_admin.py`).
 - Automatic startup seeding (under `startup_lock()`) for empty tables: 5 unified teams (`Settlements`, `Pricing`, `Rates`, `Payments`, `Management`), 5 sources (`demo`, `trade-gateway`, `payments-webhook`, `settlement-kafka`, `pricing-engine-logs`), 4 rules, 3 members + 4 team leads, and 3 Appendix B runbooks (YAML, Markdown, text).
 - Source management endpoints use a centralized `require_source_manager` dependency in `routers/sources.py` (open for local/hackathon testing by default; set `REQUIRE_ADMIN_FOR_SOURCES = True` to restrict source mutations to administrators).
 
@@ -171,7 +171,6 @@ The included multi-stage `Dockerfile` compiles the React + TypeScript bundle wit
 Required/recommended environment variables for production (see `.env.example`):
 - `DATABASE_URL` — PostgreSQL connection string (required for multi-replica deployments; defaults to local SQLite `app.db` if unset)
 - `SECRET_KEY` — shared JWT signing key across all replicas
-- `ADMIN_UNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` — automatic bootstrap for the first administrator account
 - `PORT` — HTTP port (defaults to `8000`)
 - `APP_URL` — base frontend URL used for `#alerts/{id}` deep links in emails and SMS (defaults to `http://localhost:5173`)
 - `EMAIL_PROVIDER`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_STARTTLS`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` — SMTP delivery configuration (defaults to Mailpit on `localhost:1025`)

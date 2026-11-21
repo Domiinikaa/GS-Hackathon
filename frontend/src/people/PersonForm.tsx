@@ -129,10 +129,10 @@ export default function PersonForm({ initial, teams, onSave, onCancel, canEditAd
           <select className={inputClass} value={team} onChange={(e) => setTeam(e.target.value)}>
             <option value="">Choose a team…</option>
             {/* keep an old value visible if the team was renamed or removed */}
-            {team && !teams.includes(team) && <option value={team}>{team} (not in Admin &amp; Teams)</option>}
+            {team && !teams.includes(team) && <option value={team}>{team} (not in Lead &amp; Teams)</option>}
             {teams.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-          <p className="text-xs text-slate-500 mt-1">Teams are managed in Admin &amp; Teams</p>
+          <p className="text-xs text-slate-500 mt-1">Teams are managed in Lead &amp; Teams</p>
         </div>
         <div>
           <label className={labelClass}>E-mail</label>
@@ -162,7 +162,7 @@ export default function PersonForm({ initial, teams, onSave, onCancel, canEditAd
           disabled={!canEditAdminFields} className="w-4 h-4 accent-amber-500" />
         <span className="text-sm text-slate-200">
           Team lead <span className="text-slate-500">
-            – approves risky runbook steps for this team{!canEditAdminFields && ' (set by an administrator)'}
+            – approves risky runbook steps &amp; manages teams/leads{!canEditAdminFields && ' (set by an administrator)'}
           </span>
         </span>
       </label>

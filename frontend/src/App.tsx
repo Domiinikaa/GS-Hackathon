@@ -39,7 +39,7 @@ const BASE_TABS: TabItem[] = [
   { id: 'sources', label: 'Sources', icon: Plug, page: SourcesPage },
   { id: 'runbooks', label: 'Runbooks', icon: BookOpen, page: RunbooksPage },
   { id: 'outbox', label: 'Outbox', icon: Inbox, page: OutboxPage },
-  { id: 'admin', label: 'Admin & Teams', icon: Key, page: AdminPanel, adminOnly: true },
+  { id: 'admin', label: 'Lead & Teams', icon: Key, page: AdminPanel, adminOnly: true },
 ];
 
 function getInitialTab(): string {
@@ -188,7 +188,7 @@ export default function App() {
                 <span className="text-xs font-semibold text-white">@{currentUser.uname}</span>
                 {currentUser.is_admin && (
                   <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold">
-                    ADMIN
+                    LEAD
                   </span>
                 )}
               </div>

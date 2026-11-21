@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 
 from database import get_db
-from models import InviteCode, Person, User
+from models import InviteCode, User
 from schemas import UserRegister, UserLogin, UserResponse, TokenResponse, UserUpdate
+from services.people_service import ensure_person_for_user
 from services.security import hash_password, verify_password, create_access_token
 from routers.deps import get_current_user
 from routers.people import team_name
@@ -55,20 +56,24 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
                 detail=f"Email address '{payload.email}' is already registered."
             )
 
-    # 3. Validate team if provided
-    raw_team = (payload.team if payload.team is not None else payload.dzial) or ""
-    resolved_team = None
-    if raw_team.strip():
-        resolved_team = team_name(db, raw_team)
-        if resolved_team is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Team '{raw_team.strip()}' does not exist.",
-            )
+    # 3. Validate team (invite team takes precedence if specified)
+    invite_team = getattr(invite, "team", None)
+    if invite_team:
+        resolved_team = invite_team
+    else:
+        raw_team = (payload.team if payload.team is not None else payload.dzial) or ""
+        resolved_team = None
+        if raw_team.strip():
+            resolved_team = team_name(db, raw_team)
+            if resolved_team is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Team '{raw_team.strip()}' does not exist.",
+                )
 
     # 4. Hash password, create user record, claim invite, and sync People roster
     hashed_pwd = hash_password(payload.password)
-    is_admin = bool(getattr(invite, "is_admin_invite", False))
+    is_admin = (getattr(invite, "role", None) == "lead") or bool(getattr(invite, "is_admin_invite", False))
     clean_uname = payload.uname.strip()
     clean_email = payload.email.lower().strip()
     clean_phone = payload.nrtel.strip() if payload.nrtel else None
@@ -88,19 +93,14 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
     invite.used_by_id = new_user.id
     invite.used_at = datetime.utcnow()
 
-    if resolved_team:
-        existing_person = db.query(Person).filter(func.lower(Person.email) == clean_email).first()
-        if existing_person is None:
-            db.add(Person(
-                name=clean_uname,
-                team=resolved_team,
-                email=clean_email,
-                phone=clean_phone,
-                on_call=False,
-                role="member",
-                channel_prefs={"critical": ["email"], "warning": ["email"], "info": ["ui"]},
-                quiet_hours={},
-            ))
+    ensure_person_for_user(
+        db,
+        name=clean_uname,
+        team=resolved_team,
+        email=clean_email,
+        phone=clean_phone,
+        role="lead" if is_admin else "member",
+    )
 
     db.commit()
     db.refresh(new_user)

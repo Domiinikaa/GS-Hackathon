@@ -89,7 +89,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           </h2>
           <p className="text-xs text-slate-400 mt-1">
             {isRegister
-              ? 'Single-use invite code required from your Administrator'
+              ? 'Single-use invite code required from your Lead'
               : 'Enter your credentials to access your private dashboard'}
           </p>
         </div>
@@ -211,7 +211,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                   <label className="text-xs font-medium text-amber-400">
                     Invite Code <span className="text-amber-400">*</span>
                   </label>
-                  <span className="text-[10px] text-slate-500">from Admin</span>
+                  <span className="text-[10px] text-slate-500">from Lead</span>
                 </div>
                 <div className="relative">
                   <Key className="w-4 h-4 text-amber-500 absolute left-3 top-3" />
@@ -246,7 +246,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
               {/* Team */}
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Team <span className="text-slate-500 text-[10px]">(optional)</span>
+                  Team <span className="text-slate-500 text-[10px]">(optional — or set by invite)</span>
                 </label>
                 <div className="relative">
                   <Briefcase className="w-4 h-4 text-slate-500 absolute left-3 top-3" />

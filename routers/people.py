@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Delivery, Person, Team, User
 from routers.deps import get_current_admin_user, get_current_user
-from services.people_service import plan_recipients
+from services.people_service import plan_recipients, sync_user_admin_for_person
 
 router = APIRouter(prefix="/api/people", tags=["People"])
 
@@ -165,6 +165,7 @@ def create_person(payload: PersonIn, db: Session = Depends(get_db), _admin: User
     data["team"] = _require_team(db, data["team"])
     person = Person(**data)
     db.add(person)
+    sync_user_admin_for_person(db, person)
     db.commit()
     db.refresh(person)
     return to_dict(person)
@@ -184,6 +185,7 @@ def update_person(person_id: int, payload: PersonIn, db: Session = Depends(get_d
         data["email"] = person.email             # e-mail links the profile to the login account
     for key, value in data.items():
         setattr(person, key, value)
+    sync_user_admin_for_person(db, person)
     db.commit()
     db.refresh(person)
     return to_dict(person)

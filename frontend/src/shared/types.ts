@@ -25,9 +25,7 @@ export interface RunbookStep {
 }
 
 export type StepKind = 'manual' | 'auto' | 'approve' | 'approve_manual';
-export type StepStatus =
-  | 'queued' | 'running' | 'waiting' | 'waiting_approval'
-  | 'succeeded' | 'failed' | 'skipped' | 'error' | 'cancelled';
+export type StepStatus = 'waiting' | 'waiting_approval' | 'succeeded' | 'failed' | 'skipped';
 
 export interface Alert {
   id: number;

@@ -45,8 +45,8 @@ export function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)} d ago`;
 }
 
-// ack/resolve dotyczą całego alertu, approve/done – jednego kroku runbooka (stepIndex)
-export type AlertAction = 'ack' | 'resolve' | 'approve' | 'done';
+// ack/resolve dotyczą całego alertu, approve/done/retry – jednego kroku runbooka (stepIndex)
+export type AlertAction = 'ack' | 'resolve' | 'approve' | 'done' | 'retry';
 export type OnAlertAction = (alert: Alert, action: AlertAction, stepIndex?: number) => void;
 
 interface Props {
