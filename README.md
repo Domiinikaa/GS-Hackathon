@@ -40,6 +40,13 @@ The platform ingests heterogeneous events and logs from arbitrary sources, evalu
 
 ## Key Capabilities
 
+### End-to-End Integrated Pipeline (`services/pipeline.py`)
+All core subsystems — **Sources / Streams**, **Rules**, **Runbooks**, **Alerts**, **People**, and **Notification Channels / Outbox** — are fully connected in production via `process_event()`:
+1. Any record arriving from HTTP push (`POST /api/ingest/{source_key}`), background stream/pull connectors (`polled_api`, `sse`, `logfile`, `kafka`, `rabbitmq`), or the simulator (`POST /api/sources/{id}/simulate`) is normalized and persisted as an `Event`.
+2. `evaluate()` runs active rules against the event, attaches the rule's linked `Runbook` (or auto-matches a runbook via `Runbook.matches`), and renders `{{field}}` templates in alert titles, bodies, and runbook step `params`.
+3. `upsert_alert()` creates or deduplicates the open `Alert` and publishes it to the live SSE stream (`/api/alerts/stream`).
+4. When a new alert is created (`_is_new`), `recipients_for()` resolves team members, `on_call` rules, and `quiet_hours`, and `enqueue_deliveries()` queues formatted Email/SMS/Phone notifications in the Outbox for the background delivery worker.
+
 ### 1. Universal Log & Event Sources (`services/connectors/`, `routers/sources.py`)
 Designed around a **declarative Connector Registry** (`CONNECTOR_REGISTRY`) so new source types can be added without modifying frontend forms. The UI dynamically renders configuration fields from `GET /api/sources/types`.
 
