@@ -125,6 +125,28 @@ def seed_default_teams():
 seed_default_departments = seed_default_teams
 
 
+def sync_legacy_teams():
+    """Databases created before Teams were unified keep their teams in the old `teams`
+    table, which nothing reads any more. People and rules still point at those names,
+    so editing such a person failed with "team does not exist". Copy the missing names
+    into the unified registry once; afterwards Admin & Teams manages them as usual."""
+    db = SessionLocal()
+    try:
+        if "teams" not in inspect(db.get_bind()).get_table_names():
+            return
+        legacy = [row[0] for row in db.execute(text("SELECT name FROM teams")) if row[0]]
+        known = {t.name.lower() for t in db.query(models.Team).all()}
+        missing = [name for name in legacy if name.strip().lower() not in known]
+        if missing:
+            db.add_all(models.Team(name=name.strip()) for name in missing)
+            db.commit()
+            print(f"[MIGRATE] Registered legacy teams: {', '.join(missing)}")
+    except Exception as e:
+        print(f"[MIGRATE ERROR] {e}")
+    finally:
+        db.close()
+
+
 def init_admin_from_env():
     """
     Bootstraps an Administrator account if provided via environment variables (e.g. in Railway):
@@ -177,6 +199,7 @@ with startup_lock():
     ensure_people_role_column(engine)
     purge_demo_user()
     seed_default_teams()
+    sync_legacy_teams()
     init_admin_from_env()
 
     startup_db = SessionLocal()
