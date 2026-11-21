@@ -7,7 +7,6 @@ import {
   Check,
   Copy,
   Users,
-  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   CheckCircle2,
@@ -31,7 +30,6 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
   const [invites, setInvites] = useState<InviteCode[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [teams, setTeams] = useState<TeamItem[]>([]);
-  const [loading, setLoading] = useState(false);
 
   // Invite code generation (default: member, optional pre-selected team)
   const [inviteRole, setInviteRole] = useState<'member' | 'lead'>('member');
@@ -59,7 +57,6 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
 
   const loadData = async () => {
     try {
-      setLoading(true);
       setError(null);
       const [invitesRes, usersRes, teamsRes, meRes] = await Promise.all([
         adminService.listInvites(),
@@ -73,8 +70,6 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
       if (meRes) setCurrentUser(meRes);
     } catch (err: any) {
       setError(err.message || 'Error loading administrator data.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -202,15 +197,6 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              onClick={loadData}
-              disabled={loading}
-              className="px-3 py-2 text-xs bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 rounded-lg border border-white/10 flex items-center space-x-1.5 transition"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
-
             {/* Team selector for invite code */}
             <select
               value={inviteTeam}

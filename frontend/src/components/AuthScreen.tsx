@@ -245,7 +245,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
               {/* Team */}
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Team <span className="text-slate-500 text-[10px]">(optional — or set by invite)</span>
+                  Team <span className="text-slate-500 text-[10px]">(optional)</span>
                 </label>
                 <div className="relative">
                   <Briefcase className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -262,6 +262,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                     ))}
                   </select>
                 </div>
+                <p className="text-[11px] text-ink-muted mt-1.5">
+                  If an admin already assigned a team to your invite code, selecting one here will not change it.
+                </p>
               </div>
             </>
           )}
