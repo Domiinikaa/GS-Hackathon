@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,7 @@ load_dotenv()
 from database import engine, Base, SessionLocal
 import models  # Registers all models with Base
 from services.security import hash_password
+from services.connectors import ingest_manager
 from routers import api, auth, admin, alerts, rules, people, sources, deliveries, runbooks
 from seed import seed_all
 from sqlalchemy import text
@@ -37,6 +39,18 @@ def ensure_sqlite_columns():
             conn.commit()
         except Exception:
             pass
+        for col_sql in (
+            "ALTER TABLE sources ADD COLUMN enabled BOOLEAN DEFAULT 1",
+            "ALTER TABLE sources ADD COLUMN status VARCHAR(20) DEFAULT 'active'",
+            "ALTER TABLE sources ADD COLUMN last_error TEXT",
+            "ALTER TABLE sources ADD COLUMN last_event_at DATETIME",
+            "ALTER TABLE sources ADD COLUMN events_count INTEGER DEFAULT 0",
+        ):
+            try:
+                conn.execute(text(col_sql))
+                conn.commit()
+            except Exception:
+                pass
 
 
 ensure_sqlite_columns()
@@ -133,10 +147,20 @@ try:
 finally:
     startup_db.close()
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await ingest_manager.start()
+    try:
+        yield
+    finally:
+        await ingest_manager.stop()
+
+
 app = FastAPI(
     title="GS Alerting & Orchestration Engine",
     description="Enterprise Ingest -> Rules -> Alerts -> Runbooks -> Escalations Pipeline",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS configuration
@@ -188,7 +212,7 @@ else:
     def api_welcome():
         return {
             "status": "online",
-            "message": "GS Alerting Backend API is operational.",
+            "message": "Alerting Backend API is operational.",
             "docs": "/docs",
             "frontend_dev_url": "http://localhost:5173"
         }
