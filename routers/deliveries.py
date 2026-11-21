@@ -11,20 +11,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database import engine, get_db
+from database import get_db
 from models import Alert, ChannelSetting, Delivery, GatewayMessage
 from services.channels import available_channels
 from services.contracts import Recipient
-from services.delivery import ensure_delivery_columns, enqueue_deliveries, start_worker
+from services.delivery import enqueue_deliveries
 from services.replies import digits, handle_phone_keypress, handle_sms
 
-
-def _on_startup() -> None:
-    ensure_delivery_columns(engine)   # nowe kolumny w istniejących bazach
-    start_worker()                     # listonosz w tle – po jednym na kopię serwera
-
-
-router = APIRouter(tags=["Channels & Outbox"], on_startup=[_on_startup])
+router = APIRouter(tags=["Channels & Outbox"])
 
 
 # ---------------------------------------------------------------- Outbox

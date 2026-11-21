@@ -13,6 +13,7 @@ from database import engine, Base, SessionLocal, startup_lock
 import models  # Registers all models with Base
 from services.security import hash_password
 from services.connectors import ingest_manager
+from services.delivery import ensure_delivery_columns, start_worker
 from routers import api, auth, admin, alerts, rules, people, sources, deliveries, runbooks
 from seed import seed_all
 from sqlalchemy import text
@@ -156,6 +157,8 @@ with startup_lock():
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    ensure_delivery_columns(engine)
+    start_worker()
     await ingest_manager.start()
     try:
         yield
