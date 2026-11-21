@@ -1,4 +1,4 @@
-"""API tests for rules and people, on a separate in-memory database."""
+"""Tests for the rules and people API."""
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

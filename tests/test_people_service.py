@@ -1,4 +1,4 @@
-"""Tests for channel preferences. Run: python -m pytest tests -q"""
+"""Tests for recipient selection."""
 from datetime import datetime
 
 import pytest

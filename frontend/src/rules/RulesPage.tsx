@@ -1,5 +1,4 @@
-// Rules page: list of rules + add, edit, enable/disable, delete.
-// Data comes from /api/rules; changes take effect immediately, without a server restart.
+// Rules page.
 import { useEffect, useMemo, useState } from 'react';
 import { Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { CHANNELS, COLOR_DOT, Rule } from './ruleTypes';

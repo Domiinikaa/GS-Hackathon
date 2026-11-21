@@ -1,4 +1,4 @@
-// Turns a rule into a plain-language sentence, for non-technical users.
+// Rule as a plain sentence.
 import { CHANNELS, Condition, OPERATORS, Rule, groupConditions, groupMode } from './ruleTypes';
 
 function formatValue(value: Condition['value']): string {

@@ -1,5 +1,4 @@
-"""People and their channel preferences: CRUD + "who will get this alert" preview.
-JSON shape = frontend/src/shared/types.ts (Person)."""
+"""People API."""
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional

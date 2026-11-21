@@ -1,4 +1,4 @@
-// Add / edit rule form with a live preview of who will be notified.
+// Add / edit rule form.
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Users, X } from 'lucide-react';
 import {

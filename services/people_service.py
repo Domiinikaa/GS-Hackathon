@@ -1,17 +1,4 @@
-"""
-Who gets an alert, and on which channel.
-
-Rules (applied in this order):
-1. Audience: rule.team can be a team name ("Payments") or a person's name ("Anna").
-   If a person with that name exists, only they get the alert; otherwise the whole team does.
-2. "ui" is a team channel (live feed), so there is always one entry per alert, not one per person.
-3. Personal channels = rule channels ∩ the person's channel_prefs[severity].
-   A person with no preference for that severity, or an empty intersection, gets the rule's channels (no alert is lost).
-4. "phone" goes only to the on-call person; everyone else gets an SMS instead.
-5. quiet_hours: {"sms": {"from": "08:00", "to": "20:00", "else": "email"}} means SMS is sent only inside that window
-   and the fallback channel outside it. Windows across midnight (22:00–06:00) work too.
-6. Missing address (SMS without a phone, e-mail without an address) -> fallback channel, so the message still lands somewhere.
-"""
+"""Decides who gets an alert and on which channel."""
 from __future__ import annotations
 
 from dataclasses import dataclass

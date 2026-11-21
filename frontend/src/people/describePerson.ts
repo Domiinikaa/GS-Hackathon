@@ -1,4 +1,4 @@
-// A person's preferences in plain words, so anyone can see when and how they will be alerted.
+// Labels and text for people preferences.
 import { CHANNELS, Channel, Severity } from '../rules/ruleTypes';
 import type { Person } from '../shared/types';
 

@@ -1,4 +1,4 @@
-// Backend calls for people and their channel preferences.
+// People API calls.
 import { api } from '../shared/api';
 import type { Person } from '../shared/types';
 

@@ -1,4 +1,4 @@
-// Backend calls for rules and rule-editor suggestions.
+// Rules API calls.
 import { api } from '../shared/api';
 import type { Channel, Rule, Severity } from './ruleTypes';
 

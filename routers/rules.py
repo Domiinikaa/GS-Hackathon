@@ -1,8 +1,4 @@
-"""Alert rules: CRUD. JSON shape = frontend/src/rules/ruleTypes.ts (Rule).
-
-Rules are data in the database, not code: a change via the API/UI takes effect immediately
-(the pipeline reads rules for every event), without restarting the server.
-"""
+"""Rules API."""
 import re
 from typing import Any, Dict, List, Literal, Optional, Union
 

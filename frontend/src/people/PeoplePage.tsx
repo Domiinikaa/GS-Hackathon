@@ -1,5 +1,4 @@
-// People page: team members and their channel preferences (critical → phone + SMS, warning → email, info → UI, working hours).
-// Data comes from /api/people; alert delivery reads these preferences in services/people_service.py.
+// People page.
 import { useEffect, useMemo, useState } from 'react';
 import { Clock, Mail, Pencil, Phone, Plus, RefreshCw, Trash2, UserRound } from 'lucide-react';
 import type { Person } from '../shared/types';

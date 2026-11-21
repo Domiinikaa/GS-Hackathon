@@ -1,4 +1,4 @@
-// Add / edit a person: contact details, on-call flag, channels per severity and quiet hours.
+// Add / edit person form.
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { CHANNELS, Channel, Severity } from '../rules/ruleTypes';

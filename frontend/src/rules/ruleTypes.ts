@@ -1,5 +1,4 @@
-// Rule types. Must match the JSON returned by /api/rules (routers/rules.py)
-// and the format read by the rules engine (services/rules_engine.py).
+// Rule types.
 
 export type Operator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'contains' | 'wildcard';
 export type Channel = 'email' | 'sms' | 'phone' | 'ui';
