@@ -18,6 +18,7 @@ from services.alert_service import upsert_alert
 from services.delivery import enqueue_deliveries
 from services.people_service import recipients_for
 from services.rules_engine import evaluate
+from services.runbook_runner import start_after_commit
 
 
 def process_event(
@@ -38,6 +39,8 @@ def process_event(
         if getattr(alert, "_is_new", alert.count == 1):
             recipients = recipients_for(db, alert, match.channels)
             enqueue_deliveries(db, alert, recipients)
+            if alert.steps:
+                start_after_commit(db, alert.id)   # Osoba 4: kroki runbooka ruszą, gdy zapis alertu się uda
     if commit:
         db.commit()
     return alert_ids

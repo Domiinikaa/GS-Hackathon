@@ -14,7 +14,20 @@ export interface RunbookStep {
   done_at?: string;
   approved_by?: string;           // kto zatwierdził ryzykowny krok
   approved_at?: string;
+  // Osoba 4 – wykonywanie kroków (services/runbook_runner.py)
+  condition?: string | null;      // "retry fails twice" – krok wykona się tylko, gdy warunek jest spełniony
+  kind?: StepKind | null;         // ręcznie wybrany rodzaj; null = wykryty automatycznie
+  status?: StepStatus | null;
+  result?: string | null;         // co się stało, np. "settlement responded 200 OK"
+  run_no?: number;                // 2, 3… po kliknięciu "Retry"
+  executed_by?: string;
+  finished_at?: string;
 }
+
+export type StepKind = 'manual' | 'auto' | 'approve' | 'approve_manual';
+export type StepStatus =
+  | 'queued' | 'running' | 'waiting' | 'waiting_approval'
+  | 'succeeded' | 'failed' | 'skipped' | 'error' | 'cancelled';
 
 export interface Alert {
   id: number;

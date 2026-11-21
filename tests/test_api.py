@@ -56,7 +56,10 @@ def test_seed_runbooks_attached_to_rules():
     assert runbooks["settlement-timeout"]["steps"][0]["action"] == "http_get"
     assert runbooks["settlement-timeout"]["steps"][2]["approval"] == "required"
     assert runbooks["payments-high-error-rate"]["steps"][1]["approval"] == "required"
-    assert all(s["approval"] == "none" and s["action"] is None for s in runbooks["pricing-warnings"]["steps"])
+    # Osoba 4: z wolnego tekstu rozpoznajemy akcje (restart, wait, eskalacja); ryzykowne czekają na zgodę
+    pricing = runbooks["pricing-warnings"]["steps"]
+    assert [s["action"] for s in pricing] == [None, "restart_service", "wait", "escalate"]
+    assert [s["approval"] for s in pricing] == ["none", "required", "none", "required"]
 
 
 def test_restart_does_not_duplicate_seed():

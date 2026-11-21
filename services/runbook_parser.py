@@ -39,19 +39,89 @@ class ParseResult:
     matches: dict[str, Any] | None = None   # do jakich zdarzeń pasuje: {"and": [{"field","op","value"}]}
 
 
+# ---------------------------------------------------------------- akcje i rodzaje kroków
+
+# Akcje, które aplikacja umie wykonać sama (services/runbook_runner.execute_step).
+# Nowa akcja = wpis tutaj + jedna gałąź w execute_step (albo funkcja w services/simulator.py).
+#   risky   – domyślnie wymaga zgody, gdy autor runbooka nie napisał wprost "approval: none"
+#   check   – tylko sprawdza; zły wynik ("serwis nie odpowiada") to informacja, nie błąd procedury
+ACTIONS: dict[str, dict[str, Any]] = {
+    "http_get":        {"label": "HTTP check",      "risky": False, "check": True},
+    "retry_workflow":  {"label": "Retry workflow",  "risky": True,  "check": False},
+    "restart_service": {"label": "Restart service", "risky": True,  "check": False},
+    "webhook":         {"label": "Webhook",         "risky": True,  "check": False},
+    "open_ticket":     {"label": "Open ticket",     "risky": False, "check": False},
+    "escalate":        {"label": "Escalate",        "risky": True,  "check": False},
+    "wait":            {"label": "Wait",            "risky": False, "check": False},
+}
+
+# manual          człowiek robi sam i klika "Mark done"
+# auto            aplikacja robi sama
+# approve         aplikacja robi po zatwierdzeniu
+# approve_manual  zgoda, potem człowiek robi sam i klika "Mark done"
+KINDS = ("manual", "auto", "approve", "approve_manual")
+
+# słowa, po których aplikacja umie ocenić warunek z wyników wcześniejszych kroków ("if retry fails twice")
+FAIL_WORDS = re.compile(r"\b(fail\w*|error\w*|down|unhealthy|not\s+(?:respond\w*|healthy|ok|working))\b", re.I)
+OK_WORDS = re.compile(r"\b(succeed\w*|success\w*|works?|ok|healthy|pass\w*|recover\w*)\b", re.I)
+
+
+def is_known_action(action: Any) -> bool:
+    return isinstance(action, str) and action in ACTIONS
+
+
+def condition_checkable(condition: str | None) -> bool:
+    """Czy aplikacja umie sama sprawdzić warunek (mówi o sukcesie / porażce wcześniejszego kroku)."""
+    return bool(condition) and bool(FAIL_WORDS.search(condition) or OK_WORDS.search(condition))
+
+
+def step_kind(step: dict[str, Any]) -> str:
+    """manual | auto | approve | approve_manual – ręczny wybór ("kind") wygrywa, jeśli ma sens."""
+    known = is_known_action(step.get("action"))
+    needs_ok = step.get("approval") == "required"
+    kind = step.get("kind")
+    if kind in KINDS and (known or kind in ("manual", "approve_manual")):
+        return kind
+    if known:
+        return "approve" if needs_ok else "auto"
+    return "approve_manual" if needs_ok else "manual"
+
+
+def set_kind(step: dict[str, Any], kind: str | None) -> dict[str, Any]:
+    """Ustawia rodzaj kroku z UI i zgodne z nim pole approval (przyciski Osoby 1 patrzą na approval)."""
+    step = dict(step)
+    if kind not in KINDS:
+        step["kind"] = None
+        return step
+    if kind in ("auto", "approve") and not is_known_action(step.get("action")):
+        raise ValueError(f"Step \"{_short(step.get('text', ''))}\" has no action the app can run, "
+                         f"so it can only be manual")
+    step["kind"] = kind
+    step["approval"] = "required" if kind in ("approve", "approve_manual") else "none"
+    return step
+
+
 def _step(
     text: str,
     *,
     action: str | None = None,
     params: dict[str, Any] | None = None,
     approval: str = "none",
+    condition: str | None = None,
+    kind: str | None = None,
+    explicit: bool = False,
 ) -> dict[str, Any]:
-    return {
+    step = {
         "text": text.strip(),
         "action": action,
         "params": dict(params) if params else {},
         "approval": "required" if approval == "required" else "none",
+        "condition": condition or None,
+        "kind": kind if kind in KINDS else None,
     }
+    if explicit:
+        step["_explicit"] = True       # autor sam napisał approval: … (finalize_step usuwa ten znacznik)
+    return step
 
 
 _APPROVAL_MENTION = re.compile(
@@ -64,7 +134,8 @@ _APPROVAL_MENTION = re.compile(
 
 
 def _text_step(text: str) -> dict[str, Any]:
-    return _step(text, approval="required" if _APPROVAL_MENTION.search(text) else "none")
+    mentioned = bool(_APPROVAL_MENTION.search(text))
+    return _step(text, approval="required" if mentioned else "none", explicit=mentioned)
 
 
 def _short(s: str, n: int = 60) -> str:
@@ -181,6 +252,7 @@ def _item_to_steps(item: Any) -> list[dict[str, Any]]:
             main = f"{_humanize(key)}: {_fmt_value(value)}"
 
     prefix = ""
+    condition: str | None = None
     approval = False
     approval_explicit = False
     action_name: str | None = None
@@ -193,6 +265,7 @@ def _item_to_steps(item: Any) -> list[dict[str, Any]]:
             continue
         if kl in _COND_KEYS and not isinstance(v, (dict, list)) and not prefix:
             prefix = f"{_COND_KEYS[kl]} {_fmt_value(v)}: "      # if: "retry fails twice" -> "If retry fails twice: "
+            condition = _fmt_value(v)
         elif kl in _APPROVAL_KEYS:
             approval_explicit = True
             approval = approval or _is_approval(v)
@@ -233,6 +306,8 @@ def _item_to_steps(item: Any) -> list[dict[str, Any]]:
         action=action_name,
         params=params,
         approval="required" if approval else "none",
+        condition=condition,
+        explicit=approval_explicit or approval,
     )
     return [step_obj] + substeps
 
@@ -538,6 +613,87 @@ def _parse_text(raw: str) -> ParseResult:
     return ParseResult(format="text", steps=steps)
 
 
+
+# ---------------------------------------------------------------- akcje z wolnego tekstu
+
+_MARKER = re.compile(r"\s*\[(auto|manual|approve|approval|approve[ _-]manual)\]\s*", re.I)
+_COND_SPLIT = re.compile(
+    rf"^(?:if|when|unless|jeśli|jeżeli|gdy)\s+(.+?)\s*[:,]\s+(?=(?:{_VERBS})\b)(.+)$", re.I)
+_URL = re.compile(r"https?://[^\s)\]>,;]+")
+_DURATION = re.compile(r"\bwait\s+(?:for\s+)?(\d+(?:\.\d+)?)\s*(s|secs?|seconds?|m|mins?|minutes?|h|hours?)\b", re.I)
+_UNIT = {"s": 1, "m": 60, "h": 3600}
+_WORKFLOW_ID = re.compile(r"(\{\{\s*[\w.]+\s*\}\}|\b[A-Z]{2,}-[\w-]+)")
+
+
+def infer_action(text: str) -> tuple[str | None, dict[str, Any]]:
+    """'Restart the pricing-engine instance' -> ("restart_service", {"service": "pricing-engine"}) itd."""
+    t = text.strip()
+    low = t.lower()
+    url = _URL.search(t)
+    m = _DURATION.search(t)
+    if m and low.startswith(("wait", "poczekaj")):
+        return "wait", {"seconds": int(float(m.group(1)) * _UNIT[m.group(2)[0].lower()])}
+    if url and re.search(r"\bwebhook\b", low):
+        return "webhook", {"url": url.group(0)}
+    if url and re.search(r"\b(check|verify|ping|probe|get|sprawdź)\b", low):
+        return "http_get", {"url": url.group(0)}
+    m = re.search(r"\b(?:restart|reboot|bounce|zrestartuj)\s+(?:the\s+)?([a-z0-9][\w.-]*[a-z0-9])", t, re.I)
+    if m:
+        return "restart_service", {"service": m.group(1)}
+    if re.search(r"\b(retry|re-run|rerun|ponów)\b", low) and "workflow" in low:
+        wf = _WORKFLOW_ID.search(t)
+        return "retry_workflow", ({"workflowId": wf.group(1)} if wf else {})
+    if re.search(r"\b(open|create|raise|file|otwórz|załóż)\b.*\bticket\b", low):
+        return "open_ticket", {"summary": t}
+    m = (re.search(r"\b(?:escalate|page|eskaluj)\b(?:\s+(?:it\s+)?to)?\s+(?:the\s+)?(.+)$", t, re.I)
+         or re.search(r"\bcall\s+(.*?\bon-?call\b)", t, re.I))
+    if m:
+        team = re.sub(r"\s+(person|people|engineer|team)\.?$", "", m.group(1).strip(" ."), flags=re.I)
+        team = re.sub(r"^the\s+", "", team, flags=re.I)
+        return "escalate", {"team": team}
+    return None, {}
+
+
+def finalize_step(step: dict[str, Any]) -> dict[str, Any]:
+    """Uzupełnia krok po parsowaniu: znacznik [auto]/[manual], warunek, akcję z tekstu, domyślną zgodę."""
+    step = dict(step)
+    explicit = bool(step.pop("_explicit", False))
+    step.setdefault("condition", None)
+    step.setdefault("kind", None)
+
+    marker = _MARKER.search(step["text"])
+    if marker:
+        step["text"] = _MARKER.sub(" ", step["text"]).strip()
+        word = marker.group(1).lower().replace(" ", "_").replace("-", "_")
+        step["kind"] = {"approval": "approve"}.get(word, word)
+
+    body = step["text"]
+    if not step["condition"]:
+        m = _COND_SPLIT.match(body)
+        if m:
+            step["condition"], body = m.group(1).strip(), m.group(2).strip()
+    elif ":" in body:
+        body = body.split(":", 1)[1].strip()          # "If retry fails twice: Escalate …" -> "Escalate …"
+
+    if not step.get("action"):
+        action, params = infer_action(body)
+        if action:
+            step["action"] = action
+            step["params"] = {**params, **(step.get("params") or {})}
+
+    known = is_known_action(step.get("action"))
+    if known and not explicit and ACTIONS[step["action"]]["risky"]:
+        step["approval"] = "required"                   # ryzykowna akcja bez "approval: none" -> pytamy człowieka
+    if known and step["condition"] and not condition_checkable(step["condition"]):
+        step["approval"] = "required"                   # warunku nie sprawdzimy sami -> człowiek potwierdza
+    if step["kind"]:
+        try:
+            step = set_kind(step, step["kind"])
+        except ValueError:
+            step["kind"] = None
+    return step
+
+
 # ---------------------------------------------------------------- wykrywanie formatu
 
 def _looks_like_json(s: str) -> bool:
@@ -595,7 +751,7 @@ def parse_runbook_full(raw: str, fmt: str = "auto") -> ParseResult:
     if not raw or not raw.strip():
         return ParseResult(format=fmt, steps=[])
     if fmt == "link" or (fmt == "auto" and detect_format(raw) == "link"):
-        return ParseResult(format="link", steps=[_step(f"Open runbook {raw.strip()}")])
+        return ParseResult(format="link", steps=[finalize_step(_step(f"Open runbook {raw.strip()}"))])
 
     if fmt != "auto":
         result = _PARSERS.get(fmt, _parse_text)(raw)
@@ -617,6 +773,7 @@ def parse_runbook_full(raw: str, fmt: str = "auto") -> ParseResult:
                     f"so each line was used as a step. Check the steps below.")
             result = fallback
 
+    result.steps = [finalize_step(st) for st in result.steps]
     if not result.steps:
         result.warnings.append("No steps found. Write one step per line, or as a numbered list.")
     result.warnings += _placeholder_warnings(result.steps)
@@ -659,6 +816,8 @@ def fill_steps(steps: list[dict[str, Any]], event_payload: Any) -> list[dict[str
             action=step.get("action"),
             params=_fill_value(raw_params, event_payload),
             approval=step.get("approval", "none"),
+            condition=render_template(step["condition"], event_payload) if step.get("condition") else None,
+            kind=step.get("kind"),
         )
         filled["done"] = False
         out.append(filled)

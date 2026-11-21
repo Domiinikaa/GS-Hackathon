@@ -11,9 +11,9 @@ load_dotenv()
 
 from database import engine, Base, SessionLocal, startup_lock
 import models  # Registers all models with Base
-from services.security import hash_password
 from services.connectors import ingest_manager
 from services.delivery import ensure_delivery_columns, start_worker
+from services import runbook_runner
 from routers import api, auth, admin, alerts, rules, people, sources, deliveries, runbooks
 from seed import seed_all
 from services.alert_service import ensure_open_dedup_index
@@ -147,47 +147,6 @@ def sync_legacy_teams():
         db.close()
 
 
-def init_admin_from_env():
-    """
-    Bootstraps an Administrator account if provided via environment variables (e.g. in Railway):
-    - ADMIN_UNAME
-    - ADMIN_EMAIL
-    - ADMIN_PASSWORD
-    - ADMIN_PHONE (optional)
-    """
-    admin_uname = os.getenv("ADMIN_UNAME")
-    admin_email = os.getenv("ADMIN_EMAIL")
-    admin_password = os.getenv("ADMIN_PASSWORD")
-
-    if not admin_uname or not admin_email or not admin_password:
-        return
-
-    db = SessionLocal()
-    try:
-        existing = db.query(models.User).filter(
-            (models.User.uname == admin_uname.strip()) | (models.User.email == admin_email.strip().lower())
-        ).first()
-
-        if not existing:
-            admin_user = models.User(
-                uname=admin_uname.strip(),
-                email=admin_email.strip().lower(),
-                hashed_password=hash_password(admin_password),
-                dzial="Management",
-                is_admin=True,
-                nrtel=os.getenv("ADMIN_PHONE")
-            )
-            db.add(admin_user)
-            db.commit()
-            print(f"[AUTH] Administrator '{admin_uname}' successfully initialized from environment variables.")
-        else:
-            if not existing.is_admin:
-                existing.is_admin = True
-                db.commit()
-    finally:
-        db.close()
-
-
 # Startup initialization & seeding
 # Przy kilku kopiach serwera tylko jedna na raz przygotowuje bazę (patrz database.startup_lock)
 with startup_lock():
@@ -200,11 +159,11 @@ with startup_lock():
     purge_demo_user()
     seed_default_teams()
     sync_legacy_teams()
-    init_admin_from_env()
 
     startup_db = SessionLocal()
     try:
         seed_all(startup_db)
+        runbook_runner.upgrade_runbook_steps(startup_db)   # stare runbooki -> rodzaje kroków i warunki
     finally:
         startup_db.close()
 
@@ -212,10 +171,12 @@ with startup_lock():
 async def lifespan(_app: FastAPI):
     ensure_delivery_columns(engine)
     start_worker()
+    runbook_runner.start_worker()          # Osoba 4: wykonywanie kroków runbooka (jeden worker na kopię)
     await ingest_manager.start()
     try:
         yield
     finally:
+        runbook_runner.stop_worker()
         await ingest_manager.stop()
 
 

@@ -247,3 +247,51 @@ class ChannelSetting(Base):
 
     channel = Column(String(20), primary_key=True)         # sms | phone | email
     down = Column(Boolean, default=False, nullable=False)
+
+
+# --- OSOBA 4: wykonywanie kroków runbooka (services/runbook_runner.py) i symulator (services/simulator.py) ---
+
+class StepJob(Base):
+    """
+    Kolejka kroków runbooka do wykonania przez aplikację. Leży w bazie, więc działa na wielu kopiach serwera:
+    zadanie bierze jedna kopia (warunkowy UPDATE 'queued' -> 'running'), a unikalna trójka
+    (alert, krok, podejście) sprawia, że ten sam krok nie trafi do kolejki dwa razy.
+    """
+    __tablename__ = "step_jobs"
+
+    id = Column(Integer, primary_key=True)
+    alert_id = Column(Integer, ForeignKey("alerts.id"), nullable=False, index=True)
+    step_index = Column(Integer, nullable=False)
+    run_no = Column(Integer, nullable=False, default=1)     # 2, 3… po kliknięciu "Ponów"
+    status = Column(String(20), nullable=False, default="queued", index=True)  # queued | running | finished
+    run_after = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)  # krok "wait" = później
+    claimed_at = Column(DateTime, nullable=True)
+    claimed_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("uq_step_jobs_once", "alert_id", "step_index", "run_no", unique=True),
+    )
+
+
+class SimService(Base):
+    """Udawany system docelowy (counterparty-service, settlement…). Stan w bazie = ten sam na każdej kopii."""
+    __tablename__ = "sim_services"
+
+    name = Column(String(100), primary_key=True)
+    healthy = Column(Boolean, nullable=False, default=True)
+    workflows_ok = Column(Boolean, nullable=False, default=True)   # czy ponowienie procesu się uda
+    restarting_until = Column(DateTime, nullable=True)
+
+
+class SimCall(Base):
+    """Dziennik: co aplikacja zrobiła w udawanym świecie (sprawdzenie, ponowienie, restart, ticket…)."""
+    __tablename__ = "sim_calls"
+
+    id = Column(Integer, primary_key=True)
+    service = Column(String(100), nullable=True)
+    action = Column(String(50), nullable=False)
+    detail = Column(Text, nullable=True)
+    ok = Column(Boolean, nullable=False, default=True)
+    alert_id = Column(Integer, nullable=True, index=True)
+    at = Column(DateTime, default=datetime.utcnow, index=True)

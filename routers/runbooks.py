@@ -9,8 +9,11 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Event, Rule, Runbook
+from routers.deps import get_optional_current_user
+from services import runbook_runner
+from services import simulator as sim
 from services.rules_engine import evaluate
-from services.runbook_parser import ParseResult, normalize_matches, parse_runbook_full
+from services.runbook_parser import ACTIONS, KINDS, ParseResult, normalize_matches, parse_runbook_full, set_kind
 
 router = APIRouter(prefix="/api", tags=["Runbooks & engine (Osoba 4)"])
 
@@ -36,6 +39,7 @@ class RunbookIn(BaseModel):
     raw: str
     format: str = "auto"
     matches: Optional[Dict[str, Any]] = None  # grupa warunków jak w regułach – automatyczne podpinanie
+    kinds: Optional[List[Optional[str]]] = None  # rodzaj każdego kroku (jak w RunbookPatch)
 
     _name = field_validator("name")(_clean_name)
 
@@ -45,6 +49,7 @@ class RunbookPatch(BaseModel):
     raw: Optional[str] = None
     format: Optional[str] = None
     matches: Optional[Dict[str, Any]] = None
+    kinds: Optional[List[Optional[str]]] = None   # rodzaj każdego kroku z UI: manual | auto | approve | approve_manual | null (auto-wykryj)
 
     _name = field_validator("name")(_clean_name)
 
@@ -68,6 +73,33 @@ def _get_or_404(db: Session, runbook_id: int) -> Runbook:
     if rb is None:
         raise HTTPException(404, f"Runbook {runbook_id} not found")
     return rb
+
+
+def _apply_kinds(steps: List[dict], kinds: List[Optional[str]]) -> List[dict]:
+    if len(kinds) != len(steps):
+        raise HTTPException(422, f"Expected {len(steps)} kinds, one per step")
+    out = []
+    for i, (step, kind) in enumerate(zip(steps, kinds)):
+        if kind is not None and kind not in KINDS:
+            raise HTTPException(422, f"Step {i + 1}: kind must be one of {', '.join(KINDS)}")
+        try:
+            out.append(set_kind(step, kind))
+        except ValueError as e:
+            raise HTTPException(422, f"Step {i + 1}: {e}")
+    return out
+
+
+def _keep_kinds(old: List[dict], new: List[dict]) -> List[dict]:
+    """Po edycji treści zostawiamy ręcznie wybrane rodzaje kroków, których tekst się nie zmienił."""
+    chosen = {s.get("text"): s.get("kind") for s in old if s.get("kind")}
+    out = []
+    for step in new:
+        kind = chosen.get(step.get("text"))
+        try:
+            out.append(set_kind(step, kind) if kind else step)
+        except ValueError:
+            out.append(step)
+    return out
 
 
 # ---------------------------------------------------------------- runbooki
@@ -97,7 +129,8 @@ def create_runbook(payload: RunbookIn, db: Session = Depends(get_db)):
     r = _parse_or_422(payload.raw, payload.format)
     # matches podane wprost wygrywają; inaczej bierzemy je z treści runbooka (YAML: "matches:")
     matches = normalize_matches(payload.matches) if payload.matches else r.matches
-    rb = Runbook(name=payload.name, format=r.format, raw=payload.raw, steps=r.steps, matches=matches)
+    steps = _apply_kinds(r.steps, payload.kinds) if payload.kinds is not None else r.steps
+    rb = Runbook(name=payload.name, format=r.format, raw=payload.raw, steps=steps, matches=matches)
     db.add(rb)
     db.commit()
     db.refresh(rb)
@@ -112,11 +145,13 @@ def update_runbook(runbook_id: int, payload: RunbookPatch, db: Session = Depends
     if payload.raw is not None or payload.format is not None:
         raw = payload.raw if payload.raw is not None else rb.raw
         r = _parse_or_422(raw, payload.format or rb.format)
-        rb.format, rb.steps, rb.raw = r.format, r.steps, raw
+        rb.format, rb.steps, rb.raw = r.format, _keep_kinds(rb.steps or [], r.steps), raw
         if r.format in ("yaml", "json"):
             rb.matches = r.matches              # treść runbooka mówi, do czego pasuje (albo już nie)
     if payload.matches is not None:
         rb.matches = normalize_matches(payload.matches)  # {} = wyłącz automatyczne podpinanie
+    if payload.kinds is not None:
+        rb.steps = _apply_kinds(rb.steps or [], payload.kinds)
     db.commit()
     db.refresh(rb)
     return rb
@@ -177,3 +212,67 @@ def engine_test(req: EngineTestRequest, db: Session = Depends(get_db)):
         "matched": [asdict(m) for m in matches],
         "not_matched": [r.id for r in rules if r.id not in matched],
     }
+
+
+# ---------------------------------------------------------------- kroki runbooka w alercie (wykonywanie)
+# Approve jednego kroku i Mark done są u Osoby 1 (routers/alerts.py) – tu decyzje, które dotyczą całej procedury.
+
+@router.get("/runbooks/actions/list")
+def list_actions():
+    """Akcje, które aplikacja umie wykonać sama, i rodzaje kroków – do edytora runbooka."""
+    return {"actions": ACTIONS, "kinds": list(KINDS)}
+
+
+@router.post("/alerts/{alert_id}/steps/{step_index}/approve-until")
+def approve_until(alert_id: int, step_index: int, db: Session = Depends(get_db),
+                  user=Depends(get_optional_current_user)):
+    """Zatwierdza wszystkie kroki od obecnego do tego włącznie (najwyżej do pierwszego kroku manual)."""
+    return runbook_runner.approve_until(db, alert_id, step_index, user)
+
+
+@router.post("/alerts/{alert_id}/steps/{step_index}/retry")
+def retry_step(alert_id: int, step_index: int, db: Session = Depends(get_db),
+               user=Depends(get_optional_current_user)):
+    """Ponów krok, który zatrzymał procedurę. Krok ze zgodą może ponowić tylko lead / admin."""
+    return runbook_runner.retry_step(db, alert_id, step_index, user)
+
+
+@router.post("/alerts/{alert_id}/runbook/abort")
+def abort_runbook(alert_id: int, db: Session = Depends(get_db), user=Depends(get_optional_current_user)):
+    """Przerwij procedurę: pozostałe kroki anulowane, alert zostaje otwarty."""
+    return runbook_runner.abort_runbook(db, alert_id, user)
+
+
+# ---------------------------------------------------------------- symulator systemów docelowych
+
+class SimServicePatch(BaseModel):
+    healthy: Optional[bool] = None
+    workflows_ok: Optional[bool] = None
+
+
+def _sim_out(svc) -> dict:
+    now = datetime.utcnow()
+    return {"name": svc.name, "healthy": bool(svc.healthy), "workflows_ok": bool(svc.workflows_ok),
+            "restarting": bool(svc.restarting_until and now < svc.restarting_until),
+            "restarting_until": svc.restarting_until}
+
+
+@router.get("/sim/services")
+def sim_services(db: Session = Depends(get_db)):
+    services = sim.list_services(db)
+    db.commit()
+    return [_sim_out(s) for s in services]
+
+
+@router.put("/sim/services/{name}")
+def sim_set_service(name: str, payload: SimServicePatch, db: Session = Depends(get_db)):
+    if name not in sim.DEFAULT_SERVICES:
+        raise HTTPException(404, f"Unknown simulated service {name!r}")
+    svc = sim.set_service(db, name, healthy=payload.healthy, workflows_ok=payload.workflows_ok)
+    db.commit()
+    return _sim_out(svc)
+
+
+@router.get("/sim/calls")
+def sim_calls(limit: int = 50, db: Session = Depends(get_db)):
+    return sim.recent_calls(db, min(max(limit, 1), 200))

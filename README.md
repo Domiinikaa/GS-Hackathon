@@ -40,6 +40,13 @@ The platform ingests heterogeneous events and logs from arbitrary sources, evalu
 
 ## Key Capabilities
 
+### End-to-End Integrated Pipeline (`services/pipeline.py`)
+All core subsystems — **Sources / Streams**, **Rules**, **Runbooks**, **Alerts**, **People**, and **Notification Channels / Outbox** — are fully connected in production via `process_event()`:
+1. Any record arriving from HTTP push (`POST /api/ingest/{source_key}`), background stream/pull connectors (`polled_api`, `sse`, `logfile`, `kafka`, `rabbitmq`), or the simulator (`POST /api/sources/{id}/simulate`) is normalized and persisted as an `Event`.
+2. `evaluate()` runs active rules against the event, attaches the rule's linked `Runbook` (or auto-matches a runbook via `Runbook.matches`), and renders `{{field}}` templates in alert titles, bodies, and runbook step `params`.
+3. `upsert_alert()` creates or deduplicates the open `Alert` and publishes it to the live SSE stream (`/api/alerts/stream`).
+4. When a new alert is created (`_is_new`), `recipients_for()` resolves team members, `on_call` rules, and `quiet_hours`, and `enqueue_deliveries()` queues formatted Email/SMS/Phone notifications in the Outbox for the background delivery worker.
+
 ### 1. Universal Log & Event Sources (`services/connectors/`, `routers/sources.py`)
 Designed around a **declarative Connector Registry** (`CONNECTOR_REGISTRY`) so new source types can be added without modifying frontend forms. The UI dynamically renders configuration fields from `GET /api/sources/types`.
 
@@ -67,13 +74,51 @@ Designed around a **declarative Connector Registry** (`CONNECTOR_REGISTRY`) so n
 - **Live Event Inspector:**
   - Real-time event viewer (`GET /api/events`) with source filtering, payload search, and auto-refresh.
 
-### 2. Rules, Alerts, Runbooks & Delivery Pipeline
-- **Normalized Event Contract for Rules:** Every ingested record (regardless of transport or raw log format) is parsed, unwrapped (`root_path`), and aliased (`field_aliases`) before being stored in `Event.payload` as a structured JSON object. Rule evaluators (`services/rules_engine.py`) can query nested fields via dot-notation (e.g. `payload.notional`, `error.code`) and build recursive `and`/`or`/`not` condition trees, while rule editors can consume `detected_fields` from `GET /api/sources` or `GET /api/sources/{id}/fields` for field autocomplete.
-- **Event Pipeline (`services/pipeline.py`):** Evaluates incoming events against enabled rules, deduplicates/groups alerts, resolves on-call recipients and channel preferences, and enqueues deliveries.
-- **Security & Access Control:**
-  - JWT authentication (`HS256`), single-use invite-code registration (`GS-XXXX-XXXX`), and dynamic company departments.
-  - Clean database initialization with environment-based or CLI admin provisioning (`ADMIN_UNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` or `create_admin.py`).
-  - Source management endpoints use a centralized `require_source_manager` dependency in `routers/sources.py` (currently open to authenticated/local testing; set `REQUIRE_ADMIN_FOR_SOURCES = True` to restrict source mutations to administrators).
+### 2. Rules Engine & Multi-Format Runbooks (`services/rules_engine.py`, `services/runbook_parser.py`)
+- **Dynamic Rule Evaluation:**
+  - Supports arbitrarily nested `and`, `or`, and `not` condition trees with leaf operators (`eq`, `neq`, `gt`, `lt`, `gte`, `lte`, `contains`, `wildcard`, `regex`, `in`) queried via dot-notation (`payload.notional`, `error.code`).
+  - Dynamic `{{field}}` template interpolation in alert titles, bodies, and runbook step parameters.
+  - Per-rule `severity` (`info`, `warning`, `critical`), `color`, `channels`, and time-window grouping (`group_by`, `group_window_s`).
+  - Interactive dry-run endpoint (`POST /api/engine/test`) and live field hints (`GET /api/rules/fields`).
+- **Multi-Format Runbook Parser (`POST /api/runbooks/parse-preview`, `routers/runbooks.py`):**
+  - Parses **YAML**, **JSON**, **HTML**, **Markdown**, **plain text**, and **URL link** runbooks into structured steps with `text`, `action`, `params`, and `approval` (`none` | `required`).
+  - Automatic `matches` criteria on runbooks attach matching runbooks to alerts at evaluation time even when a rule has no explicit `runbook_id`.
+  - Detects approval-required steps from explicit `approval: required` or natural-language phrases (e.g. `needs approval`).
+
+### 3. Alert Deduplication, Live Stream & Step Approvals (`services/alert_service.py`, `routers/alerts.py`, `services/live.py`)
+- **Anti-Flood Open-Alert Deduplication:**
+  - Enforced at the database level via partial unique index `uq_alerts_open_dedup` on `alerts(dedup_key) WHERE status != 'resolved'` and atomic `ON CONFLICT ... DO UPDATE ... RETURNING` in `upsert_alert()`.
+  - Repeated events increment `Alert.count` and refresh `last_seen`, while **notifications are dispatched only once when a new alert is created** (until the alert is resolved and a fresh occurrence opens a new alert).
+- **Real-Time Live Feed (`GET /api/alerts/stream`):**
+  - Server-Sent Events (SSE) stream using in-memory pub/sub locally or PostgreSQL `LISTEN/NOTIFY` across multiple backend replicas.
+- **Incident Lifecycle & RBAC Step Approvals:**
+  - `open -> acknowledged -> resolved` state machine with full `history` audit trail.
+  - Risky runbook steps (`approval: "required"`) cannot be marked `done` until approved via `POST /api/alerts/{id}/steps/{step_index}/approve`, restricted to a `lead` of the alert's team or an administrator (`is_admin`).
+
+### 4. Unified Teams, People & Escalation Routing (`services/people_service.py`, `routers/people.py`, `routers/admin.py`)
+- **Single Unified `Team` Directory:**
+  - Shared across Auth (`User`), Admin & Teams (`/api/teams`, `/api/admin/teams`), People, Rules, Sources, and Alerts (with a `My team` quick filter in the Alerts UI).
+  - Registering or updating a user profile (`POST /api/auth/register`, `PUT /api/auth/me`) validates the team and automatically creates/syncs the matching `Person` profile.
+  - Renaming a team cascades across `users`, `people`, `rules`, `sources`, and `alerts`; deleting a team with active members or rules is guarded (`409 Conflict`).
+- **Smart Recipient Planning (`recipients_for`):**
+  - Resolves per-severity `channel_prefs`, restricts `phone` calls to `on_call=True` responders, enforces `quiet_hours` fallbacks (including `"ui"`), falls back to `email` when `phone` is missing, and distinguishes `member` vs `lead` roles.
+
+### 5. Notification Channels, Outbox & Two-Way Replies (`services/delivery.py`, `services/channels/`, `services/replies.py`)
+- **Pluggable Channel Registry (`services/channels/registry.py`):**
+  - **Email (`SmtpEmail`, `EMAIL_PROVIDER=smtp`):** Sends multipart plain-text + styled HTML emails with severity accents, runbook steps, and `#alerts/{id}` deep links (works out of the box with Mailpit on `localhost:1025` or any SMTP server via `SMTP_*` env vars).
+  - **SMS & Voice Phone (`FakeSms`, `FakePhone`, `SMS_PROVIDER=fake`, `PHONE_PROVIDER=fake`):** Concise ≤160-char SMS payloads with 4-digit `reply_code` and voice-call scripts logged to `gateway_messages` and displayed in the **Fake phone** UI inside Outbox.
+- **Reliable Outbox Worker:**
+  - Background worker (`start_worker` / `process_due`) claims pending/failed deliveries via atomic `UPDATE ... WHERE status IN (...)` leases (safe across multiple replicas), retries with exponential backoff (`2^attempts` seconds up to `MAX_ATTEMPTS = 5`), and marks exhausted rows as `dead`.
+  - Simulated channel outage toggles (`PUT /api/channels/{channel}/outage` for `sms` and `phone`) demonstrate retry recovery in the Outbox UI.
+- **Two-Way SMS & Phone Responses:**
+  - Responders can reply directly from the **Fake phone** widget or via webhooks:
+    - `POST /api/channels/sms/inbound`: `ACK <code>` (acknowledge), `YES <code>` / `APPROVE <code>` (approve next pending risky step), `RESOLVE <code>` (resolve alert) — verified against both recipient phone number and `reply_code`.
+    - `POST /api/channels/phone/inbound`: press `1` to acknowledge the latest alert call.
+
+### 6. Security, Access Control & Seed Data (`seed.py`, `routers/auth.py`)
+- JWT authentication (`HS256`), single-use invite-code registration (`GS-XXXX-XXXX`), and CLI admin provisioning (`create_admin.py`).
+- Automatic startup seeding (under `startup_lock()`) for empty tables: 5 unified teams (`Settlements`, `Pricing`, `Rates`, `Payments`, `Management`), 5 sources (`demo`, `trade-gateway`, `payments-webhook`, `settlement-kafka`, `pricing-engine-logs`), 4 rules, 3 members + 4 team leads, and 3 Appendix B runbooks (YAML, Markdown, text).
+- Source management endpoints use a centralized `require_source_manager` dependency in `routers/sources.py` (open for local/hackathon testing by default; set `REQUIRE_ADMIN_FOR_SOURCES = True` to restrict source mutations to administrators).
 
 ---
 
@@ -123,11 +168,13 @@ npm run dev
 
 The included multi-stage `Dockerfile` compiles the React + TypeScript bundle with Node 20 and serves both the FastAPI backend and static SPA from Python 3.11 on a single port.
 
-Required/recommended environment variables for production:
+Required/recommended environment variables for production (see `.env.example`):
 - `DATABASE_URL` — PostgreSQL connection string (required for multi-replica deployments; defaults to local SQLite `app.db` if unset)
 - `SECRET_KEY` — shared JWT signing key across all replicas
-- `ADMIN_UNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` — automatic bootstrap for the first administrator account
 - `PORT` — HTTP port (defaults to `8000`)
+- `APP_URL` — base frontend URL used for `#alerts/{id}` deep links in emails and SMS (defaults to `http://localhost:5173`)
+- `EMAIL_PROVIDER`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_STARTTLS`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` — SMTP delivery configuration (defaults to Mailpit on `localhost:1025`)
+- `SMS_PROVIDER`, `PHONE_PROVIDER` — channel provider selection (default `fake`)
 
 ### Production Horizontal Scaling (N Replicas / Kubernetes)
 All application instances are stateless and coordinate exclusively through the shared PostgreSQL database:
@@ -164,28 +211,41 @@ All application instances are stateless and coordinate exclusively through the s
 | `POST` | `/api/ingest/{source_key}` | Universal push endpoint (JSON object/array, NDJSON, or raw log text) |
 | `GET` | `/api/events` | List recent ingested events (supports `limit` and `source_id` filters) |
 
-### Authentication & Administration (`/api/auth`, `/api/admin`)
+### Authentication, Teams & Administration (`/api/auth`, `/api/teams`, `/api/admin`)
 | Method | Endpoint | Description | Access |
 |---|---|---|---|
-| `POST` | `/api/auth/register` | Register using a single-use invite code | Public |
+| `POST` | `/api/auth/register` | Register using a single-use invite code (auto-creates `Person`) | Public |
 | `POST` | `/api/auth/login` | Authenticate with username/email and password | Public |
 | `GET` | `/api/auth/me` | Fetch authenticated user profile | Bearer JWT |
-| `PUT` | `/api/auth/me` | Update phone number or department | Bearer JWT |
-| `GET` | `/api/departments` | List active company departments | Public |
+| `PUT` | `/api/auth/me` | Update phone number or team (syncs linked `Person`) | Bearer JWT |
+| `GET` | `/api/teams` | List unified teams with member/rule/source counts | Public |
 | `POST` | `/api/admin/invites` | Generate a single-use invite code | Admin Only |
 | `GET` | `/api/admin/invites` | List generated invite codes | Admin Only |
 | `GET` | `/api/admin/users` | List registered users | Admin Only |
 | `PATCH` | `/api/admin/users/{id}/role` | Promote or demote administrator privileges | Admin Only |
-| `POST` | `/api/admin/departments` | Create a company department | Admin Only |
-| `PUT` | `/api/admin/departments/{id}` | Update a department | Admin Only |
-| `DELETE` | `/api/admin/departments/{id}` | Delete a department | Admin Only |
+| `POST` | `/api/admin/teams` | Create a team | Admin Only |
+| `PUT` | `/api/admin/teams/{id}` | Rename/update a team (cascades across all entities) | Admin Only |
+| `DELETE` | `/api/admin/teams/{id}` | Delete an empty team (`409` if members or rules exist) | Admin Only |
 
-### Alerting Pipeline (`/api`)
-| Resource | Prefix | Description |
+### Alerting Pipeline, Channels & Outbox (`/api`)
+| Resource | Prefix / Endpoints | Description |
 |---|---|---|
-| Alerts | `/api/alerts` | Live alerts feed, acknowledge, and resolve actions |
-| Rules | `/api/rules` | Runtime rule management (conditions, templates, routing, grouping) |
-| People | `/api/people` | On-call responders, channel preferences, and quiet hours |
-| Runbooks | `/api/runbooks` | Remediation steps (YAML, Markdown, text, or link) |
-| Deliveries | `/api/deliveries` | Notification outbox and delivery retry status |
+| Engine | `POST /api/engine/test` | Dry-run active or draft rules against a sample event |
+| Alerts | `/api/alerts`, `GET /api/alerts/stream`, `POST /api/alerts/{id}/ack\|resolve`, `POST /api/alerts/{id}/steps/{idx}/approve\|done` | Live SSE alerts feed, dedup, acknowledge/resolve, and RBAC runbook step approvals |
+| Rules | `/api/rules`, `GET /api/rules/fields` | Runtime rule management (conditions, templates, routing, grouping) |
+| People | `/api/people`, `POST /api/people/preview` | On-call responders, `member`/`lead` roles, channel preferences, and quiet hours |
+| Runbooks | `/api/runbooks`, `POST /api/runbooks/parse-preview` | Multi-format remediation steps (YAML, JSON, HTML, Markdown, text, link) |
+| Outbox | `GET /api/deliveries`, `POST /api/deliveries/test` | Notification outbox, retry attempts, and test delivery trigger |
+| Channels | `GET /api/channels`, `PUT /api/channels/{ch}/outage`, `GET /api/channels/phones\|messages`, `POST /api/channels/sms\|phone/inbound` | Channel status, outage simulator, Fake phone threads, and two-way SMS/phone replies |
 | Health | `/health` | Service uptime check |
+
+---
+
+## Automated Tests
+
+All backend tests run against isolated temporary SQLite databases without modifying `app.db`:
+- `tests/test_engine.py` — Rules engine operators, grouping, templates, and multi-format runbook parsing
+- `tests/test_api.py` — Runbook CRUD, engine preview API, and `/api/ingest` integration
+- `tests/test_integration_pipeline.py` — End-to-end Sources → Rules → Runbooks → Alerts → People → Outbox, anti-flood dedup, step approval RBAC, and unified Teams
+- `tests/test_channels_delivery.py` — SMTP email delivery, backoff & dead-letter retries, fake gateway outage recovery, two-way SMS/phone replies, and background worker lifecycle
+- `tests/test_people_service.py`, `tests/test_rules_people_api.py`, `tests/test_people_roles.py` — Recipient planning, quiet hours, API validation, and team lead seeding/migrations
