@@ -1,193 +1,124 @@
-"""OSOBA 3 – Outbox: co i komu wysłaliśmy, symulacja awarii kanału i ponawianie."""
-from typing import Any, Dict, List, Optional
+"""
+Wysyłka alertów (kanały) i Outbox: co, komu i jakim kanałem wysłaliśmy, z ponawianiem.
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+  /api/deliveries…        Outbox (lista wysyłek) + testowa wysyłka
+  /api/channels…          kanały: stan, przełącznik awarii, udawany telefon, odpowiedzi z telefonu
+"""
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Alert, Delivery, Person
-from services.delivery import (
-    CHANNEL_PROVIDERS,
-    MAX_ATTEMPTS,
-    format_delivery_message,
-    list_channel_statuses,
-    process_pending_deliveries,
-    set_channel_outage,
-)
+from models import Alert, ChannelSetting, Delivery, GatewayMessage
+from services.channels import available_channels
+from services.contracts import Recipient
+from services.delivery import enqueue_deliveries
+from services.replies import digits, handle_phone_keypress, handle_sms
 
-router = APIRouter(prefix="/api/deliveries", tags=["Outbox (Osoba 3)"])
+router = APIRouter(tags=["Channels & Outbox"])
 
 
-class OutageToggleIn(BaseModel):
-    down: bool
-    error_message: Optional[str] = None
-
-
-def _serialize_delivery(
-    d: Delivery,
-    alerts_by_id: Dict[int, Alert],
-    people_by_id: Dict[int, Person],
-) -> Dict[str, Any]:
-    alert = alerts_by_id.get(d.alert_id)
-    person = people_by_id.get(d.person_id) if d.person_id is not None else None
-    attempts = d.attempts or 0
-    if person is not None:
-        person_name: Optional[str] = person.name
-    elif d.channel == "ui" and alert is not None:
-        person_name = f"Team feed ({alert.team})"
-    else:
-        person_name = None
-
-    return {
-        "id": d.id,
-        "alert_id": d.alert_id,
-        "person_id": d.person_id,
-        "channel": d.channel,
-        "to": d.to,
-        "status": d.status,
-        "attempts": attempts,
-        "max_attempts": MAX_ATTEMPTS,
-        "exhausted": bool(d.status == "failed" and attempts >= MAX_ATTEMPTS),
-        "last_error": d.last_error,
-        "created_at": d.created_at.isoformat() if d.created_at else None,
-        "sent_at": d.sent_at.isoformat() if d.sent_at else None,
-        "next_retry_at": d.next_retry_at.isoformat() if d.next_retry_at else None,
-        "person_name": person_name,
-        "alert_title": alert.title if alert else None,
-        "alert_severity": alert.severity if alert else None,
-        "alert_color": alert.color if alert else None,
-        "alert_team": alert.team if alert else None,
-        "alert_link": f"/#alerts/{d.alert_id}",
-        "message_preview": format_delivery_message(alert, d.channel) if alert else None,
-    }
-
-
-def _serialize_many(db: Session, rows: List[Delivery]) -> List[Dict[str, Any]]:
-    if not rows:
-        return []
-    alert_ids = {d.alert_id for d in rows if d.alert_id is not None}
-    person_ids = {d.person_id for d in rows if d.person_id is not None}
-    alerts_by_id = (
-        {a.id: a for a in db.query(Alert).filter(Alert.id.in_(alert_ids)).all()}
-        if alert_ids
-        else {}
-    )
-    people_by_id = (
-        {p.id: p for p in db.query(Person).filter(Person.id.in_(person_ids)).all()}
-        if person_ids
-        else {}
-    )
-    return [_serialize_delivery(d, alerts_by_id, people_by_id) for d in rows]
-
-
-@router.get("")
-def list_deliveries(
-    status: Optional[str] = None,
-    channel: Optional[str] = None,
-    alert_id: Optional[int] = None,
-    limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db),
-):
+# ---------------------------------------------------------------- Outbox
+@router.get("/api/deliveries")
+def list_deliveries(status: Optional[str] = None, alert_id: Optional[int] = None, limit: int = 100,
+                    db: Session = Depends(get_db)):
     q = db.query(Delivery)
     if status:
         q = q.filter(Delivery.status == status)
-    if channel:
-        q = q.filter(Delivery.channel == channel)
-    if alert_id is not None:
+    if alert_id:
         q = q.filter(Delivery.alert_id == alert_id)
-    rows = q.order_by(Delivery.id.desc()).limit(limit).all()
-    return _serialize_many(db, rows)
+    return q.order_by(Delivery.id.desc()).limit(limit).all()
 
 
-@router.get("/stats")
-def delivery_stats(db: Session = Depends(get_db)):
-    grouped = dict(
-        db.query(Delivery.status, func.count(Delivery.id))
-        .group_by(Delivery.status)
-        .all()
-    )
-    sent = int(grouped.get("sent", 0))
-    pending = int(grouped.get("pending", 0))
-    failed = int(grouped.get("failed", 0))
-    exhausted = int(
-        db.query(func.count(Delivery.id))
-        .filter(Delivery.status == "failed", Delivery.attempts >= MAX_ATTEMPTS)
-        .scalar()
-        or 0
-    )
-    return {
-        "total": sent + pending + failed,
-        "sent": sent,
-        "pending": pending,
-        "failed": failed,
-        "exhausted": exhausted,
-        "channels": list_channel_statuses(db),
-    }
+class TestDeliveryRequest(BaseModel):
+    """Udawany odbiorca – do testów, zanim recipients_for (Osoba 2) jest w main."""
+    channel: str = "email"            # email | sms | phone
+    to: str = "kasia@example.com"     # dla sms/phone: numer, np. +48 600 000 001
+    name: str = "Kasia"
+    alert_id: Optional[int] = None    # brak = najnowszy alert
 
 
-@router.get("/channels")
-def get_channel_statuses(db: Session = Depends(get_db)):
-    return list_channel_statuses(db)
-
-
-@router.post("/channels/{channel}/outage")
-def toggle_channel_outage(
-    channel: str,
-    payload: OutageToggleIn,
-    db: Session = Depends(get_db),
-):
-    if channel not in CHANNEL_PROVIDERS:
-        raise HTTPException(404, f"Unknown channel '{channel}'")
-    state = set_channel_outage(db, channel, payload.down, payload.error_message)
-    if not payload.down:
-        db.query(Delivery).filter(
-            Delivery.channel == channel,
-            Delivery.status == "failed",
-            Delivery.attempts < MAX_ATTEMPTS,
-        ).update({Delivery.next_retry_at: None}, synchronize_session=False)
-        db.commit()
-        flushed = process_pending_deliveries(db, batch_size=100, ignore_backoff=True)
-        return {**state, "flushed": flushed}
-    return state
-
-
-@router.post("/retry-failed")
-def retry_all_failed(db: Session = Depends(get_db)):
-    reset_count = (
-        db.query(Delivery)
-        .filter(Delivery.status == "failed")
-        .update(
-            {
-                Delivery.status: "pending",
-                Delivery.attempts: 0,
-                Delivery.last_error: None,
-                Delivery.next_retry_at: None,
-            },
-            synchronize_session=False,
-        )
-    )
+@router.post("/api/deliveries/test")
+def create_test_delivery(req: TestDeliveryRequest, db: Session = Depends(get_db)):
+    """TYLKO DO TESTÓW: wysyła wskazany alert do udawanego odbiorcy wybranym kanałem."""
+    alert = db.get(Alert, req.alert_id) if req.alert_id else db.query(Alert).order_by(Alert.id.desc()).first()
+    if not alert:
+        raise HTTPException(404, "No alert – create one with POST /api/alerts/test first")
+    created = enqueue_deliveries(db, alert, [Recipient(person_id=None, name=req.name, channel=req.channel, to=req.to)])
     db.commit()
-    result = process_pending_deliveries(db, batch_size=100, ignore_backoff=True)
-    return {"reset": int(reset_count), **result}
+    if not created:
+        raise HTTPException(400, "Nothing to send (channel 'ui' or empty address)")
+    db.refresh(created[0])
+    return created[0]
 
 
-@router.post("/process")
-def process_deliveries_now(db: Session = Depends(get_db)):
-    return process_pending_deliveries(db, ignore_backoff=True)
+# ---------------------------------------------------------------- kanały: stan i awaria do demo
+@router.get("/api/channels")
+def channels(db: Session = Depends(get_db)):
+    """Skonfigurowane kanały i czy któryś ma włączoną (udawaną) awarię."""
+    down = {s.channel: s.down for s in db.query(ChannelSetting).all()}
+    return [{"channel": c, "down": bool(down.get(c, False))} for c in available_channels()]
 
 
-@router.post("/{delivery_id}/retry")
-def retry_single_delivery(delivery_id: int, db: Session = Depends(get_db)):
-    delivery = db.get(Delivery, delivery_id)
-    if delivery is None:
-        raise HTTPException(404, f"Delivery {delivery_id} not found")
-    delivery.status = "pending"
-    delivery.attempts = 0
-    delivery.last_error = None
-    delivery.next_retry_at = None
+class OutageRequest(BaseModel):
+    down: bool
+
+
+@router.put("/api/channels/{channel}/outage")
+def set_outage(channel: str, req: OutageRequest, db: Session = Depends(get_db)):
+    """Demo: "SMS gateway down" – wysyłki tym kanałem się nie udają i są ponawiane, aż awaria minie."""
+    if channel not in ("sms", "phone"):
+        raise HTTPException(400, "Outage can be simulated for sms and phone (e-mail: stop Mailpit)")
+    setting = db.get(ChannelSetting, channel) or ChannelSetting(channel=channel)
+    setting.down = req.down
+    db.add(setting)
     db.commit()
-    process_pending_deliveries(db, ignore_backoff=True)
-    db.refresh(delivery)
-    return _serialize_many(db, [delivery])[0]
+    return {"channel": channel, "down": setting.down}
+
+
+# ---------------------------------------------------------------- udawany telefon
+@router.get("/api/channels/phones")
+def phones(db: Session = Depends(get_db)):
+    """Numery, na które coś poszło (SMS/połączenie) – lista "telefonów" w widoku fałszywego telefonu."""
+    rows = (db.query(Delivery.to, func.max(Delivery.recipient_name), func.max(Delivery.id))
+            .filter(Delivery.channel.in_(["sms", "phone"]))
+            .group_by(Delivery.to).order_by(func.max(Delivery.id).desc()).all())
+    return [{"number": number, "name": name} for number, name, _ in rows]
+
+
+@router.get("/api/channels/messages")
+def phone_messages(number: str, db: Session = Depends(get_db)):
+    """Rozmowa z jednym numerem: SMS-y i połączenia w obie strony, od najstarszych."""
+    wanted = digits(number)
+    rows = db.query(GatewayMessage).order_by(GatewayMessage.id.desc()).limit(500).all()
+    return [m for m in reversed(rows) if digits(m.number) == wanted]
+
+
+class SmsInbound(BaseModel):
+    """Tak wyglądałby webhook od bramki SMS (np. Twilio), gdy człowiek odpisze."""
+    from_number: str = Field(..., alias="from", examples=["+48 600 000 001"])
+    text: str = Field(..., examples=["ACK 4821"])
+
+    model_config = {"populate_by_name": True}
+
+
+@router.post("/api/channels/sms/inbound")
+def sms_inbound(msg: SmsInbound, db: Session = Depends(get_db)):
+    result = handle_sms(db, msg.from_number, msg.text)
+    return {"ok": result.ok, "reply": result.message, "alert_id": result.alert_id}
+
+
+class PhoneInbound(BaseModel):
+    from_number: str = Field(..., alias="from", examples=["+48 600 000 002"])
+    digit: str = Field("1", examples=["1"])
+
+    model_config = {"populate_by_name": True}
+
+
+@router.post("/api/channels/phone/inbound")
+def phone_inbound(msg: PhoneInbound, db: Session = Depends(get_db)):
+    result = handle_phone_keypress(db, msg.from_number, msg.digit)
+    return {"ok": result.ok, "reply": result.message, "alert_id": result.alert_id}

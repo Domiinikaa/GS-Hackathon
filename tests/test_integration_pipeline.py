@@ -149,7 +149,12 @@ def test_settlements_end_to_end_and_antiflood_dedup():
     alert = ok(client.get(f"/api/alerts/{alert_id}"))
     assert alert["count"] == 6 and alert["status"] == "open"
     persisted_deliveries = ok(client.get(f"/api/deliveries?alert_id={alert_id}"))
-    assert len(persisted_deliveries) == 4  # 1 ui (sent) + 3 personal (pending)
+    assert len(persisted_deliveries) == 3  # Tom (phone + sms) + Ewa (sms); ui is live-feed only
+    assert sorted((row["recipient_name"], row["channel"]) for row in persisted_deliveries) == [
+        ("Ewa", "sms"),
+        ("Tom", "phone"),
+        ("Tom", "sms"),
+    ]
 
     # Resolve the alert -> next occurrence creates a NEW alert and notifies once again
     ok(client.post(f"/api/alerts/{alert_id}/resolve"))

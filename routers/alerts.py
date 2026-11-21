@@ -133,13 +133,18 @@ def _check_approve_permission(db: Session, alert: Alert, user: Optional[User]) -
       - anonymous API calls (`user is None`) are permitted for CLI/Swagger testing;
       - logged-in users without a matching `Person` profile are permitted so demo testers aren't locked out.
     """
-    if user is None or user.is_admin:
+    if user is None or getattr(user, "is_admin", False):
+        return
+
+    email = getattr(user, "email", None)
+    if not email:
+        # Non-User actor (e.g. ReplyActor authenticated via phone number + SMS reply_code)
         return
 
     person = (
         db.query(Person)
         .filter(
-            (func.lower(Person.email) == user.email.lower())
+            (func.lower(Person.email) == email.lower())
             | (func.lower(Person.name) == user.uname.lower())
         )
         .first()
