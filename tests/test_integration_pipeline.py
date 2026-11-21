@@ -185,8 +185,8 @@ def test_pricing_logfile_key_value_and_grouping():
     d = DELIVERIES_LOG[0]
     assert d["rule_id"] == "pricing-warnings"
     assert d["title"] == "Pricing warnings for EURUSD"
-    # Team feed always; Marek (Pricing lead) has no warning preference -> default email
-    assert d["recipients"] == [(None, "team:Pricing", "ui", None), (5, "Marek", "email", "marek@example.com")]
+    # The team feed always gets it; no people are seeded any more, so nobody else does
+    assert d["recipients"] == [(None, "team:Pricing", "ui", None)]
     assert len(d["steps"]) == 4  # Appendix B pricing text splits into 4 steps
     alert = ok(client.get(f"/api/alerts/{d['alert_id']}"))
     assert alert["count"] == 2

@@ -39,7 +39,7 @@ const BASE_TABS: TabItem[] = [
   { id: 'sources', label: 'Sources', icon: Plug, page: SourcesPage },
   { id: 'runbooks', label: 'Runbooks', icon: BookOpen, page: RunbooksPage },
   { id: 'outbox', label: 'Outbox', icon: Inbox, page: OutboxPage },
-  { id: 'admin', label: 'Admin & Teams', icon: Key, page: AdminPanel, adminOnly: true },
+  { id: 'admin', label: 'Lead & Teams', icon: Key, page: AdminPanel, adminOnly: true },
 ];
 
 function getInitialTab(): string {
@@ -168,7 +168,7 @@ export default function App() {
           <div className="flex items-center gap-3 shrink-0">
             <MoodIndicator mood={mood} onOpen={() => setActiveTabId('alerts')} />
             <span className="hidden md:block text-[14px] text-ink-muted">
-              {currentUser.uname}{currentUser.is_admin && ', admin'}
+              {currentUser.uname}{currentUser.is_admin && ', lead'}
             </span>
             <button onClick={handleLogout} title="Sign out" aria-label="Sign out"
               className="w-9 h-9 rounded-full flex items-center justify-center text-ios-blue hover:bg-white/[0.08] transition-colors">
@@ -186,6 +186,8 @@ export default function App() {
           <AdminPanel currentUser={currentUser} />
         ) : currentTab.id === 'alerts' ? (
           <AlertsPage currentUser={currentUser} />
+        ) : currentTab.id === 'people' ? (
+          <PeoplePage currentUser={currentUser} />
         ) : (
           <PageComponent />
         )}

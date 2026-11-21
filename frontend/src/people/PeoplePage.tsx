@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Plus, RefreshCw, Users } from 'lucide-react';
 import { ChannelList, EmptyState, Notice, PageHeader, Row, SEVERITY_DOT, Section, Segmented, type SeverityLevel, Toggle, cn, iconButton } from '../shared/ui';
 import type { Person } from '../shared/types';
+import type { User } from '../types';
 import { errorMessage } from '../rules/rulesApi';
 import { PersonInput, peopleApi } from './peopleApi';
 import { SEVERITY_LABEL, SEVERITY_ORDER, describeQuietHours } from './describePerson';
@@ -13,7 +14,12 @@ function toInput(p: Person): PersonInput {
   return rest;
 }
 
-export default function PeoplePage() {
+export default function PeoplePage({ currentUser }: { currentUser?: User | null } = {}) {
+  const isAdmin = Boolean(currentUser?.is_admin);
+  // A login account is linked to its People profile by e-mail (set at registration)
+  const isMe = (p: Person) =>
+    Boolean(p.email && currentUser?.email && p.email.toLowerCase() === currentUser.email.toLowerCase());
+  const canEdit = (p: Person) => isAdmin || isMe(p);
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -105,12 +111,12 @@ export default function PeoplePage() {
     <div className="space-y-6">
       <PageHeader
         title="People"
-        description="Team members, who is on call, and how each person wants to be reached."
+        description={<>Team members, who is on call, and how each person wants to be reached.{!isAdmin && ' You can edit your own profile.'}</>}
         actions={<>
           <button onClick={load} title="Reload people" aria-label="Reload people" className={iconButton}>
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          {editing === null && (
+          {isAdmin && editing === null && (
             <button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]">
               <Plus className="w-4 h-4" />Add person
             </button>
@@ -128,6 +134,7 @@ export default function PeoplePage() {
           teams={availableTeams}
           onSave={savePerson}
           onCancel={() => setEditing(null)}
+          canEditAdminFields={isAdmin}
         />
       )}
 
@@ -151,6 +158,7 @@ export default function PeoplePage() {
               footer={warnings.length > 0 && <span className="text-ios-orange">{warnings.join(' ')}</span>}>
               {members.map((person) => (
                 <PersonRow key={person.id} person={person} open={openId === person.id}
+                  me={isMe(person)} canEdit={canEdit(person)} canDelete={isAdmin}
                   onToggleOpen={() => setOpenId(openId === person.id ? null : person.id)}
                   onToggleOnCall={() => toggleOnCall(person)}
                   onEdit={() => setEditing(person)}
@@ -162,8 +170,7 @@ export default function PeoplePage() {
       </div>
 
       {!loading && people.length === 0 && !error && (
-        <EmptyState icon={Users} title="No people yet" text="Add the first person so alerts have somewhere to go."
-          action={<button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]"><Plus className="w-4 h-4" />Add person</button>} />
+        <EmptyState icon={Users} title="No people yet" text="People appear here when they register with an invite code." />
       )}
     </div>
   );
@@ -176,8 +183,9 @@ const DEFAULT_LABEL: Record<string, string> = {
   info: 'App only',
 };
 
-function PersonRow({ person, open, onToggleOpen, onToggleOnCall, onEdit, onDelete }: {
-  person: Person; open: boolean; onToggleOpen: () => void; onToggleOnCall: () => void; onEdit: () => void; onDelete: () => void;
+function PersonRow({ person, open, me, canEdit, canDelete, onToggleOpen, onToggleOnCall, onEdit, onDelete }: {
+  person: Person; open: boolean; me: boolean; canEdit: boolean; canDelete: boolean;
+  onToggleOpen: () => void; onToggleOnCall: () => void; onEdit: () => void; onDelete: () => void;
 }) {
   const quiet = describeQuietHours(person);
   return (
@@ -190,14 +198,18 @@ function PersonRow({ person, open, onToggleOpen, onToggleOnCall, onEdit, onDelet
             {initials(person.name)}
           </span>
           <span className="min-w-0">
-            <span className="block text-[15px] font-semibold text-white truncate">{person.name}</span>
+            <span className="block text-[15px] font-semibold text-white truncate">
+              {person.name}{me && <span className="font-normal text-ink-muted"> (you)</span>}
+            </span>
             <span className="block text-[13px] text-ink-muted truncate">
-              {person.role === 'lead' ? 'Team lead' : 'Member'}{person.on_call && <span className="text-ios-green">, on call</span>}
+              {person.role === 'lead' ? 'Lead' : 'Member'}{person.on_call && <span className="text-ios-green">, on call</span>}
             </span>
           </span>
         </button>
-        <Toggle checked={!!person.on_call} onChange={onToggleOnCall}
-          label={`${person.name}: ${person.on_call ? 'on call, turn off' : 'off call, turn on'}`} />
+        {canEdit && (
+          <Toggle checked={!!person.on_call} onChange={onToggleOnCall}
+            label={`${person.name}: ${person.on_call ? 'on call, turn off' : 'off call, turn on'}`} />
+        )}
         <button type="button" onClick={onToggleOpen} aria-label={open ? 'Hide details' : 'Show details'} className="p-1 -mr-1">
           <ChevronRight className={cn('w-4 h-4 text-ink-faint transition-transform duration-300', open && 'rotate-90')} />
         </button>
@@ -220,10 +232,12 @@ function PersonRow({ person, open, onToggleOpen, onToggleOnCall, onEdit, onDelet
               );
             })}
             <Row label="Quiet hours" value={quiet.length ? quiet.join(' ') : 'None'} />
-            <div className="ios-row justify-between">
-              <button type="button" onClick={onEdit} className="text-[15px] text-ios-blue hover:opacity-70">Edit</button>
-              <button type="button" onClick={onDelete} className="text-[15px] text-ios-red hover:opacity-70">Remove</button>
-            </div>
+            {(canEdit || canDelete) && (
+              <div className="ios-row justify-between">
+                {canEdit ? <button type="button" onClick={onEdit} className="text-[15px] text-ios-blue hover:opacity-70">Edit</button> : <span />}
+                {canDelete && <button type="button" onClick={onDelete} className="text-[15px] text-ios-red hover:opacity-70">Remove</button>}
+              </div>
+            )}
           </div>
         </div>
       </div>

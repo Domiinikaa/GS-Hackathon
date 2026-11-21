@@ -253,7 +253,7 @@ def seed_runbooks(db: Session) -> None:  # Osoba 4
 def seed_all(db: Session) -> None:
     seed_sources(db)
     seed_rules(db)
-    seed_people(db)
+    # People are NOT seeded: only users who register (routers/auth.py) appear in People.
     db.flush()
     seed_runbooks(db)
     db.commit()
