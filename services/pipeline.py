@@ -29,7 +29,10 @@ def process_event(db: Session, event: Event) -> list[int]:
         if alert is None:
             continue
         alert_ids.append(alert.id)
-        recipients = recipients_for(db, alert, match.channels)
-        enqueue_deliveries(db, alert, recipients)
+        # Powiadamiamy ludzi tylko o NOWYM alercie. Powtórki (×2, ×3…) podbijają licznik na stronie,
+        # ale nie wysyłają kolejnych SMS-ów – wymaganie 2.5 "Don't flood people".
+        if alert.count == 1:
+            recipients = recipients_for(db, alert, match.channels)
+            enqueue_deliveries(db, alert, recipients)
     db.commit()
     return alert_ids

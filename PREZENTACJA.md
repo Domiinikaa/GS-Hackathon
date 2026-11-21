@@ -60,6 +60,20 @@ Dopisujemy na bieżąco.
   akcje wymagają zatwierdzenia, które zostaje w historii.”
 - Uczciwie: Approve zapisuje zgodę; samo wykonanie akcji (retry, restart) to silnik runbooków (Osoba 4).
 
+## 3c. Wysyłka, która nie gubi alertów ⭐ (2.3 "Delivery must survive failure")
+
+- **Co:** e-mail wysyłany prawdziwym protokołem SMTP (lokalnie do Mailpit – skrzynka jak Gmail pod localhost:8025),
+  ładny HTML z kolorem ważności, krokami runbooka i przyciskiem „Open alert” (link `#alerts/<id>`).
+- **Kanały jako wtyczki:** każdy kanał = mała klasa z `send()` w `services/channels/`. Prawdziwy serwer pocztowy = zmiana
+  zmiennych `SMTP_*`, zero zmian w kodzie. Nowy dostawca (Twilio, SendGrid) = nowa klasa + 1 linijka w `registry.py`.
+- **Outbox + listonosz w tle:** każda wysyłka to wiersz w bazie. Błąd → ponowienie po 2, 4, 8, 16 s, po 5 próbach `dead`.
+  Działa na wielu kopiach serwera – wysyłkę rezerwuje jedno atomowe `UPDATE`, więc nic nie wychodzi dwa razy.
+- **Dowód – test awarii:** serwer pocztowy wyłączony → 3 nieudane próby („Connection refused”) → włączony →
+  mail doszedł w 4. próbie. Żaden alert nie zginął.
+- **Nie zalewamy ludzi:** powiadomienie idzie tylko przy nowym alercie; powtórki (×500) tylko podbijają licznik.
+- **Do powiedzenia:** „Wyłączyliśmy serwer pocztowy w trakcie – system sam ponawiał i dostarczył maila, gdy serwer wrócił.
+  Podmiana na prawdziwego dostawcę to jedna klasa, bez ruszania logiki.”
+
 ## 4. Czytelne alerty (UX, 2.2 "per-rule presentation")
 
 - Kolor i ważność biorą się z reguły (czerwony pasek + CRITICAL, bursztynowy + WARNING).

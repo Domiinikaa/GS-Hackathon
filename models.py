@@ -193,8 +193,14 @@ class Delivery(Base):
     person_id = Column(Integer, ForeignKey("people.id"), nullable=True)
     channel = Column(String(20), nullable=False)           # email | sms | phone | ui
     to = Column(String(200), nullable=True)                # address or number
-    status = Column(String(20), default="pending")         # pending | sent | failed
+    status = Column(String(20), default="pending")         # pending | sending | sent | failed | dead
     attempts = Column(Integer, default=0)
     last_error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     sent_at = Column(DateTime, nullable=True)
+    # Treść przygotowana przy zapisie (services/channels/messages.py) – Outbox pokazuje dokładnie to, co poszło
+    subject = Column(String(300), nullable=True)
+    body = Column(Text, nullable=True)
+    html = Column(Text, nullable=True)
+    # Kiedy listonosz może (ponownie) spróbować; przy "sending" = do kiedy wysyłka jest zarezerwowana
+    next_attempt_at = Column(DateTime, nullable=True, index=True)
