@@ -34,19 +34,30 @@ class ConditionIn(BaseModel):
         return self
 
 
+MAX_DEPTH = 5
+
+
+def _validate_node(node: Any, depth: int) -> Dict[str, Any]:
+    """A condition node: {"and": [...]}, {"or": [...]}, {"not": node} or a leaf {"field", "op", "value"}."""
+    if depth > MAX_DEPTH:
+        raise ValueError(f"conditions can be nested at most {MAX_DEPTH} levels deep")
+    if isinstance(node, dict) and len(node) == 1 and next(iter(node)) in ("and", "or"):
+        mode, items = next(iter(node.items()))
+        if not isinstance(items, list) or not items:
+            raise ValueError(f'"{mode}" needs at least one condition')
+        return {mode: [_validate_node(item, depth + 1) for item in items]}
+    if isinstance(node, dict) and len(node) == 1 and "not" in node:
+        return {"not": _validate_node(node["not"], depth + 1)}
+    if isinstance(node, dict) and "field" in node:
+        return ConditionIn.model_validate(node).model_dump()
+    raise ValueError('each condition must be {"and": [...]}, {"or": [...]}, {"not": ...} or {"field", "op", "value"}')
+
+
 def _validate_group(group: Any) -> Dict[str, Any]:
-    """{"and": [...]} or {"or": [...]} with plain conditions only (no nested groups)."""
+    """Top level is always an "and" / "or" group; nested and / or / not groups are allowed inside."""
     if not isinstance(group, dict) or len(group) != 1 or next(iter(group)) not in ("and", "or"):
         raise ValueError('condition must look like {"and": [...]} or {"or": [...]}')
-    mode, items = next(iter(group.items()))
-    if not isinstance(items, list) or not items:
-        raise ValueError("condition needs at least one item")
-    out = []
-    for item in items:
-        if isinstance(item, dict) and ("and" in item or "or" in item):
-            raise ValueError("nested groups are not supported: use only AND or only OR")
-        out.append(ConditionIn.model_validate(item).model_dump())
-    return {mode: out}
+    return _validate_node(group, 0)
 
 
 class RuleIn(BaseModel):
@@ -125,9 +136,24 @@ def list_rules(team: Optional[str] = None, db: Session = Depends(get_db)):
     return [to_dict(r) for r in q.order_by(Rule.team, Rule.name).all()]
 
 
+def _type_name(value: Any) -> str:
+    """Same type names as the sources API (services/connectors/parser.py)."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, (int, float)):
+        return "number"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, dict):
+        return "object"
+    return "string"
+
+
 def _flatten(obj: Any, prefix: str = "", out: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     out = {} if out is None else out
-    if isinstance(obj, dict):
+    if isinstance(obj, dict) and (obj or not prefix):
         for k, v in obj.items():
             _flatten(v, f"{prefix}.{k}" if prefix else str(k), out)
     elif prefix:
@@ -137,15 +163,16 @@ def _flatten(obj: Any, prefix: str = "", out: Optional[Dict[str, Any]] = None) -
 
 @router.get("/fields")
 def field_hints(limit: int = 200, db: Session = Depends(get_db)):
-    """Field suggestions for the rule editor: every path found in recent events and source samples."""
+    """Field suggestions for the rule editor, from source samples and recent events.
+    Same shape as GET /api/sources/{id}/fields: {"path", "type", "example"} (+ "count")."""
     seen: Dict[str, Dict[str, Any]] = {}
     payloads = [s.sample_event for s in db.query(Source).all() if s.sample_event]
     payloads += [e.payload for e in db.query(Event).order_by(Event.id.desc()).limit(limit).all()]
     for payload in payloads:
         for path, value in _flatten(payload).items():
-            entry = seen.setdefault(path, {"field": path, "example": value, "count": 0})
+            entry = seen.setdefault(path, {"path": path, "type": _type_name(value), "example": value, "count": 0})
             entry["count"] += 1
-    return sorted(seen.values(), key=lambda e: (-e["count"], e["field"]))
+    return sorted(seen.values(), key=lambda e: (-e["count"], e["path"]))
 
 
 @router.get("/{rule_id}")

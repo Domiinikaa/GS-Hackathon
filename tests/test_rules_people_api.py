@@ -82,12 +82,24 @@ def test_rule_validation(client, bad):
     assert client.post("/api/rules", json={**NEW_RULE, **bad}).status_code == 422
 
 
-def test_nested_groups_rejected(client):
-    cond = {"and": [{"field": "a", "op": "eq", "value": 1},
-                    {"or": [{"field": "b", "op": "eq", "value": 2}, {"field": "c", "op": "eq", "value": 3}]}]}
+def test_nested_and_or_not_allowed(client):
+    cond = {"or": [
+        {"and": [{"field": "a", "op": "eq", "value": 1}, {"field": "b", "op": "eq", "value": 2}]},
+        {"not": {"field": "c", "op": "eq", "value": 3}},
+    ]}
     res = client.post("/api/rules", json={**NEW_RULE, "condition": cond})
-    assert res.status_code == 422
-    assert "nested groups are not supported" in res.text
+    assert res.status_code == 201, res.text
+    assert res.json()["condition"] == cond
+
+
+@pytest.mark.parametrize("cond", [
+    {"not": {"field": "a", "op": "eq", "value": 1}},          # top level must be and / or
+    {"and": [{"or": []}]},                                    # empty nested group
+    {"and": [{"not": {"xor": []}}]},                          # unknown node
+    {"and": [{"and": [{"and": [{"and": [{"and": [{"and": [{"field": "a", "op": "eq", "value": 1}]}]}]}]}]}]},
+])
+def test_bad_nested_conditions_rejected(client, cond):
+    assert client.post("/api/rules", json={**NEW_RULE, "condition": cond}).status_code == 422
 
 
 NEW_PERSON = {
@@ -132,5 +144,17 @@ def test_teams_and_preview(client):
     assert "08:00" in night[0]["reason"]
 
 
-def test_field_hints(client):
-    assert client.get("/api/rules/fields").status_code == 200
+def test_field_hints_shape(client):
+    from database import get_db
+    from models import Source
+    db = next(client.app.dependency_overrides[get_db]())
+    db.add(Source(key="t", name="t", team="Rates", sample_event={
+        "payload": {"desk": "rates", "notional": 25000000, "ok": True, "tags": ["a"], "extra": {}}, "note": None}))
+    db.commit()
+    fields = {f["path"]: f for f in client.get("/api/rules/fields").json()}
+    assert fields["payload.desk"] == {"path": "payload.desk", "type": "string", "example": "rates", "count": 1}
+    assert fields["payload.notional"]["type"] == "number"
+    assert fields["payload.ok"]["type"] == "boolean"
+    assert fields["payload.tags"]["type"] == "array"
+    assert fields["payload.extra"]["type"] == "object"
+    assert fields["note"]["type"] == "null"

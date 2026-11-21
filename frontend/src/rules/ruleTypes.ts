@@ -12,8 +12,15 @@ export interface Condition {
   value: string | number | string[];
 }
 
-// Condition group: "and" = all must match, "or" = any one is enough
-export type ConditionGroup = { and: Condition[] } | { or: Condition[] };
+// A node is a single condition or a nested group ("not" negates its child)
+export type ConditionNode =
+  | Condition
+  | { and: ConditionNode[] }
+  | { or: ConditionNode[] }
+  | { not: ConditionNode };
+
+// Top level: "and" = all must match, "or" = any one is enough
+export type ConditionGroup = { and: ConditionNode[] } | { or: ConditionNode[] };
 
 export interface Rule {
   id: string;
@@ -76,11 +83,20 @@ export const COLOR_DOT: Record<Color, string> = {
   slate: 'bg-slate-500',
 };
 
-// Pomocnicze: czy grupa to AND czy OR, i jakie ma warunki
+// Whether the top-level group is AND or OR, and its items
 export function groupMode(group: ConditionGroup): 'and' | 'or' {
   return 'and' in group ? 'and' : 'or';
 }
 
-export function groupConditions(group: ConditionGroup): Condition[] {
+export function groupItems(group: ConditionGroup): ConditionNode[] {
   return 'and' in group ? group.and : group.or;
+}
+
+export function isLeaf(node: ConditionNode): node is Condition {
+  return 'field' in node;
+}
+
+// True when the rule has no nested groups, so the simple form can edit it
+export function isFlat(group: ConditionGroup): boolean {
+  return groupItems(group).every(isLeaf);
 }

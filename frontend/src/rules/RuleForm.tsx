@@ -3,9 +3,10 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Users, X } from 'lucide-react';
 import {
   CHANNELS, COLOR_DOT, Channel, Condition, Operator, OPERATORS,
-  Rule, SEVERITY_OPTIONS, Severity, colorForSeverity, groupConditions, groupMode,
+  Rule, SEVERITY_OPTIONS, Severity, colorForSeverity, groupItems, groupMode, isFlat, isLeaf,
 } from './ruleTypes';
 import { FieldHint, PlannedRecipient, errorMessage, rulesApi } from './rulesApi';
+import { describeNode } from './describeRule';
 
 // In the form a condition value is kept as text (exactly as the user types it)
 interface ConditionRow {
@@ -44,7 +45,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
   const [mode, setMode] = useState<'and' | 'or'>(initial ? groupMode(initial.condition) : 'and');
   const [rows, setRows] = useState<ConditionRow[]>(
     initial
-      ? groupConditions(initial.condition).map((c) => ({ field: c.field, op: c.op, value: valueToText(c.value) }))
+      ? groupItems(initial.condition).filter(isLeaf).map((c) => ({ field: c.field, op: c.op, value: valueToText(c.value) }))
       : [{ field: '', op: 'eq', value: '' }],
   );
   const [channels, setChannels] = useState<Channel[]>(initial?.channels ?? ['ui']);
@@ -57,6 +58,8 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
   );
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  // Rules with nested groups (created via the API) keep their conditions unchanged in this form
+  const nested = initial ? !isFlat(initial.condition) : false;
   const [targets, setTargets] = useState<string[]>([]);
   const [fieldHints, setFieldHints] = useState<FieldHint[]>([]);
   const [recipients, setRecipients] = useState<PlannedRecipient[] | null>(null);
@@ -91,7 +94,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
       name: name.trim(),
       team: team.trim(),
       enabled: initial?.enabled ?? true,
-      condition: mode === 'and' ? { and: conditions } : { or: conditions },
+      condition: nested && initial ? initial.condition : mode === 'and' ? { and: conditions } : { or: conditions },
       channels,
       title: title.trim(),
       body: body.trim() || undefined,
@@ -115,7 +118,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
     const rule = buildRule();
     if (!rule.name) return setError('Give the rule a name.');
     if (!rule.team) return setError('Choose who receives the alerts (team or person).');
-    if (groupConditions(rule.condition).length === 0) return setError('Add at least one condition.');
+    if (groupItems(rule.condition).length === 0) return setError('Add at least one condition.');
     if (rule.channels.length === 0) return setError('Pick at least one way to notify.');
     if (!rule.title) return setError('Add an alert headline.');
     setError('');
@@ -158,6 +161,15 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
       </div>
 
       {/* 2. Conditions */}
+      {nested && initial ? (
+        <div>
+          <span className={labelClass}>Raise an alert when an incoming event matches</span>
+          <p className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-200">
+            {describeNode(initial.condition)}
+          </p>
+          <p className={hintClass}>Nested conditions – kept as they are; change them via the API</p>
+        </div>
+      ) : (
       <div>
         <div className="flex items-center justify-between mb-1 gap-3 flex-wrap">
           <span className={labelClass}>Raise an alert when an incoming event matches</span>
@@ -203,7 +215,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
         </div>
         <datalist id="rule-fields">
           {fieldHints.map((h) => (
-            <option key={h.field} value={h.field}>{`e.g. ${JSON.stringify(h.example)}`.slice(0, 60)}</option>
+            <option key={h.path} value={h.path}>{`${h.type}, e.g. ${JSON.stringify(h.example)}`.slice(0, 60)}</option>
           ))}
         </datalist>
         <button type="button" onClick={() => setRows([...rows, { field: '', op: 'eq', value: '' }])}
@@ -211,6 +223,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
           <Plus className="w-3.5 h-3.5" /><span>Add condition</span>
         </button>
       </div>
+      )}
 
       {/* 3. Urgency (also sets the alert colour) */}
       <div>

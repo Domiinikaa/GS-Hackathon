@@ -2,10 +2,12 @@
 import { api } from '../shared/api';
 import type { Channel, Rule, Severity } from './ruleTypes';
 
+// Same shape as GET /api/sources/{id}/fields
 export interface FieldHint {
-  field: string;     // e.g. "payload.notional"
+  path: string;      // e.g. "payload.notional"
+  type: 'string' | 'number' | 'boolean' | 'array' | 'object' | 'null';
   example: unknown;  // sample value from a real event
-  count: number;
+  count?: number;
 }
 
 export interface PlannedRecipient {
