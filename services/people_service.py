@@ -13,7 +13,7 @@ from services.contracts import Recipient
 
 PERSONAL_CHANNELS = ("phone", "sms", "email")
 # Personal channels used when a person has no preference for a severity
-DEFAULT_CHANNELS = {"critical": ("phone", "sms"), "warning": ("email",), "info": ()}
+DEFAULT_CHANNELS = {"critical": ("email", "phone", "sms"), "warning": ("email",), "info": ()}
 
 # Where to go when a channel is unavailable (missing address etc.)
 FALLBACK = {"phone": "sms", "sms": "email", "email": None}

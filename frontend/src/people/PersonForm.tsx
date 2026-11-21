@@ -19,7 +19,7 @@ interface QuietRow {
 }
 
 const DEFAULT_PREFS: Person['channel_prefs'] = {
-  critical: ['phone', 'sms'],
+  critical: ['email', 'phone', 'sms'],
   warning: ['email'],
   info: [],
 };
