@@ -91,7 +91,7 @@ def test_startup_created_open_dedup_index_and_seed():
     depts = {d["name"] for d in ok(client.get("/api/departments"))}
     assert {"Settlements", "Pricing", "Rates", "Payments"}.issubset(depts)
     sources = {s["key"] for s in ok(client.get("/api/sources"))}
-    assert {"trade-gateway", "payments-webhook", "settlement-kafka", "pricing-engine-logs"} == sources
+    assert {"demo", "trade-gateway", "payments-webhook", "settlement-kafka", "pricing-engine-logs"} == sources
 
 
 def test_settlements_end_to_end_and_antiflood_dedup():
@@ -137,6 +137,8 @@ def test_settlements_end_to_end_and_antiflood_dedup():
     alert_id = d["alert_id"]
     alert = ok(client.get(f"/api/alerts/{alert_id}"))
     assert alert["count"] == 6 and alert["status"] == "open"
+    persisted_deliveries = ok(client.get(f"/api/deliveries?alert_id={alert_id}"))
+    assert len(persisted_deliveries) == 4  # 1 ui (sent) + 3 personal (pending)
 
     # Resolve the alert -> next occurrence creates a NEW alert and notifies once again
     ok(client.post(f"/api/alerts/{alert_id}/resolve"))

@@ -81,9 +81,24 @@ export interface Delivery {
   to: string | null;
   status: 'pending' | 'sent' | 'failed';
   attempts: number;
+  max_attempts?: number;
+  exhausted?: boolean;
   last_error: string | null;
   created_at: string;
   sent_at: string | null;
+  next_retry_at?: string | null;
+  person_name?: string | null;
+  alert_title?: string | null;
+  alert_severity?: Severity | null;
+  alert_color?: Color | null;
+  alert_team?: string | null;
+  alert_link?: string | null;
+  message_preview?: {
+    subject?: string;
+    body?: string;
+    script?: string;
+    link?: string;
+  } | null;
 }
 
 export interface Runbook {

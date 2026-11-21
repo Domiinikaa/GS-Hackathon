@@ -225,9 +225,6 @@ def test_disabled_rule_is_skipped_by_engine():
 # ---------------------------------------------------------------- pełna droga przez /api/ingest
 
 def test_ingest_end_to_end_hands_matches_to_person_1():
-    demo_src = ok(client.post("/api/sources", json={
-        "name": "demo", "key": "demo", "team": "Settlements", "kind": "webhook", "enabled": True
-    }))
     captured = []
     real = pipeline.upsert_alert
     pipeline.upsert_alert = lambda db, match: captured.append(match)  # udajemy Osobę 1
@@ -237,7 +234,6 @@ def test_ingest_end_to_end_hands_matches_to_person_1():
         ok(client.post("/api/ingest/demo", json=SETTLEMENT))
     finally:
         pipeline.upsert_alert = real
-        ok(client.delete(f"/api/sources/{demo_src['id']}"))
 
     assert [m.rule_id for m in captured] == ["rates-big-rejections", "rates-big-rejections", "settlements-prod"]
     assert captured[0].dedup_key == captured[1].dedup_key          # ten sam problem -> ten sam alert

@@ -203,3 +203,14 @@ class Delivery(Base):
     last_error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     sent_at = Column(DateTime, nullable=True)
+    next_retry_at = Column(DateTime, nullable=True, index=True)
+
+
+class ChannelConfig(Base):
+    """Per-channel delivery settings (DB-backed simulated outage state for multi-replica deployments)."""
+    __tablename__ = "channel_configs"
+
+    channel = Column(String(20), primary_key=True)   # email | sms | phone | ui
+    simulated_down = Column(Boolean, default=False, nullable=False)
+    error_message = Column(String(300), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -13,6 +13,7 @@ from database import engine, Base, SessionLocal, startup_lock
 import models  # Registers all models with Base
 from services.security import hash_password
 from services.connectors import ingest_manager
+from services.delivery import delivery_worker
 from routers import api, auth, admin, alerts, rules, people, sources, deliveries, runbooks
 from seed import seed_all
 from services.alert_service import ensure_open_dedup_index
@@ -80,6 +81,19 @@ def ensure_sources_columns(bind) -> None:
     with bind.begin() as conn:
         for sql in missing:
             conn.execute(text(sql))
+
+
+def ensure_delivery_columns(bind) -> None:
+    """Adds retry scheduling column to existing deliveries tables (SQLite and PostgreSQL)."""
+    insp = inspect(bind)
+    if "deliveries" not in insp.get_table_names():
+        return
+    existing = {col["name"] for col in insp.get_columns("deliveries")}
+    if "next_retry_at" in existing:
+        return
+    col_type = "TIMESTAMP" if bind.dialect.name == "postgresql" else "DATETIME"
+    with bind.begin() as conn:
+        conn.execute(text(f"ALTER TABLE deliveries ADD COLUMN next_retry_at {col_type}"))
 
 
 def purge_demo_user():
@@ -172,6 +186,7 @@ with startup_lock():
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_columns()
     ensure_sources_columns(engine)
+    ensure_delivery_columns(engine)
     ensure_open_dedup_index(engine)
     ensure_people_role_column(engine)
     purge_demo_user()
@@ -187,9 +202,11 @@ with startup_lock():
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await ingest_manager.start()
+    await delivery_worker.start()
     try:
         yield
     finally:
+        await delivery_worker.stop()
         await ingest_manager.stop()
 
 

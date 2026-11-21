@@ -11,6 +11,24 @@ def seed_sources(db: Session) -> None:  # Osoba 3
     if db.query(Source).count() == 0:
         db.add_all([
             Source(
+                key="demo",
+                name="demo-webhook",
+                team="All",
+                kind="webhook",
+                enabled=True,
+                status="active",
+                config={"auth_mode": "none", "parser": "auto", "sim_preset": "workflow_failure"},
+                sample_event={
+                    "type": "WORKFLOW_FAILED",
+                    "workflowId": "WF-20261121-00042",
+                    "workflowName": "order-settlement",
+                    "step": "validate-counterparty",
+                    "severity": "ERROR",
+                    "environment": "prod",
+                    "error": {"code": "TIMEOUT", "message": "Counterparty service did not respond in 5000 ms"},
+                },
+            ),
+            Source(
                 key="trade-gateway",
                 name="trade-gateway",
                 team="Rates",
