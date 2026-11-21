@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 
 from database import get_db
-from models import InviteCode, Person, User
+from models import InviteCode, User
 from schemas import UserRegister, UserLogin, UserResponse, TokenResponse, UserUpdate
+from services.people_service import ensure_person_for_user
 from services.security import hash_password, verify_password, create_access_token
 from routers.deps import get_current_user
 from routers.people import team_name
@@ -88,19 +89,13 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
     invite.used_by_id = new_user.id
     invite.used_at = datetime.utcnow()
 
-    if resolved_team:
-        existing_person = db.query(Person).filter(func.lower(Person.email) == clean_email).first()
-        if existing_person is None:
-            db.add(Person(
-                name=clean_uname,
-                team=resolved_team,
-                email=clean_email,
-                phone=clean_phone,
-                on_call=False,
-                role="member",
-                channel_prefs={"critical": ["email"], "warning": ["email"], "info": ["ui"]},
-                quiet_hours={},
-            ))
+    ensure_person_for_user(
+        db,
+        name=clean_uname,
+        team=resolved_team,
+        email=clean_email,
+        phone=clean_phone,
+    )
 
     db.commit()
     db.refresh(new_user)
