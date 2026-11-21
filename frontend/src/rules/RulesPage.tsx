@@ -1,7 +1,7 @@
 // Rules page.
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
-import { EmptyState, Notice, PageHeader, ghostButton, iconButton } from '../shared/ui';
+import { Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { EmptyState, Notice, PageHeader, ghostButton } from '../shared/ui';
 import { Rule } from './ruleTypes';
 import RuleCard from './RuleCard';
 import { RunbookSummary, errorMessage, rulesApi } from './rulesApi';
@@ -118,9 +118,6 @@ export default function RulesPage() {
               {allOpen ? 'Collapse all' : 'Expand all'}
             </button>
           )}
-          <button onClick={load} title="Reload rules" aria-label="Reload rules" className={iconButton}>
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
           {editing === null && (
             <button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]">
               <Plus className="w-4 h-4" />New rule

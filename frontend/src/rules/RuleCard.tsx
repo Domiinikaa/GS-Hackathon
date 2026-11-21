@@ -43,9 +43,6 @@ export default function RuleCard({ rule, runbookName, open, onToggleOpen, onTogg
       <Row label="Channels" value={<ChannelList channels={rule.channels} />} />
       <Row label="Urgency" value={<SeverityBadge severity={rule.severity} />} />
       {rule.runbook_id && <Row label="Runbook" value={runbookName ?? `#${rule.runbook_id}`} />}
-      <Row label="Repeats" value={rule.group_by && rule.group_window_s
-        ? `Once per ${rule.group_by} every ${Math.round(rule.group_window_s / 60)} min`
-        : 'Every match alerts'} />
 
       {/* disclosure: full conditions + headline */}
       <button type="button" onClick={onToggleOpen} aria-expanded={open} aria-controls={detailsId}

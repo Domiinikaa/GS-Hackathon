@@ -46,10 +46,6 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [body, setBody] = useState(initial?.body ?? '');
   const [severity, setSeverity] = useState<Severity>(initial?.severity ?? 'warning');
-  const [groupBy, setGroupBy] = useState(initial?.group_by ?? '');
-  const [groupMinutes, setGroupMinutes] = useState(
-    initial?.group_window_s ? String(initial.group_window_s / 60) : '',
-  );
   const [runbookId, setRunbookId] = useState<number | null>(initial?.runbook_id ?? null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -85,7 +81,6 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
     const conditions: Condition[] = rows
       .filter((r) => r.field.trim() !== '')
       .map((r) => ({ field: r.field.trim(), op: r.op, value: parseValue(r.op, r.value) }));
-    const minutes = Number(groupMinutes);
     return {
       id: initial?.id ?? '', // new rule: the backend derives the id from the name
       name: name.trim(),
@@ -97,8 +92,10 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
       body: body.trim() || undefined,
       severity,
       color: colorForSeverity(severity), // the colour always follows the urgency
-      group_by: groupBy.trim() || undefined,
-      group_window_s: groupBy.trim() && minutes > 0 ? minutes * 60 : undefined,
+      // Repeats are always combined per rule: same rule = same open alert (+1 to its counter).
+      // Clear any old field/time-window grouping so the rule follows that behaviour.
+      group_by: null,
+      group_window_s: null,
       runbook_id: runbookId,
     };
   }
@@ -226,25 +223,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
                   </div>
       </div>
 
-      {/* 6. Combining repeated alerts (optional) */}
-      <div>
-        <span className={labelClass}>Combine repeated alerts (optional)</span>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-ink-muted mb-1">Same problem if this field is equal</label>
-            <input className={`${inputClass} field font-mono`} value={groupBy} onChange={(e) => setGroupBy(e.target.value)}
-              placeholder="e.g. instrument" />
-          </div>
-          <div>
-            <label className="block text-xs text-ink-muted mb-1">Time window (minutes)</label>
-            <input type="number" min="1" className={inputClass} value={groupMinutes}
-              onChange={(e) => setGroupMinutes(e.target.value)} placeholder="e.g. 5" />
-          </div>
-        </div>
-        <p className={hintClass}>One alert with a counter instead of many</p>
-      </div>
-
-      {/* 7. Attached runbook (optional) */}
+      {/* 6. Attached runbook (optional) */}
       <div>
         <label className={labelClass}>Attach runbook (optional)</label>
         <select
