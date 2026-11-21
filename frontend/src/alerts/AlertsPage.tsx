@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react';
 import { api } from '../shared/api';
 import { errorMessage } from '../rules/rulesApi';
 import type { Alert, AlertStatus } from '../shared/types';
+import type { User } from '../types';
 import AlertCard, { AlertAction } from './AlertCard';
 
 type StatusFilter = AlertStatus | 'all';
@@ -14,9 +15,10 @@ function alertIdFromUrl(): number | null {
   return m ? Number(m[1]) : null;
 }
 
-export default function AlertsPage() {
+export default function AlertsPage({ currentUser }: { currentUser?: User | null } = {}) {
   // "Pamięć" strony
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [knownTeams, setKnownTeams] = useState<string[]>([]);
   const linkedId = alertIdFromUrl();
   // Wejście z linku: pokaż wszystkie statusy, żeby alert był widoczny nawet gdy już acknowledged
   const [status, setStatus] = useState<StatusFilter>(linkedId ? 'all' : 'open');
@@ -119,9 +121,17 @@ export default function AlertsPage() {
     return () => source.close();                       // wyjście z zakładki / zmiana filtra = wyłącz radio
   }, [status]);
 
-  // Lista zespołów do filtra – zbudowana z tego, co jest w alertach
-  const teams = Array.from(new Set(alerts.map((a) => a.team))).sort();
+  // Pobierz kanoniczną listę zespołów (Admin & Teams)
+  useEffect(() => {
+    api<{ id: number; name: string }[]>('/teams')
+      .then((list) => setKnownTeams(list.map((t) => t.name)))
+      .catch(() => {});
+  }, []);
+
+  // Lista zespołów do filtra – kanoniczne zespoły + wartości z alertów
+  const teams = Array.from(new Set([...knownTeams, ...alerts.map((a) => a.team)])).sort();
   const visible = team === 'all' ? alerts : alerts.filter((a) => a.team === team);
+  const userTeam = currentUser?.team ?? currentUser?.dzial;
 
   const selectClass =
     'bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500';
@@ -142,6 +152,19 @@ export default function AlertsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {userTeam && (
+            <button
+              type="button"
+              onClick={() => setTeam(team === userTeam ? 'all' : userTeam)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${
+                team === userTeam
+                  ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'
+              }`}
+            >
+              My team ({userTeam})
+            </button>
+          )}
           <select value={team} onChange={(e) => setTeam(e.target.value)} className={selectClass} aria-label="Team">
             <option value="all">All teams</option>
             {teams.map((t) => <option key={t} value={t}>{t}</option>)}

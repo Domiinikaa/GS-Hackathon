@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { authService, departmentService } from '../services/auth';
-import { User, DepartmentItem } from '../types';
+import { authService, teamService } from '../services/auth';
+import { User, TeamItem } from '../types';
 import { Lock, Mail, User as UserIcon, Phone, Briefcase, ArrowRight, ShieldCheck, Key } from 'lucide-react';
 
 interface AuthScreenProps {
@@ -12,8 +12,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Dynamic departments fetched from database
-  const [departments, setDepartments] = useState<DepartmentItem[]>([]);
+  // Dynamic teams fetched from database
+  const [teams, setTeams] = useState<TeamItem[]>([]);
 
   // Form fields
   const [uname, setUname] = useState('');
@@ -22,11 +22,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [nrtel, setNrtel] = useState('');
-  const [dzial, setDzial] = useState('');
+  const [team, setTeam] = useState('');
 
   useEffect(() => {
-    departmentService.getDepartments().then((depts) => {
-      setDepartments(depts);
+    teamService.getTeams().then((list) => {
+      setTeams(list);
     });
   }, []);
 
@@ -54,7 +54,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           confirm_password: confirmPassword,
           invite_code: inviteCode.trim(),
           nrtel: nrtel.trim() || undefined,
-          dzial: dzial || undefined,
+          team: team || undefined,
         });
         onSuccess(res.user);
       } else {
@@ -243,22 +243,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                 </div>
               </div>
 
-              {/* Department */}
+              {/* Team */}
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Department <span className="text-slate-500 text-[10px]">(optional)</span>
+                  Team <span className="text-slate-500 text-[10px]">(optional)</span>
                 </label>
                 <div className="relative">
                   <Briefcase className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
                   <select
-                    value={dzial}
-                    onChange={(e) => setDzial(e.target.value)}
+                    value={team}
+                    onChange={(e) => setTeam(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
                   >
-                    <option value="">Select department...</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.name}>
-                        {d.name}
+                    <option value="">Select team...</option>
+                    {teams.map((t) => (
+                      <option key={t.id} value={t.name}>
+                        {t.name}
                       </option>
                     ))}
                   </select>

@@ -3,29 +3,39 @@ from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field
 
 
-# --- Department Schemas ---
+# --- Team Schemas ---
 
-class DepartmentBase(BaseModel):
-    name: str = Field(..., min_length=2, max_length=100, example="Engineering")
-    description: Optional[str] = Field(None, max_length=255, example="Software engineering and infrastructure")
+class TeamBase(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100, example="Payments")
+    description: Optional[str] = Field(None, max_length=255, example="Payments API reliability and failover")
 
 
-class DepartmentCreate(DepartmentBase):
+class TeamCreate(TeamBase):
     pass
 
 
-class DepartmentUpdate(BaseModel):
+class TeamUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     description: Optional[str] = Field(None, max_length=255)
 
 
-class DepartmentResponse(DepartmentBase):
+class TeamResponse(TeamBase):
     id: int
     created_at: datetime
-    user_count: Optional[int] = 0
+    user_count: int = 0
+    people_count: int = 0
+    rules_count: int = 0
+    sources_count: int = 0
 
     class Config:
         from_attributes = True
+
+
+# Backwards-compatible aliases
+DepartmentBase = TeamBase
+DepartmentCreate = TeamCreate
+DepartmentUpdate = TeamUpdate
+DepartmentResponse = TeamResponse
 
 
 # --- User & Auth Schemas ---
@@ -37,7 +47,8 @@ class UserRegister(BaseModel):
     confirm_password: Optional[str] = Field(None, min_length=6, max_length=128, example="SuperSecret123!")
     invite_code: str = Field(..., min_length=4, max_length=64, example="GS-7F8A-9B2C")
     nrtel: Optional[str] = Field(None, example="+1 (212) 555-0199")
-    dzial: Optional[str] = Field(None, example="Finance")
+    team: Optional[str] = Field(None, example="Payments")
+    dzial: Optional[str] = Field(None, example="Payments")
 
 
 class UserLogin(BaseModel):
@@ -47,6 +58,7 @@ class UserLogin(BaseModel):
 
 class UserUpdate(BaseModel):
     nrtel: Optional[str] = None
+    team: Optional[str] = None
     dzial: Optional[str] = None
 
 
@@ -55,6 +67,7 @@ class UserResponse(BaseModel):
     uname: str
     email: str
     nrtel: Optional[str] = None
+    team: Optional[str] = None
     dzial: Optional[str] = None
     is_admin: bool = False
     created_at: datetime

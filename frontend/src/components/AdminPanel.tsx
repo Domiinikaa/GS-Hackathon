@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { adminService, departmentService, authService } from '../services/auth';
-import { InviteCode, User, DepartmentItem } from '../types';
+import { adminService, teamService, authService } from '../services/auth';
+import { InviteCode, User, TeamItem } from '../types';
 import {
   Key,
   PlusCircle,
@@ -14,8 +14,10 @@ import {
   Briefcase,
   Trash2,
   FolderPlus,
+  Pencil,
   Shield,
-  UserX
+  UserX,
+  X
 } from 'lucide-react';
 
 interface NewlyCreatedInvite {
@@ -27,7 +29,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
   const [currentUser, setCurrentUser] = useState<User | null>(initialUser || null);
   const [invites, setInvites] = useState<InviteCode[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [departments, setDepartments] = useState<DepartmentItem[]>([]);
+  const [teams, setTeams] = useState<TeamItem[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Invite code generation (default: normal user invite)
@@ -36,10 +38,16 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
   const [newlyCreatedInvite, setNewlyCreatedInvite] = useState<NewlyCreatedInvite | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  // New department state
-  const [newDeptName, setNewDeptName] = useState('');
-  const [newDeptDesc, setNewDeptDesc] = useState('');
-  const [addingDept, setAddingDept] = useState(false);
+  // New team state
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamDesc, setNewTeamDesc] = useState('');
+  const [addingTeam, setAddingTeam] = useState(false);
+
+  // Edit / rename team state
+  const [editingTeamId, setEditingTeamId] = useState<number | null>(null);
+  const [editTeamName, setEditTeamName] = useState('');
+  const [editTeamDesc, setEditTeamDesc] = useState('');
+  const [savingTeamId, setSavingTeamId] = useState<number | null>(null);
 
   // Modifying user role
   const [roleChangingUserId, setRoleChangingUserId] = useState<number | null>(null);
@@ -51,15 +59,15 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
     try {
       setLoading(true);
       setError(null);
-      const [invitesRes, usersRes, deptsRes, meRes] = await Promise.all([
+      const [invitesRes, usersRes, teamsRes, meRes] = await Promise.all([
         adminService.listInvites(),
         adminService.listUsers(),
-        departmentService.getDepartments(),
+        teamService.getTeams(),
         currentUser ? Promise.resolve(currentUser) : authService.getMe().catch(() => null),
       ]);
       setInvites(invitesRes);
       setUsers(usersRes);
-      setDepartments(deptsRes);
+      setTeams(teamsRes);
       if (meRes) setCurrentUser(meRes);
     } catch (err: any) {
       setError(err.message || 'Error loading administrator data.');
@@ -111,37 +119,61 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
   };
 
 
-  const handleAddDepartment = async (e: React.FormEvent) => {
+  const handleAddTeam = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newDeptName.trim()) return;
+    if (!newTeamName.trim()) return;
 
     try {
-      setAddingDept(true);
+      setAddingTeam(true);
       setError(null);
-      await adminService.createDepartment(newDeptName.trim(), newDeptDesc.trim() || undefined);
-      setNewDeptName('');
-      setNewDeptDesc('');
-      setSuccessMsg(`Department "${newDeptName.trim()}" created successfully.`);
+      const createdName = newTeamName.trim();
+      await adminService.createTeam(createdName, newTeamDesc.trim() || undefined);
+      setNewTeamName('');
+      setNewTeamDesc('');
+      setSuccessMsg(`Team "${createdName}" created successfully.`);
       setTimeout(() => setSuccessMsg(null), 3500);
       await loadData();
     } catch (err: any) {
-      setError(err.message || 'Failed to add department.');
+      setError(err.message || 'Failed to add team.');
     } finally {
-      setAddingDept(false);
+      setAddingTeam(false);
     }
   };
 
-  const handleDeleteDepartment = async (id: number, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete department "${name}"?`)) return;
+  const startEditingTeam = (team: TeamItem) => {
+    setEditingTeamId(team.id);
+    setEditTeamName(team.name);
+    setEditTeamDesc(team.description ?? '');
+  };
 
+  const handleSaveTeam = async (teamId: number) => {
+    if (!editTeamName.trim()) return;
     try {
+      setSavingTeamId(teamId);
       setError(null);
-      await adminService.deleteDepartment(id);
-      setSuccessMsg(`Department "${name}" deleted successfully.`);
+      const saved = await adminService.updateTeam(teamId, editTeamName.trim(), editTeamDesc.trim() || undefined);
+      setEditingTeamId(null);
+      setSuccessMsg(`Team updated to "${saved.name}" across all rosters, rules, sources, and alerts.`);
       setTimeout(() => setSuccessMsg(null), 3500);
       await loadData();
     } catch (err: any) {
-      setError(err.message || 'Failed to delete department.');
+      setError(err.message || 'Failed to update team.');
+    } finally {
+      setSavingTeamId(null);
+    }
+  };
+
+  const handleDeleteTeam = async (id: number, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete team "${name}"?`)) return;
+
+    try {
+      setError(null);
+      await adminService.deleteTeam(id);
+      setSuccessMsg(`Team "${name}" deleted successfully.`);
+      setTimeout(() => setSuccessMsg(null), 3500);
+      await loadData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete team.');
     }
   };
 
@@ -164,7 +196,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               <h2 className="text-xl font-bold text-white">Administrator Command Center</h2>
             </div>
             <p className="text-xs text-slate-400">
-              Manage dynamic company departments, issue single-use invite codes, and grant Administrator privileges.
+              Manage teams, issue single-use invite codes, and grant Administrator privileges.
             </p>
           </div>
 
@@ -252,29 +284,29 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
         )}
       </div>
 
-      {/* --- SECTION: DEPARTMENT MANAGEMENT --- */}
+      {/* --- SECTION: TEAM MANAGEMENT --- */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-base font-bold text-white flex items-center space-x-2">
               <Briefcase className="w-4 h-4 text-amber-400" />
-              <span>Company Departments ({departments.length})</span>
+              <span>Teams ({teams.length})</span>
             </h3>
             <p className="text-xs text-slate-400">
-              Dynamic organization taxonomy. Any additions or removals immediately update the registration directory.
+              Single source of truth for teams across user accounts, People, Rules, Sources, and Alerts.
             </p>
           </div>
         </div>
 
-        {/* Create Department Form */}
-        <form onSubmit={handleAddDepartment} className="mb-6 bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col md:flex-row gap-3 items-end">
+        {/* Create Team Form */}
+        <form onSubmit={handleAddTeam} className="mb-6 bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col md:flex-row gap-3 items-end">
           <div className="flex-1 w-full">
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Department Name *</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Team Name *</label>
             <input
               type="text"
               required
-              value={newDeptName}
-              onChange={(e) => setNewDeptName(e.target.value)}
+              value={newTeamName}
+              onChange={(e) => setNewTeamName(e.target.value)}
               placeholder="e.g. Risk Management, Quantitative Research, Trading"
               className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
             />
@@ -283,49 +315,102 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
             <label className="block text-xs font-semibold text-slate-300 mb-1">Description (optional)</label>
             <input
               type="text"
-              value={newDeptDesc}
-              onChange={(e) => setNewDeptDesc(e.target.value)}
+              value={newTeamDesc}
+              onChange={(e) => setNewTeamDesc(e.target.value)}
               placeholder="Responsibilities and mandate"
               className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
             />
           </div>
           <button
             type="submit"
-            disabled={addingDept}
+            disabled={addingTeam}
             className="w-full md:w-auto px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm rounded-lg flex items-center justify-center space-x-1.5 transition active:scale-95 shrink-0"
           >
             <FolderPlus className="w-4 h-4" />
-            <span>{addingDept ? 'Adding...' : 'Add Department'}</span>
+            <span>{addingTeam ? 'Adding...' : 'Add Team'}</span>
           </button>
         </form>
 
-        {/* Department Grid */}
+        {/* Teams Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {departments.map((dept) => (
-            <div key={dept.id} className="bg-slate-950/70 border border-slate-800 p-4 rounded-xl flex items-start justify-between group hover:border-slate-700 transition">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="font-bold text-sm text-white">{dept.name}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
-                    {dept.user_count ?? 0} users
-                  </span>
-                </div>
-                {dept.description && (
-                  <p className="text-xs text-slate-400 mt-1 line-clamp-2">{dept.description}</p>
+          {teams.map((team) => {
+            const isEditing = editingTeamId === team.id;
+            const isSaving = savingTeamId === team.id;
+            return (
+              <div key={team.id} className="bg-slate-950/70 border border-slate-800 p-4 rounded-xl flex flex-col justify-between gap-3 group hover:border-slate-700 transition">
+                {isEditing ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={editTeamName}
+                      onChange={(e) => setEditTeamName(e.target.value)}
+                      placeholder="Team name"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                    />
+                    <input
+                      type="text"
+                      value={editTeamDesc}
+                      onChange={(e) => setEditTeamDesc(e.target.value)}
+                      placeholder="Description (optional)"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                    />
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setEditingTeamId(null)}
+                        className="px-2 py-1 text-xs rounded-lg border border-slate-700 text-slate-300 hover:text-white flex items-center gap-1"
+                      >
+                        <X className="w-3 h-3" />
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSaving || !editTeamName.trim()}
+                        onClick={() => handleSaveTeam(team.id)}
+                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-50 flex items-center gap-1"
+                      >
+                        <Check className="w-3 h-3" />
+                        {isSaving ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm text-white truncate">{team.name}</div>
+                      {team.description && (
+                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">{team.description}</p>
+                      )}
+                      <p className="text-[11px] font-mono text-slate-400 mt-2">
+                        {team.people_count ?? 0} people · {team.rules_count ?? 0} rules · {team.user_count ?? 0} accounts
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => startEditingTeam(team)}
+                        title="Rename / edit team"
+                        className="opacity-70 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTeam(team.id, team.name)}
+                        title="Delete this team"
+                        className="opacity-70 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
-              <button
-                onClick={() => handleDeleteDepartment(dept.id, dept.name)}
-                title="Delete this department"
-                className="opacity-60 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
-          {departments.length === 0 && (
+            );
+          })}
+          {teams.length === 0 && (
             <div className="col-span-full py-6 text-center text-xs text-slate-500">
-              No departments configured. Use the form above to add your first department.
+              No teams configured. Use the form above to add your first team.
             </div>
           )}
         </div>
@@ -437,9 +522,9 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                         </span>
                       )}
                     </div>
-                    {u.dzial && (
+                    {(u.team ?? u.dzial) && (
                       <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-slate-800 text-slate-300 border border-slate-700">
-                        {u.dzial}
+                        {u.team ?? u.dzial}
                       </span>
                     )}
                   </div>

@@ -1,16 +1,22 @@
-export interface DepartmentItem {
+export interface TeamItem {
   id: number;
   name: string;
   description?: string | null;
   created_at: string;
   user_count?: number;
+  people_count?: number;
+  rules_count?: number;
+  sources_count?: number;
 }
+
+export type DepartmentItem = TeamItem;
 
 export interface User {
   id: number;
   uname: string;
   email: string;
   nrtel?: string | null;
+  team?: string | null;
   dzial?: string | null;
   is_admin: boolean;
   created_at: string;

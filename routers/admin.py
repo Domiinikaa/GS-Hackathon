@@ -1,125 +1,141 @@
 import secrets
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Alert, Department, InviteCode, Person, Rule, Source, User
+from models import Alert, InviteCode, Person, Rule, Source, Team, User
+from routers.deps import get_current_admin_user
 from schemas import (
-    InviteCodeResponse,
-    InviteCodeCreateResponse,
     InviteCodeCreateRequest,
+    InviteCodeCreateResponse,
+    InviteCodeResponse,
+    TeamCreate,
+    TeamResponse,
+    TeamUpdate,
     UserResponse,
     UserRoleUpdate,
-    DepartmentResponse,
-    DepartmentCreate,
-    DepartmentUpdate
 )
-from routers.deps import get_current_admin_user
 
-router = APIRouter(tags=["Admin & Departments"])
-
-
-# --- PUBLIC DEPARTMENTS DIRECTORY ---
-
-@router.get("/api/departments", response_model=List[DepartmentResponse])
-def get_public_departments(db: Session = Depends(get_db)):
-    """Retrieves all active company departments (available for registration and profile forms)."""
-    departments = db.query(Department).order_by(Department.name.asc()).all()
-    results = []
-    for d in departments:
-        user_count = db.query(func.count(User.id)).filter(User.dzial == d.name).scalar() or 0
-        results.append({
-            "id": d.id,
-            "name": d.name,
-            "description": d.description,
-            "created_at": d.created_at,
-            "user_count": user_count
-        })
-    return results
+router = APIRouter(tags=["Admin & Teams"])
 
 
-# --- DEPARTMENT MANAGEMENT (ADMIN ONLY) ---
+def _serialize_team(db: Session, team: Team) -> dict:
+    user_count = db.query(func.count(User.id)).filter(User.dzial == team.name).scalar() or 0
+    people_count = db.query(func.count(Person.id)).filter(Person.team == team.name).scalar() or 0
+    rules_count = db.query(func.count(Rule.id)).filter(Rule.team == team.name).scalar() or 0
+    sources_count = db.query(func.count(Source.id)).filter(Source.team == team.name).scalar() or 0
+    return {
+        "id": team.id,
+        "name": team.name,
+        "description": team.description,
+        "created_at": team.created_at,
+        "user_count": user_count,
+        "people_count": people_count,
+        "rules_count": rules_count,
+        "sources_count": sources_count,
+    }
 
-@router.post("/api/admin/departments", response_model=DepartmentResponse, status_code=status.HTTP_201_CREATED)
-def create_department(
-    payload: DepartmentCreate,
+
+# --- PUBLIC TEAMS DIRECTORY ---
+
+@router.get("/api/teams", response_model=List[TeamResponse])
+@router.get("/api/departments", response_model=List[TeamResponse], include_in_schema=False)
+def get_public_teams(db: Session = Depends(get_db)):
+    """Retrieves all active teams (used by Registration, Alerts, People, Rules, Sources, and Admin)."""
+    teams = db.query(Team).order_by(Team.name.asc()).all()
+    return [_serialize_team(db, t) for t in teams]
+
+
+# --- TEAM MANAGEMENT (ADMIN ONLY) ---
+
+@router.post("/api/admin/teams", response_model=TeamResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/api/admin/departments", response_model=TeamResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+def create_team(
+    payload: TeamCreate,
     admin: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
-    """Creates a new company department. Administrator only."""
-    dept_name = payload.name.strip()
-    existing = db.query(Department).filter(
-        func.lower(Department.name) == dept_name.lower()
+    """Creates a new team. Administrator only."""
+    team_name_clean = payload.name.strip()
+    existing = db.query(Team).filter(
+        func.lower(Team.name) == team_name_clean.lower()
     ).first()
 
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Department '{dept_name}' already exists."
+            detail=f"Team '{team_name_clean}' already exists."
         )
 
-    new_dept = Department(
-        name=dept_name,
+    new_team = Team(
+        name=team_name_clean,
         description=payload.description.strip() if payload.description else None
     )
-    db.add(new_dept)
+    db.add(new_team)
     db.commit()
-    db.refresh(new_dept)
-
-    return {
-        "id": new_dept.id,
-        "name": new_dept.name,
-        "description": new_dept.description,
-        "created_at": new_dept.created_at,
-        "user_count": 0
-    }
+    db.refresh(new_team)
+    return _serialize_team(db, new_team)
 
 
-@router.delete("/api/admin/departments/{dept_id}", status_code=status.HTTP_200_OK)
-def delete_department(
-    dept_id: int,
+@router.delete("/api/admin/teams/{team_id}", status_code=status.HTTP_200_OK)
+@router.delete("/api/admin/departments/{team_id}", status_code=status.HTTP_200_OK, include_in_schema=False)
+def delete_team(
+    team_id: int,
     admin: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
-    """Deletes a department. Employees in this department are preserved (department reset to null)."""
-    dept = db.query(Department).filter(Department.id == dept_id).first()
-    if not dept:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found.")
+    """Deletes a team once no People or Rules reference it."""
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found.")
 
-    # Reset users referencing this department name
-    db.query(User).filter(User.dzial == dept.name).update({User.dzial: None})
+    people_count = db.query(func.count(Person.id)).filter(Person.team == team.name).scalar() or 0
+    rules_count = db.query(func.count(Rule.id)).filter(Rule.team == team.name).scalar() or 0
+    if people_count > 0 or rules_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Cannot delete team '{team.name}' while it still has {people_count} people "
+                f"and {rules_count} rules. Reassign or remove them first."
+            ),
+        )
 
-    db.delete(dept)
+    # Unlink users and shared sources referencing this team name
+    db.query(User).filter(User.dzial == team.name).update({User.dzial: None})
+    db.query(Source).filter(Source.team == team.name).update({Source.team: "All"})
+
+    db.delete(team)
     db.commit()
-    return {"message": f"Department '{dept.name}' was successfully deleted."}
+    return {"message": f"Team '{team.name}' was successfully deleted."}
 
 
-@router.put("/api/admin/departments/{dept_id}", response_model=DepartmentResponse)
-def update_department(
-    dept_id: int,
-    payload: DepartmentUpdate,
+@router.put("/api/admin/teams/{team_id}", response_model=TeamResponse)
+@router.put("/api/admin/departments/{team_id}", response_model=TeamResponse, include_in_schema=False)
+def update_team(
+    team_id: int,
+    payload: TeamUpdate,
     admin: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
-    """Updates department name or description."""
-    dept = db.query(Department).filter(Department.id == dept_id).first()
-    if not dept:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found.")
+    """Updates team name or description and cascades rename across users, people, rules, sources, and alerts."""
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found.")
 
-    old_name = dept.name
+    old_name = team.name
     if payload.name:
         new_name = payload.name.strip()
-        conflict = db.query(Department).filter(
-            func.lower(Department.name) == new_name.lower(),
-            Department.id != dept_id
+        conflict = db.query(Team).filter(
+            func.lower(Team.name) == new_name.lower(),
+            Team.id != team_id
         ).first()
         if conflict:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Department '{new_name}' already exists.")
-        dept.name = new_name
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Team '{new_name}' already exists.")
+        team.name = new_name
 
-        # Cascade name update to users and alerting entities
+        # Cascade name update across users and all alerting entities
         db.query(User).filter(User.dzial == old_name).update({User.dzial: new_name})
         db.query(Person).filter(Person.team == old_name).update({Person.team: new_name})
         db.query(Rule).filter(Rule.team == old_name).update({Rule.team: new_name})
@@ -127,19 +143,11 @@ def update_department(
         db.query(Alert).filter(Alert.team == old_name).update({Alert.team: new_name})
 
     if payload.description is not None:
-        dept.description = payload.description.strip() if payload.description else None
+        team.description = payload.description.strip() if payload.description else None
 
     db.commit()
-    db.refresh(dept)
-
-    user_count = db.query(func.count(User.id)).filter(User.dzial == dept.name).scalar() or 0
-    return {
-        "id": dept.id,
-        "name": dept.name,
-        "description": dept.description,
-        "created_at": dept.created_at,
-        "user_count": user_count
-    }
+    db.refresh(team)
+    return _serialize_team(db, team)
 
 
 # --- INVITE CODES & USER ROSTER (ADMIN ONLY) ---
@@ -208,7 +216,7 @@ def list_company_users(
     admin: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
-    """Returns the roster of registered users and their departments."""
+    """Returns the roster of registered users and their teams."""
     return db.query(User).order_by(User.created_at.desc()).all()
 
 

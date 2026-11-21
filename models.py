@@ -6,10 +6,10 @@ from database import Base
 
 # --- Authentication & Administration Models ---
 
-class Department(Base):
+class Team(Base):
     """
-    Company departments managed dynamically by the Administrator.
-    Administrators can add, edit, and remove departments at any time.
+    Unified organization teams managed dynamically by the Administrator.
+    Shared across user accounts, People roster, Rules, Sources, and Alerts.
     """
     __tablename__ = "departments"
 
@@ -17,6 +17,10 @@ class Department(Base):
     name = Column(String(100), unique=True, index=True, nullable=False)
     description = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# Backwards-compatible alias for legacy imports
+Department = Team
 
 
 class User(Base):
@@ -33,6 +37,14 @@ class User(Base):
     dzial = Column(String(100), nullable=True)
     is_admin = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    @property
+    def team(self):
+        return self.dzial
+
+    @team.setter
+    def team(self, value):
+        self.dzial = value
 
     # Personal items owned by this user
     items = relationship("Item", back_populates="owner", cascade="all, delete-orphan")

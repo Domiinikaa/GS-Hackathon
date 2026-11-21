@@ -114,29 +114,28 @@ def purge_demo_user():
         db.close()
 
 
-def seed_default_departments():
-    """Initializes default company departments if the table is empty (fully editable by Admin)."""
+def seed_default_teams():
+    """Initializes default teams if the table is empty (fully editable by Admin)."""
     db = SessionLocal()
     try:
-        if db.query(models.Department).count() == 0:
-            default_depts = [
-                models.Department(name="Settlements", description="Order settlement workflows and counterparty operations"),
-                models.Department(name="Pricing", description="Pricing engine services and market data latency"),
-                models.Department(name="Rates", description="Rates trading desk and trade gateway monitoring"),
-                models.Department(name="Payments", description="Payments API reliability and regional failover"),
-                models.Department(name="Management", description="Executive leadership and strategic planning"),
-                models.Department(name="IT", description="Engineering, software architecture, and infrastructure"),
-                models.Department(name="Finance", description="Capital markets, quantitative analysis, and treasury"),
-                models.Department(name="Sales", description="Institutional client relations and capital raising"),
-                models.Department(name="Business", description="Business development and operations"),
+        if db.query(models.Team).count() == 0:
+            default_teams = [
+                models.Team(name="Settlements", description="Order settlement workflows and counterparty operations"),
+                models.Team(name="Pricing", description="Pricing engine services and market data latency"),
+                models.Team(name="Rates", description="Rates trading desk and trade gateway monitoring"),
+                models.Team(name="Payments", description="Payments API reliability and regional failover"),
+                models.Team(name="Management", description="Executive leadership and platform administration"),
             ]
-            db.add_all(default_depts)
+            db.add_all(default_teams)
             db.commit()
-            print("[SEED] Default company departments initialized.")
+            print("[SEED] Default teams initialized.")
     except Exception as e:
         print(f"[SEED ERROR] {e}")
     finally:
         db.close()
+
+
+seed_default_departments = seed_default_teams
 
 
 def init_admin_from_env():
@@ -190,7 +189,7 @@ with startup_lock():
     ensure_open_dedup_index(engine)
     ensure_people_role_column(engine)
     purge_demo_user()
-    seed_default_departments()
+    seed_default_teams()
     init_admin_from_env()
 
     startup_db = SessionLocal()

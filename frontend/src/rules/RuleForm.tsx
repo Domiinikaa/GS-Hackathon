@@ -150,7 +150,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
             {team && !targets.teams.includes(team) && !targets.people.includes(team) && (
               <option value={team}>{team} (not found)</option>
             )}
-            <optgroup label="Teams (Admin & Invites)">
+            <optgroup label="Teams">
               {targets.teams.map((t) => <option key={`t-${t}`} value={t}>{t}</option>)}
             </optgroup>
             <optgroup label="One person">

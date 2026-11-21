@@ -88,6 +88,7 @@ async def get_user_stats(
         "user": {
             "uname": current_user.uname,
             "email": current_user.email,
-            "dzial": current_user.dzial
+            "team": current_user.dzial,
+            "dzial": current_user.dzial,
         } if current_user else None
     }

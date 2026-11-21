@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Delivery, Department, Person
+from models import Delivery, Person, Team
 from services.people_service import plan_recipients
 
 router = APIRouter(prefix="/api/people", tags=["People"])
@@ -21,15 +21,15 @@ HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 def team_name(db: Session, name: str) -> Optional[str]:
-    """Teams are the departments managed in Admin & Invites. Returns the exact department name, or None."""
-    dept = db.query(Department).filter(func.lower(Department.name) == name.strip().lower()).first()
-    return dept.name if dept else None
+    """Teams are managed in Admin & Teams. Returns the exact team name, or None."""
+    team = db.query(Team).filter(func.lower(Team.name) == name.strip().lower()).first()
+    return team.name if team else None
 
 
 def _require_team(db: Session, name: str) -> str:
     found = team_name(db, name)
     if found is None:
-        raise HTTPException(422, f"Team '{name}' does not exist. Pick one of the departments from Admin & Invites.")
+        raise HTTPException(422, f"Team '{name}' does not exist. Pick a team managed in Admin & Teams.")
     return found
 
 
@@ -122,9 +122,9 @@ def list_people(team: Optional[str] = None, role: Optional[Role] = None, db: Ses
 
 @router.get("/teams")
 def list_teams(db: Session = Depends(get_db)):
-    """Teams (= departments from Admin & Invites) and people a rule can target."""
+    """Teams (managed in Admin & Teams) and people a rule can target."""
     return {
-        "teams": [d.name for d in db.query(Department).order_by(Department.name).all()],
+        "teams": [t.name for t in db.query(Team).order_by(Team.name).all()],
         "people": sorted({n for (n,) in db.query(Person.name).distinct()}),
     }
 

@@ -39,7 +39,7 @@ const BASE_TABS: TabItem[] = [
   { id: 'sources', label: 'Sources', icon: Plug, page: SourcesPage },
   { id: 'runbooks', label: 'Runbooks', icon: BookOpen, page: RunbooksPage },
   { id: 'outbox', label: 'Outbox', icon: Inbox, page: OutboxPage },
-  { id: 'admin', label: 'Admin & Invites', icon: Key, page: AdminPanel, adminOnly: true },
+  { id: 'admin', label: 'Admin & Teams', icon: Key, page: AdminPanel, adminOnly: true },
 ];
 
 function getInitialTab(): string {
@@ -193,7 +193,7 @@ export default function App() {
                 )}
               </div>
               <div className="text-[10px] text-slate-400">
-                {currentUser.dzial ? `${currentUser.dzial} • ` : ''}{currentUser.email}
+                {(currentUser.team ?? currentUser.dzial) ? `${currentUser.team ?? currentUser.dzial} • ` : ''}{currentUser.email}
               </div>
             </div>
 
@@ -222,8 +222,10 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 py-8">
         {isUnauthorizedAdminRoute ? (
           <AccessDenied user={currentUser} onReturn={handleReturnToAlerts} />
-        ) : activeTabId === 'admin' ? (
+        ) : currentTab.id === 'admin' ? (
           <AdminPanel currentUser={currentUser} />
+        ) : currentTab.id === 'alerts' ? (
+          <AlertsPage currentUser={currentUser} />
         ) : (
           <PageComponent />
         )}

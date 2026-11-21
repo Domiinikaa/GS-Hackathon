@@ -182,14 +182,14 @@ def get_rule(rule_id: str, db: Session = Depends(get_db)):
 
 
 def _require_target(db: Session, name: str) -> str:
-    """A rule goes to a team (department from Admin & Invites) or to one person by name."""
+    """A rule goes to a team (managed in Admin & Teams) or to one person by name."""
     team = team_name(db, name)
     if team:
         return team
     person = db.query(Person).filter(Person.name == name.strip()).first()
     if person:
         return person.name
-    raise HTTPException(422, f"'{name}' is neither a team (Admin & Invites department) nor a person on the People page.")
+    raise HTTPException(422, f"'{name}' is neither a team nor a person on the People page.")
 
 
 @router.post("", status_code=201)

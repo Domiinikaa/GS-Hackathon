@@ -9,10 +9,10 @@ from sqlalchemy.pool import StaticPool
 import models  # noqa: F401
 from database import Base, get_db
 from routers import people, rules
-from models import Department
+from models import Team
 from seed import seed_people, seed_rules
 
-DEPARTMENTS = sorted(["Business", "Finance", "IT", "Management", "Payments", "Pricing", "Rates", "Sales", "Settlements"])
+TEAMS = sorted(["Management", "Payments", "Pricing", "Rates", "Settlements"])
 
 
 @pytest.fixture()
@@ -21,7 +21,7 @@ def client():
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     with Session() as db:
-        db.add_all([Department(name=n) for n in DEPARTMENTS])
+        db.add_all([Team(name=n) for n in TEAMS])
         seed_rules(db)
         seed_people(db)
         db.commit()
@@ -139,7 +139,7 @@ def test_person_validation(client, bad):
 
 def test_teams_and_preview(client):
     teams = client.get("/api/people/teams").json()
-    assert teams["teams"] == DEPARTMENTS
+    assert teams["teams"] == TEAMS
     assert "Anna" in teams["people"]
 
     night = client.post("/api/people/preview", json={
@@ -152,7 +152,7 @@ def test_field_hints_shape(client):
     from database import get_db
     from models import Source
     db = next(client.app.dependency_overrides[get_db]())
-    db.add(Source(key="t", name="t", team="Finance", sample_event={
+    db.add(Source(key="t", name="t", team="Rates", sample_event={
         "payload": {"desk": "rates", "notional": 25000000, "ok": True, "tags": ["a"], "extra": {}}, "note": None}))
     db.commit()
     fields = {f["path"]: f for f in client.get("/api/rules/fields").json()}

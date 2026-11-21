@@ -2,13 +2,14 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from database import get_db
-from models import User, InviteCode
+from models import InviteCode, Person, User
 from schemas import UserRegister, UserLogin, UserResponse, TokenResponse, UserUpdate
 from services.security import hash_password, verify_password, create_access_token
 from routers.deps import get_current_user
+from routers.people import team_name
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication & Profile"])
 
@@ -54,27 +55,55 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
                 detail=f"Email address '{payload.email}' is already registered."
             )
 
-    # 3. Hash password and create user record
+    # 3. Validate team if provided
+    raw_team = (payload.team if payload.team is not None else payload.dzial) or ""
+    resolved_team = None
+    if raw_team.strip():
+        resolved_team = team_name(db, raw_team)
+        if resolved_team is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Team '{raw_team.strip()}' does not exist.",
+            )
+
+    # 4. Hash password, create user record, claim invite, and sync People roster
     hashed_pwd = hash_password(payload.password)
     is_admin = bool(getattr(invite, "is_admin_invite", False))
+    clean_uname = payload.uname.strip()
+    clean_email = payload.email.lower().strip()
+    clean_phone = payload.nrtel.strip() if payload.nrtel else None
 
     new_user = User(
-        uname=payload.uname.strip(),
-        email=payload.email.lower().strip(),
+        uname=clean_uname,
+        email=clean_email,
         hashed_password=hashed_pwd,
-        nrtel=payload.nrtel.strip() if payload.nrtel else None,
-        dzial=payload.dzial.strip() if payload.dzial else None,
+        nrtel=clean_phone,
+        dzial=resolved_team,
         is_admin=is_admin
     )
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    db.flush()
 
-    # 4. Mark invite code as used
     invite.is_used = True
     invite.used_by_id = new_user.id
     invite.used_at = datetime.utcnow()
+
+    if resolved_team:
+        existing_person = db.query(Person).filter(func.lower(Person.email) == clean_email).first()
+        if existing_person is None:
+            db.add(Person(
+                name=clean_uname,
+                team=resolved_team,
+                email=clean_email,
+                phone=clean_phone,
+                on_call=False,
+                role="member",
+                channel_prefs={"critical": ["email"], "warning": ["email"], "info": ["ui"]},
+                quiet_hours={},
+            ))
+
     db.commit()
+    db.refresh(new_user)
 
     # 5. Issue JWT access token
     access_token = create_access_token(data={"sub": str(new_user.id), "uname": new_user.uname})
@@ -143,11 +172,29 @@ def update_my_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Updates profile attributes (phone number, department)."""
+    """Updates profile attributes (phone number, team) and keeps linked Person in sync."""
+    person = db.query(Person).filter(func.lower(Person.email) == current_user.email.lower()).first()
+
     if payload.nrtel is not None:
-        current_user.nrtel = payload.nrtel.strip() if payload.nrtel else None
-    if payload.dzial is not None:
-        current_user.dzial = payload.dzial.strip() if payload.dzial else None
+        clean_phone = payload.nrtel.strip() if payload.nrtel else None
+        current_user.nrtel = clean_phone
+        if person is not None:
+            person.phone = clean_phone
+
+    raw_team = payload.team if payload.team is not None else payload.dzial
+    if raw_team is not None:
+        if raw_team.strip() == "":
+            current_user.dzial = None
+        else:
+            resolved_team = team_name(db, raw_team)
+            if resolved_team is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Team '{raw_team.strip()}' does not exist.",
+                )
+            current_user.dzial = resolved_team
+            if person is not None:
+                person.team = resolved_team
 
     db.commit()
     db.refresh(current_user)

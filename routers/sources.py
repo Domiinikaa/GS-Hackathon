@@ -33,6 +33,7 @@ except ImportError:
 from database import get_db
 from models import Event, Source, User
 from routers.deps import get_current_admin_user, get_optional_current_user
+from routers.people import team_name
 from services.connectors import (
     CONNECTOR_REGISTRY,
     dry_run_against_rules,
@@ -108,6 +109,19 @@ class SimulatePayload(BaseModel):
 
 
 # --- Helpers ---
+
+def _resolve_source_team(db: Session, raw_team: Optional[str]) -> str:
+    cleaned = (raw_team or "").strip()
+    if not cleaned or cleaned.lower() == "all":
+        return "All"
+    found = team_name(db, cleaned)
+    if found is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Team '{cleaned}' does not exist. Choose an existing team or 'All'.",
+        )
+    return found
+
 
 def _slugify_key(name: str, db: Session) -> str:
     base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "source"
@@ -286,7 +300,7 @@ async def create_source(
     src = Source(
         key=clean_key,
         name=payload.name.strip(),
-        team=payload.team.strip() or "All",
+        team=_resolve_source_team(db, payload.team),
         kind=payload.kind,
         config=payload.config or {},
         sample_event=_normalize_sample_event(payload.sample_event, payload.config or {}),
@@ -327,7 +341,7 @@ async def update_source(
     if payload.name is not None:
         src.name = payload.name.strip()
     if payload.team is not None:
-        src.team = payload.team.strip() or "All"
+        src.team = _resolve_source_team(db, payload.team)
     src.kind = next_kind
     src.config = next_config
     if payload.sample_event is not None:

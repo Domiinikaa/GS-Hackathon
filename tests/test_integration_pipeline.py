@@ -88,8 +88,19 @@ def test_startup_created_open_dedup_index_and_seed():
             text("SELECT name FROM sqlite_master WHERE type='index' AND name='uq_alerts_open_dedup'")
         ).scalar()
     assert idx == "uq_alerts_open_dedup"
-    depts = {d["name"] for d in ok(client.get("/api/departments"))}
-    assert {"Settlements", "Pricing", "Rates", "Payments"}.issubset(depts)
+    teams = ok(client.get("/api/teams"))
+    depts = ok(client.get("/api/departments"))
+    assert teams == depts
+    teams_by_name = {t["name"]: t for t in teams}
+    assert set(teams_by_name) == {"Settlements", "Pricing", "Rates", "Payments", "Management"}
+    assert teams_by_name["Settlements"]["people_count"] == 2  # Tom + Ewa
+    assert teams_by_name["Settlements"]["rules_count"] == 1   # settlements-prod
+    assert teams_by_name["Settlements"]["sources_count"] == 1  # settlement-kafka
+    assert teams_by_name["Rates"]["people_count"] == 2        # Kasia + Piotr
+    assert teams_by_name["Rates"]["rules_count"] == 1         # rates-big-rejections
+    assert teams_by_name["Rates"]["sources_count"] == 1       # trade-gateway
+    assert teams_by_name["Payments"]["people_count"] == 2     # Anna + Zofia
+    assert teams_by_name["Pricing"]["people_count"] == 1      # Marek
     sources = {s["key"] for s in ok(client.get("/api/sources"))}
     assert {"demo", "trade-gateway", "payments-webhook", "settlement-kafka", "pricing-engine-logs"} == sources
 
@@ -305,9 +316,9 @@ def test_dry_run_matches_rules_engine_and_rule_edit_keeps_runbook():
     assert updated["runbook_id"] == orig_rb
 
 
-def test_department_rename_cascades_across_entities():
-    admin_hdr = _auth_header("dept_admin", "dept_admin@example.com", is_admin=True)
-    dept = ok(client.post("/api/admin/departments", json={"name": "TempOps", "description": "Temp"}, headers=admin_hdr), 201)
+def test_team_rename_cascades_across_entities():
+    admin_hdr = _auth_header("team_admin", "team_admin@example.com", is_admin=True)
+    team = ok(client.post("/api/admin/teams", json={"name": "TempOps", "description": "Temp"}, headers=admin_hdr), 201)
     person = ok(client.post("/api/people", json={
         "name": "TempUser", "team": "TempOps", "email": "temp@example.com",
         "channel_prefs": {"warning": ["email"]},
@@ -324,13 +335,63 @@ def test_department_rename_cascades_across_entities():
     alerts_before = ok(client.get("/api/alerts?team=TempOps"))
     assert len(alerts_before) == 1
 
-    ok(client.put(f"/api/admin/departments/{dept['id']}", json={"name": "RenamedOps"}, headers=admin_hdr))
+    ok(client.put(f"/api/admin/teams/{team['id']}", json={"name": "RenamedOps"}, headers=admin_hdr))
 
     assert ok(client.get(f"/api/people/{person['id']}"))["team"] == "RenamedOps"
     assert ok(client.get(f"/api/rules/{rule['id']}"))["team"] == "RenamedOps"
     assert _source_by_key(src["key"])["team"] == "RenamedOps"
     alerts_after = ok(client.get("/api/alerts?team=RenamedOps"))
     assert len(alerts_after) == 1 and alerts_after[0]["id"] == alerts_before[0]["id"]
+
+
+def test_unified_teams_auth_sync_source_validation_and_delete_guard():
+    admin_hdr = _auth_header("team_admin", "team_admin@example.com", is_admin=True)
+    invite = ok(client.post("/api/admin/invites", json={"is_admin": False}, headers=admin_hdr), 201)
+    code = invite["code"]
+
+    # Unknown team fails with 422 and does NOT consume the invite code
+    ok(client.post("/api/auth/register", json={
+        "uname": "synced_user",
+        "email": "synced@example.com",
+        "password": "Password123!",
+        "confirm_password": "Password123!",
+        "invite_code": code,
+        "team": "NonExistent",
+    }), 422)
+
+    # Valid registration normalizes case and auto-creates matching Person in People roster
+    reg = ok(client.post("/api/auth/register", json={
+        "uname": "synced_user",
+        "email": "synced@example.com",
+        "password": "Password123!",
+        "confirm_password": "Password123!",
+        "invite_code": code,
+        "nrtel": "+48 600 999 111",
+        "team": "payments",
+    }), 201)
+    assert reg["user"]["team"] == "Payments" and reg["user"]["dzial"] == "Payments"
+    user_hdr = {"Authorization": f"Bearer {reg['access_token']}"}
+    pay_people = ok(client.get("/api/people?team=Payments"))
+    synced_person = next((p for p in pay_people if p["email"] == "synced@example.com"), None)
+    assert synced_person is not None and synced_person["name"] == "synced_user"
+
+    # Updating profile via PUT /api/auth/me updates both user and linked Person
+    me_upd = ok(client.put("/api/auth/me", json={"team": "rates"}, headers=user_hdr))
+    assert me_upd["team"] == "Rates" and me_upd["dzial"] == "Rates"
+    assert ok(client.get(f"/api/people/{synced_person['id']}"))["team"] == "Rates"
+
+    # Sources validate team against unified Teams directory
+    ok(client.post("/api/sources", json={"name": "bad-src", "team": "BogusTeam", "kind": "webhook"}), 422)
+    norm_src = ok(client.post("/api/sources", json={"name": "norm-src", "team": "rates", "kind": "webhook"}))
+    assert norm_src["team"] == "Rates"
+    shared_src = ok(client.post("/api/sources", json={"name": "shared-src", "team": "All", "kind": "webhook"}))
+    assert shared_src["team"] == "All"
+
+    # Delete guard: team with people/rules returns 409; empty team deletes cleanly with 200
+    teams_by_name = {t["name"]: t for t in ok(client.get("/api/teams"))}
+    ok(client.delete(f"/api/admin/teams/{teams_by_name['Settlements']['id']}", headers=admin_hdr), 409)
+    empty_team = ok(client.post("/api/admin/teams", json={"name": "EmptyTeam"}, headers=admin_hdr), 201)
+    ok(client.delete(f"/api/admin/teams/{empty_team['id']}", headers=admin_hdr), 200)
 
 
 if __name__ == "__main__":

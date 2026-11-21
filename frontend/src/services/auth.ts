@@ -1,4 +1,4 @@
-import { User, AuthResponse, InviteCode, DepartmentItem } from '../types';
+import { User, AuthResponse, InviteCode, TeamItem } from '../types';
 
 const TOKEN_KEY = 'gs_jwt_token';
 
@@ -32,16 +32,20 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
   return fetch(url, { ...options, headers });
 }
 
-export const departmentService = {
-  async getDepartments(): Promise<DepartmentItem[]> {
+export const teamService = {
+  async getTeams(): Promise<TeamItem[]> {
     try {
-      const res = await fetch('/api/departments');
+      const res = await fetch('/api/teams');
       if (!res.ok) return [];
       return await res.json();
     } catch {
       return [];
     }
   },
+};
+
+export const departmentService = {
+  getDepartments: () => teamService.getTeams(),
 };
 
 export const authService = {
@@ -52,12 +56,15 @@ export const authService = {
     confirm_password?: string;
     invite_code: string;
     nrtel?: string;
+    team?: string;
     dzial?: string;
   }): Promise<AuthResponse> {
+    const resolvedTeam = data.team || data.dzial || null;
     const payload = {
       ...data,
       invite_code: data.invite_code.trim().toUpperCase(),
-      dzial: data.dzial || null,
+      team: resolvedTeam,
+      dzial: resolvedTeam,
       nrtel: data.nrtel || null,
     };
     const res = await fetch('/api/auth/register', {
@@ -148,25 +155,45 @@ export const adminService = {
     return res.json();
   },
 
-  async createDepartment(name: string, description?: string): Promise<DepartmentItem> {
-    const res = await authFetch('/api/admin/departments', {
+  async createTeam(name: string, description?: string): Promise<TeamItem> {
+    const res = await authFetch('/api/admin/teams', {
       method: 'POST',
       body: JSON.stringify({ name, description }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Failed to create department.');
+      throw new Error(err.detail || 'Failed to create team.');
     }
     return res.json();
   },
 
-  async deleteDepartment(id: number): Promise<void> {
-    const res = await authFetch(`/api/admin/departments/${id}`, {
+  async updateTeam(id: number, name: string, description?: string): Promise<TeamItem> {
+    const res = await authFetch(`/api/admin/teams/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name, description }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to update team.');
+    }
+    return res.json();
+  },
+
+  async deleteTeam(id: number): Promise<void> {
+    const res = await authFetch(`/api/admin/teams/${id}`, {
       method: 'DELETE',
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Failed to delete department.');
+      throw new Error(err.detail || 'Failed to delete team.');
     }
+  },
+
+  createDepartment(name: string, description?: string): Promise<TeamItem> {
+    return this.createTeam(name, description);
+  },
+
+  deleteDepartment(id: number): Promise<void> {
+    return this.deleteTeam(id);
   },
 };

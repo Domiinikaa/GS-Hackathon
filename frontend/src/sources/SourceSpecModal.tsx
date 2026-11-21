@@ -88,15 +88,15 @@ export default function SourceSpecModal({
   );
   const [name, setName] = useState(existing?.name || '');
   const [team, setTeam] = useState(existing?.team || '');
-  const [departments, setDepartments] = useState<string[]>([]);
+  const [teams, setTeams] = useState<string[]>([]);
   const [kind, setKind] = useState<SourceKind>(existing?.kind || 'webhook');
   const [enabled, setEnabled] = useState<boolean>(existing ? existing.enabled : true);
 
   useEffect(() => {
-    api<{ id: number; name: string }[]>('/departments')
+    api<{ id: number; name: string }[]>('/teams')
       .then((list) => {
-        const names = list.map((d) => d.name);
-        setDepartments(names);
+        const names = list.map((t) => t.name);
+        setTeams(names);
         setTeam((prev) => prev || names[0] || 'All');
       })
       .catch(() => {
@@ -635,20 +635,20 @@ config:
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">
-                    Team / Department
+                    Team
                   </label>
                   <select
                     value={team}
                     onChange={(e) => setTeam(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
                   >
-                    {team && !departments.includes(team) && (
+                    {team && team !== 'All' && !teams.includes(team) && (
                       <option value={team}>{team}</option>
                     )}
-                    {departments.map((d) => (
-                      <option key={d} value={d}>{d}</option>
+                    {teams.map((t) => (
+                      <option key={t} value={t}>{t}</option>
                     ))}
-                    {!departments.includes('All') && <option value="All">All</option>}
+                    {!teams.includes('All') && <option value="All">All (shared)</option>}
                   </select>
                 </div>
               </section>
