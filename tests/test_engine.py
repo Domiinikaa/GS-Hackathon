@@ -190,9 +190,26 @@ def texts(steps):
     return [s["text"] for s in steps]
 
 
-def test_steps_are_plain_info():
-    for steps in (parse_runbook(YAML, "yaml"), parse_runbook(MARKDOWN, "markdown")):
-        assert all(s["action"] is None and s["approval"] == "none" and s["params"] == {} for s in steps)
+def test_actions_and_kinds_from_text():
+    """Osoba 4: z tekstu rozpoznajemy akcje; ryzykowne (retry, restart, eskalacja) domyślnie wymagają zgody."""
+    from services.runbook_parser import step_kind
+    yaml_steps = parse_runbook(YAML, "yaml")
+    assert [step_kind(s) for s in yaml_steps] == ["manual", "approve", "approve"]
+    assert yaml_steps[1]["action"] == "retry_workflow" and yaml_steps[1]["params"] == {"workflowId": "{{workflowId}}"}
+    assert yaml_steps[2]["action"] == "escalate" and yaml_steps[2]["params"] == {"team": "on-call"}
+    md_steps = parse_runbook(MARKDOWN, "markdown")
+    assert [step_kind(s) for s in md_steps] == ["manual", "approve", "manual"]
+    assert md_steps[1]["params"] == {"service": "pricing-engine"}
+
+
+def test_markers_conditions_and_wait():
+    from services.runbook_parser import step_kind
+    steps = parse_runbook("1. Restart pricing-engine [auto]\n2. Wait 2 minutes\n"
+                          "3. If latency is still high, open a ticket\n4. Open a ticket [manual]", "markdown")
+    assert [step_kind(s) for s in steps] == ["auto", "auto", "approve", "manual"]
+    assert steps[0]["text"] == "Restart pricing-engine"                 # znacznik znika z tekstu
+    assert steps[1]["params"] == {"seconds": 120}
+    assert steps[2]["condition"] == "latency is still high"            # warunku nie sprawdzimy -> zgoda
 
 
 def test_yaml_runbook():

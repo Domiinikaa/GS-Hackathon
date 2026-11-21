@@ -2,7 +2,9 @@
 Odpowiedzi na alert z telefonu (kartka 2.6: "approve … by replying to the alert").
 
 SMS:   "ACK 4821"      → przejmij alert (acknowledge)
-       "YES 4821"      → zatwierdź pierwszy krok runbooka, który czeka na zgodę (approve)
+       "YES 4821"      → zatwierdź najbliższy krok runbooka, który czeka na zgodę (approve)
+       "YES 3 4821"    → zatwierdź wszystkie kroki do kroku 3 włącznie (Osoba 4: najwyżej do pierwszego manual)
+       "YES ALL 4821"  → zatwierdź wszystko do pierwszego kroku manual
        "RESOLVE 4821"  → zamknij alert
 Telefon: wciśnięcie "1" w trakcie połączenia → acknowledge.
 
@@ -51,12 +53,15 @@ def handle_sms(db: Session, from_number: str, text: str) -> ReplyResult:
     words = (text or "").strip().upper().split()
     if len(words) < 2 or words[0] not in COMMANDS:
         return _answer(from_number, ReplyResult(False, "Sorry, not understood. Reply e.g. ACK 4821 or YES 4821."))
-    action, code = COMMANDS[words[0]], words[1]
+    action, code = COMMANDS[words[0]], words[-1]
+    target = words[1] if action == "approve" and len(words) >= 3 else None   # "YES 3 4821" / "YES ALL 4821"
+    if target is not None and target != "ALL" and not target.isdigit():
+        return _answer(from_number, ReplyResult(False, "Reply YES 4821, YES 3 4821 (up to step 3) or YES ALL 4821."))
 
     delivery = _find_delivery(db, from_number, code=code)
     if not delivery:
         return _answer(from_number, ReplyResult(False, f"Code {code} is not valid for this number."))
-    return _answer(from_number, _apply(db, delivery, action, "SMS"))
+    return _answer(from_number, _apply(db, delivery, action, "SMS", target))
 
 
 def handle_phone_keypress(db: Session, from_number: str, digit: str) -> ReplyResult:
@@ -81,7 +86,7 @@ def _find_delivery(db: Session, from_number: str, code: str | None = None, chann
     return None
 
 
-def _apply(db: Session, delivery: Delivery, action: str, via: str) -> ReplyResult:
+def _apply(db: Session, delivery: Delivery, action: str, via: str, target: str | None = None) -> ReplyResult:
     # Import tutaj, nie na górze: routers.alerts importuje services, więc unikamy importu w kółko
     from routers.alerts import _change_status, _update_step
 
@@ -96,14 +101,29 @@ def _apply(db: Session, delivery: Delivery, action: str, via: str) -> ReplyResul
         if action == "resolve":
             _change_status(db, alert.id, "resolved", ["open", "acknowledged"], actor)
             return ReplyResult(True, f"OK - alert {alert.id} resolved.", alert.id)
-        # approve: pierwszy krok, który wymaga zgody i jej jeszcze nie ma
-        step_index = next((i for i, s in enumerate(alert.steps or [])
-                           if s.get("approval") == "required" and not s.get("approved_by")), None)
+        if target is None:
+            # "YES 4821": pierwszy krok, który wymaga zgody i jej jeszcze nie ma (jak przycisk Approve)
+            step_index = next((i for i, s in enumerate(alert.steps or [])
+                               if s.get("approval") == "required" and not s.get("approved_by")), None)
+            if step_index is None:
+                return ReplyResult(False, f"Alert {alert.id} has no step waiting for approval.", alert.id)
+            text = (alert.steps[step_index] or {}).get("text", "")
+            _update_step(db, alert.id, step_index, actor, "approve")
+            return ReplyResult(True, f"OK - step {step_index + 1} approved: {text}"[:160], alert.id)
+
+        # "YES 3 4821" / "YES ALL 4821" (Osoba 4): kilka kroków naraz, najwyżej do pierwszego kroku manual
+        from services import runbook_runner
+
+        step_index = runbook_runner.approval_limit(alert) if target == "ALL" else int(target) - 1
         if step_index is None:
             return ReplyResult(False, f"Alert {alert.id} has no step waiting for approval.", alert.id)
-        text = (alert.steps[step_index] or {}).get("text", "")
-        _update_step(db, alert.id, step_index, actor, "approve")
-        return ReplyResult(True, f"OK - step {step_index + 1} approved: {text}"[:160], alert.id)
+        before = {i for i, s in enumerate(alert.steps or []) if s.get("approved_by")}
+        alert = runbook_runner.approve_until(db, alert.id, step_index, actor)
+        approved = [str(i + 1) for i, s in enumerate(alert.steps or []) if s.get("approved_by") and i not in before]
+        if len(approved) == 1:
+            text = (alert.steps[int(approved[0]) - 1] or {}).get("text", "")
+            return ReplyResult(True, f"OK - step {approved[0]} approved: {text}"[:160], alert.id)
+        return ReplyResult(True, f"OK - steps {', '.join(approved)} approved."[:160], alert.id)
     except HTTPException as exc:      # te same odmowy co na stronie (np. alert już rozwiązany)
         db.rollback()
         return ReplyResult(False, f"Alert {alert.id}: {exc.detail}", alert.id)
