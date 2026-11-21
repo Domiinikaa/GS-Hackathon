@@ -8,15 +8,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from database import engine, Base, SessionLocal
+from database import engine, Base, SessionLocal, startup_lock
 import models  # Registers all models with Base
 from services.security import hash_password
 from routers import api, auth, admin, alerts, rules, people, sources, deliveries, runbooks
 from seed import seed_all
 from sqlalchemy import text
 
-# Create database tables (SQLite / PostgreSQL)
-Base.metadata.create_all(bind=engine)
+# Tabele (SQLite / PostgreSQL) są tworzone niżej, w bloku startowym pod startup_lock()
 
 
 def ensure_sqlite_columns():
@@ -38,8 +37,8 @@ def ensure_sqlite_columns():
         except Exception:
             pass
 
-
-ensure_sqlite_columns()
+from services.alert_service import ensure_open_dedup_index  # noqa: E402  (Osoba 1: ochrona przed duplikatami alertów)
+ensure_open_dedup_index(engine)
 
 
 def purge_demo_user():
@@ -123,15 +122,19 @@ def init_admin_from_env():
 
 
 # Startup initialization & seeding
-purge_demo_user()
-seed_default_departments()
-init_admin_from_env()
+# Przy kilku kopiach serwera tylko jedna na raz przygotowuje bazę (patrz database.startup_lock)
+with startup_lock():
+    Base.metadata.create_all(bind=engine)
+    ensure_sqlite_columns()
+    purge_demo_user()
+    seed_default_departments()
+    init_admin_from_env()
 
-startup_db = SessionLocal()
-try:
-    seed_all(startup_db)
-finally:
-    startup_db.close()
+    startup_db = SessionLocal()
+    try:
+        seed_all(startup_db)
+    finally:
+        startup_db.close()
 
 app = FastAPI(
     title="GS Alerting & Orchestration Engine",
