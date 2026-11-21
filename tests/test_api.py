@@ -20,10 +20,9 @@ from fastapi.testclient import TestClient  # noqa: E402
 import main  # noqa: E402  (tworzy tabele w bazie testowej)
 import services.pipeline as pipeline  # noqa: E402
 from database import SessionLocal  # noqa: E402
-from seed import seed_all  # noqa: E402
 
-with SessionLocal() as _db:
-    seed_all(_db)
+# czysta baza z danymi startowymi przed testami tego pliku – patrz tests/conftest.py
+SEED = {}
 
 client = TestClient(main.app)
 

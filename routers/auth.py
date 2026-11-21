@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 
 from database import get_db
-from models import InviteCode, User
+from models import InviteCode, Person, User
 from schemas import UserRegister, UserLogin, UserResponse, TokenResponse, UserUpdate
 from services.people_service import ensure_person_for_user
 from services.security import hash_password, verify_password, create_access_token

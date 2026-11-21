@@ -32,12 +32,11 @@ from sqlalchemy import create_engine, inspect, text  # noqa: E402
 import main  # noqa: E402
 from database import SessionLocal  # noqa: E402
 from models import Alert, ChannelSetting, Delivery, GatewayMessage  # noqa: E402
-from seed import seed_all  # noqa: E402
 from services.channels.messages import build_message  # noqa: E402
 from services.delivery import MAX_ATTEMPTS, ensure_delivery_columns, process_due  # noqa: E402
 
-with SessionLocal() as _db:
-    seed_all(_db, include_people=True)
+# czysta baza z danymi startowymi przed testami tego pliku – patrz tests/conftest.py
+SEED = {"include_people": True}
 
 
 # ---------------------------------------------------------------- helpers
@@ -531,6 +530,8 @@ def test_e2e_ingest_pipeline_dedup_and_channels(client, db, smtp_server, monkeyp
     monkeypatch.setenv("SMTP_HOST", "127.0.0.1")
     monkeypatch.setenv("SMTP_PORT", str(smtp_server.port))
     monkeypatch.setenv("SMTP_STARTTLS", "0")
+    monkeypatch.delenv("SMTP_USER", raising=False)
+    monkeypatch.delenv("SMTP_PASSWORD", raising=False)
 
     settlement_payload = {
         "type": "WORKFLOW_FAILED",

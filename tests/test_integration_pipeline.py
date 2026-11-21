@@ -20,12 +20,11 @@ import main  # noqa: E402
 import services.pipeline as pipeline  # noqa: E402
 from database import SessionLocal, engine  # noqa: E402
 from models import Alert, User  # noqa: E402
-from seed import seed_all  # noqa: E402
 from services.people_service import plan_recipients  # noqa: E402
 from services.security import create_access_token, hash_password  # noqa: E402
 
-with SessionLocal() as _db:
-    seed_all(_db)
+# czysta baza z danymi startowymi przed testami tego pliku – patrz tests/conftest.py
+SEED = {"include_people": True}
 
 client = TestClient(main.app)
 
@@ -189,8 +188,8 @@ def test_pricing_logfile_key_value_and_grouping():
     d = DELIVERIES_LOG[0]
     assert d["rule_id"] == "pricing-warnings"
     assert d["title"] == "Pricing warnings for EURUSD"
-    # The team feed always gets it; no people are seeded any more, so nobody else does
-    assert d["recipients"] == [(None, "team:Pricing", "ui", None)]
+    # zespół zawsze dostaje wpis w UI; Marek (Pricing) ma domyślnie e-mail dla ostrzeżeń (warning)
+    assert d["recipients"] == [(None, "team:Pricing", "ui", None), (5, "Marek", "email", "marek@example.com")]
     assert len(d["steps"]) == 4  # Appendix B pricing text splits into 4 steps
     alert = ok(client.get(f"/api/alerts/{d['alert_id']}"))
     assert alert["count"] == 2
@@ -332,7 +331,7 @@ def test_team_rename_cascades_across_entities():
     person = ok(client.post("/api/people", json={
         "name": "TempUser", "team": "TempOps", "email": "temp@example.com",
         "channel_prefs": {"warning": ["email"]},
-    }), 201)
+    }, headers=admin_hdr), 201)
     rule = ok(client.post("/api/rules", json={
         "name": "Temp rule", "team": "TempOps",
         "condition": {"and": [{"field": "temp_flag", "op": "eq", "value": "yes"}]},

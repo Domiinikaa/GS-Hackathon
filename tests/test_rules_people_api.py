@@ -9,7 +9,8 @@ from sqlalchemy.pool import StaticPool
 import models  # noqa: F401
 from database import Base, get_db
 from routers import people, rules
-from models import Team
+from models import Team, User
+from routers.deps import get_current_admin_user, get_current_user
 from seed import seed_people, seed_rules
 
 TEAMS = sorted(["Management", "Payments", "Pricing", "Rates", "Settlements"])
@@ -37,6 +38,9 @@ def client():
     app.include_router(rules.router)
     app.include_router(people.router)
     app.dependency_overrides[get_db] = override
+    admin = User(id=1, uname="admin", email="admin@example.com", is_admin=True)
+    app.dependency_overrides[get_current_admin_user] = lambda: admin
+    app.dependency_overrides[get_current_user] = lambda: admin
     return TestClient(app)
 
 
