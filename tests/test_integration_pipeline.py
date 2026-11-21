@@ -20,8 +20,12 @@ import main  # noqa: E402
 import services.pipeline as pipeline  # noqa: E402
 from database import SessionLocal, engine  # noqa: E402
 from models import Alert, User  # noqa: E402
+from seed import seed_all  # noqa: E402
 from services.people_service import plan_recipients  # noqa: E402
 from services.security import create_access_token, hash_password  # noqa: E402
+
+with SessionLocal() as _db:
+    seed_all(_db)
 
 client = TestClient(main.app)
 

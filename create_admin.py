@@ -15,11 +15,24 @@ from sqlalchemy.orm import Session
 load_dotenv()
 
 from database import SessionLocal, Base, engine
-from models import User
+from models import Team, User
 from services.people_service import ensure_person_for_user
 from services.security import hash_password
 
 Base.metadata.create_all(bind=engine)
+
+
+def _ensure_management_team(db: Session) -> Team:
+    """Guarantee that the Management team exists when bootstrapping an admin on an empty DB."""
+    team = db.query(Team).filter(func.lower(Team.name) == "management").first()
+    if team is None:
+        team = Team(
+            name="Management",
+            description="Executive leadership and platform administration",
+        )
+        db.add(team)
+        db.flush()
+    return team
 
 
 def create_or_promote_admin(
@@ -50,6 +63,8 @@ def create_or_promote_admin(
         existing.is_admin = True
         if not existing.dzial:
             existing.dzial = "Management"
+        if (existing.dzial or "").strip().lower() == "management":
+            _ensure_management_team(db)
         if clean_phone and not existing.nrtel:
             existing.nrtel = clean_phone
         ensure_person_for_user(
@@ -65,6 +80,7 @@ def create_or_promote_admin(
         status = "already_admin" if was_admin else "promoted"
         return existing, status
 
+    _ensure_management_team(db)
     admin_user = User(
         uname=clean_uname,
         email=clean_email,

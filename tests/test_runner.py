@@ -22,6 +22,10 @@ from fastapi.testclient import TestClient  # noqa: E402
 import main  # noqa: E402
 from database import SessionLocal  # noqa: E402
 from models import SimCall  # noqa: E402
+from seed import seed_all  # noqa: E402
+
+with SessionLocal() as _db:
+    seed_all(_db)
 
 client = TestClient(main.app)
 

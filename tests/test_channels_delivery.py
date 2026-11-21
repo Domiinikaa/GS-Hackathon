@@ -32,8 +32,12 @@ from sqlalchemy import create_engine, inspect, text  # noqa: E402
 import main  # noqa: E402
 from database import SessionLocal  # noqa: E402
 from models import Alert, ChannelSetting, Delivery, GatewayMessage  # noqa: E402
+from seed import seed_all  # noqa: E402
 from services.channels.messages import build_message  # noqa: E402
 from services.delivery import MAX_ATTEMPTS, ensure_delivery_columns, process_due  # noqa: E402
+
+with SessionLocal() as _db:
+    seed_all(_db, include_people=True)
 
 
 # ---------------------------------------------------------------- helpers

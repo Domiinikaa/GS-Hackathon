@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from sqlalchemy import func, text
+from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -40,6 +40,32 @@ USE_POSTGRES = DATABASE_URL.startswith("postgresql")
 ADVISORY_LOCK_BASE = 700_000
 RECONCILE_INTERVAL_S = 5.0
 MAX_STORED_CURSORS = 200
+
+
+def ensure_sources_columns(bind) -> None:
+    """Adds new Source columns on existing SQLite or PostgreSQL databases."""
+    insp = inspect(bind)
+    if "sources" not in insp.get_table_names():
+        return
+    existing = {col["name"] for col in insp.get_columns("sources")}
+    is_pg = bind.dialect.name == "postgresql"
+    column_ddls = (
+        ("enabled", "ALTER TABLE sources ADD COLUMN enabled BOOLEAN NOT NULL DEFAULT TRUE"
+         if is_pg else "ALTER TABLE sources ADD COLUMN enabled BOOLEAN DEFAULT 1"),
+        ("status", "ALTER TABLE sources ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active'"
+         if is_pg else "ALTER TABLE sources ADD COLUMN status VARCHAR(20) DEFAULT 'active'"),
+        ("last_error", "ALTER TABLE sources ADD COLUMN last_error TEXT"),
+        ("last_event_at", "ALTER TABLE sources ADD COLUMN last_event_at TIMESTAMP"
+         if is_pg else "ALTER TABLE sources ADD COLUMN last_event_at DATETIME"),
+        ("events_count", "ALTER TABLE sources ADD COLUMN events_count INTEGER NOT NULL DEFAULT 0"
+         if is_pg else "ALTER TABLE sources ADD COLUMN events_count INTEGER DEFAULT 0"),
+    )
+    missing = [sql for name, sql in column_ddls if name not in existing]
+    if not missing:
+        return
+    with bind.begin() as conn:
+        for sql in missing:
+            conn.execute(text(sql))
 
 
 def ingest_records(db: Session, source: Source, raw_payload: Any) -> dict[str, Any]:
