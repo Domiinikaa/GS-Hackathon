@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, time
 from typing import Iterable
 
-from sqlalchemy import inspect, text
+from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session
 
 from models import Alert, Person
@@ -145,6 +145,37 @@ def ensure_people_role_column(engine) -> bool:
 def team_leads(db: Session, team: str) -> list[Person]:
     """Leads of a team: they approve risky runbook steps for alerts of that team."""
     return db.query(Person).filter(Person.team == team, Person.role == "lead").order_by(Person.name).all()
+
+
+def ensure_person_for_user(
+    db: Session,
+    *,
+    name: str,
+    team: str | None,
+    email: str,
+    phone: str | None = None,
+    role: str = "member",
+) -> Person | None:
+    """Ensure a Person roster entry exists for a User so they appear in People & alert routing."""
+    clean_team = (team or "").strip()
+    if not clean_team:
+        return None
+    clean_email = email.strip().lower()
+    existing = db.query(Person).filter(func.lower(Person.email) == clean_email).first()
+    if existing is not None:
+        return existing
+    person = Person(
+        name=name.strip(),
+        team=clean_team,
+        email=clean_email,
+        phone=(phone or "").strip() or None,
+        on_call=False,
+        role=role,
+        channel_prefs={"critical": ["email"], "warning": ["email"], "info": ["ui"]},
+        quiet_hours={},
+    )
+    db.add(person)
+    return person
 
 
 def recipients_for(db: Session, alert: Alert, rule_channels: list[str]) -> list[Recipient]:
