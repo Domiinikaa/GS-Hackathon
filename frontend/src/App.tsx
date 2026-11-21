@@ -226,6 +226,8 @@ export default function App() {
           <AdminPanel currentUser={currentUser} />
         ) : currentTab.id === 'alerts' ? (
           <AlertsPage currentUser={currentUser} />
+        ) : currentTab.id === 'people' ? (
+          <PeoplePage currentUser={currentUser} />
         ) : (
           <PageComponent />
         )}
