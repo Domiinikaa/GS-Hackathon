@@ -79,11 +79,32 @@ export interface Delivery {
   person_id: number | null;
   channel: Channel;
   to: string | null;
-  status: 'pending' | 'sent' | 'failed';
+  status: 'pending' | 'sending' | 'sent' | 'failed' | 'dead';
   attempts: number;
   last_error: string | null;
   created_at: string;
   sent_at: string | null;
+  subject?: string | null;
+  body?: string | null;
+  next_attempt_at?: string | null;
+  recipient_name?: string | null;
+  reply_code?: string | null;
+}
+
+// Udawana bramka SMS / telefon (widok "fałszywego telefonu")
+export interface GatewayMessage {
+  id: number;
+  channel: 'sms' | 'phone';
+  direction: 'out' | 'in';   // out = do człowieka, in = odpowiedź człowieka
+  number: string;
+  body: string;
+  delivery_id: number | null;
+  created_at: string;
+}
+
+export interface ChannelState {
+  channel: Channel;
+  down: boolean;
 }
 
 export interface Runbook {
