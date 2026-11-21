@@ -69,7 +69,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
 
     # 4. Hash password, create user record, claim invite, and sync People roster
     hashed_pwd = hash_password(payload.password)
-    is_admin = bool(getattr(invite, "is_admin_invite", False))
+    is_admin = (getattr(invite, "role", None) == "lead") or bool(getattr(invite, "is_admin_invite", False))
     clean_uname = payload.uname.strip()
     clean_email = payload.email.lower().strip()
     clean_phone = payload.nrtel.strip() if payload.nrtel else None
@@ -95,6 +95,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
         team=resolved_team,
         email=clean_email,
         phone=clean_phone,
+        role="lead" if is_admin else "member",
     )
 
     db.commit()

@@ -29,15 +29,15 @@ export const AccessDenied: React.FC<AccessDeniedProps> = ({ user, onReturn }) =>
 
         {/* Heading */}
         <h2 className="text-2xl font-bold text-white tracking-tight mb-2">
-          Administrator Access Required
+          Lead Access Required
         </h2>
 
         {/* Description */}
         <p className="text-sm text-slate-400 leading-relaxed mb-6">
           You are currently signed in as{' '}
           <span className="text-white font-semibold font-mono">@{user.uname}</span>{' '}
-          with standard user permissions. The Admin &amp; Invites Command Center is
-          restricted to authorized workspace administrators.
+          with standard user permissions. The Lead &amp; Teams Command Center is
+          restricted to authorized workspace leads.
         </p>
 
         {/* Info box */}
@@ -62,7 +62,7 @@ export const AccessDenied: React.FC<AccessDeniedProps> = ({ user, onReturn }) =>
           </div>
           <p className="text-[11px] text-slate-500 mt-3 pt-3 border-t border-slate-800/80">
             If you believe you should have access to this page, please contact your
-            workspace administrator to request elevated privileges.
+            workspace lead to request elevated privileges.
           </p>
         </div>
 
