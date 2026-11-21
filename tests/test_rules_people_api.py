@@ -116,13 +116,13 @@ NEW_PERSON = {
 
 
 def test_people_crud(client):
-    assert len(client.get("/api/people").json()) == 3
+    assert len(client.get("/api/people").json()) == 6  # 3 members + 3 team leads from the seed
     created = client.post("/api/people", json=NEW_PERSON)
     assert created.status_code == 201, created.text
     person = created.json()
     assert person["quiet_hours"]["sms"] == {"from": "08:00", "to": "20:00", "else": "email"}
 
-    assert len(client.get("/api/people", params={"team": "Finance"}).json()) == 2
+    assert len(client.get("/api/people", params={"team": "Finance"}).json()) == 3  # Kasia, Piotr, Ola
     updated = client.put(f"/api/people/{person['id']}", json={**NEW_PERSON, "on_call": False})
     assert updated.json()["on_call"] is False
     assert client.delete(f"/api/people/{person['id']}").json() == {"deleted": True}
@@ -175,3 +175,13 @@ def test_rule_target_is_team_or_person(client):
     assert client.post("/api/rules", json={**NEW_RULE, "team": "Payments"}).status_code == 422
     assert client.post("/api/rules", json={**NEW_RULE, "team": "it"}).json()["team"] == "IT"
     assert client.post("/api/rules", json={**NEW_RULE, "name": "Personal", "team": "Anna"}).json()["team"] == "Anna"
+
+
+def test_role_defaults_to_member_and_lead_filter(client):
+    member = client.post("/api/people", json=NEW_PERSON).json()
+    assert member["role"] == "member"
+    lead = client.post("/api/people", json={**NEW_PERSON, "name": "Lead Finance", "role": "lead"}).json()
+    assert lead["role"] == "lead"
+    leads = client.get("/api/people", params={"team": "Finance", "role": "lead"}).json()
+    assert {p["name"] for p in leads} == {"Piotr", "Lead Finance"}  # Piotr comes from the seed
+    assert client.post("/api/people", json={**NEW_PERSON, "role": "boss"}).status_code == 422

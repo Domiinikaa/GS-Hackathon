@@ -157,6 +157,11 @@ export default function PeoplePage() {
                 · nobody on call – phone alerts fall back to SMS
               </span>
             )}
+            {!members.some((m) => m.role === 'lead') && (
+              <span className="text-xs text-amber-300/80" title="Risky runbook steps need approval from the team lead">
+                · no team lead – risky steps can't be approved
+              </span>
+            )}
           </div>
 
           {members.map((person) => {
@@ -170,6 +175,12 @@ export default function PeoplePage() {
                 <div className="flex-1 space-y-3 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-bold text-white">{person.name}</h3>
+                    {person.role === 'lead' && (
+                      <span className="text-xs font-bold text-violet-300 bg-violet-500/10 border border-violet-500/40 px-2 py-0.5 rounded"
+                        title="Approves risky runbook steps for this team">
+                        LEAD
+                      </span>
+                    )}
                     {person.on_call && (
                       <span className="text-xs font-bold text-emerald-300 bg-emerald-500/10 border border-emerald-500/40 px-2 py-0.5 rounded">
                         ON CALL

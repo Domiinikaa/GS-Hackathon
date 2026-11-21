@@ -39,6 +39,7 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
   const [email, setEmail] = useState(initial?.email ?? '');
   const [phone, setPhone] = useState(initial?.phone ?? '');
   const [onCall, setOnCall] = useState(initial?.on_call ?? false);
+  const [isLead, setIsLead] = useState(initial?.role === 'lead');
   const [prefs, setPrefs] = useState<Person['channel_prefs']>(initial?.channel_prefs ?? DEFAULT_PREFS);
   const [quiet, setQuiet] = useState<Record<string, QuietRow>>(() =>
     Object.fromEntries(
@@ -83,6 +84,7 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
       email: email.trim() || null,
       phone: phone.trim() || null,
       on_call: onCall,
+      role: isLead ? 'lead' : 'member',
       channel_prefs: channelPrefs,
       quiet_hours: quietHours,
     };
@@ -148,6 +150,14 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
           className="w-4 h-4 accent-amber-500" />
         <span className="text-sm text-slate-200">
           On call <span className="text-slate-500">– only the on-call person gets phone calls; others get an SMS instead</span>
+        </span>
+      </label>
+
+      <label className="flex items-center gap-3 cursor-pointer select-none">
+        <input type="checkbox" checked={isLead} onChange={(e) => setIsLead(e.target.checked)}
+          className="w-4 h-4 accent-amber-500" />
+        <span className="text-sm text-slate-200">
+          Team lead <span className="text-slate-500">– approves risky runbook steps for this team</span>
         </span>
       </label>
 

@@ -46,8 +46,12 @@ def seed_rules(db: Session) -> None:  # Osoba 2 – te same 4 reguły co fronten
 
 
 def seed_people(db: Session) -> None:  # Osoba 2
-    if db.query(Person).count() > 0:
-        return
+    if db.query(Person).count() == 0:
+        _seed_members(db)
+    seed_team_leads(db)
+
+
+def _seed_members(db: Session) -> None:
     db.add_all([
         Person(name="Anna", team="IT", email="anna@example.com", phone="+48 600 000 001",
                channel_prefs={"critical": ["sms"], "warning": ["email"], "info": ["ui"]},
@@ -56,6 +60,22 @@ def seed_people(db: Session) -> None:  # Osoba 2
                channel_prefs={"critical": ["phone", "sms"], "warning": ["email"], "info": ["ui"]}),
         Person(name="Kasia", team="Finance", email="kasia@example.com",
                channel_prefs={"critical": ["email"], "warning": ["email"], "info": ["ui"]}),
+    ])
+
+
+TEAM_LEADS = [  # one lead per team that has example rules; leads approve risky runbook steps
+    dict(name="Marek", team="IT", email="marek@example.com", phone="+48 600 000 011"),
+    dict(name="Ewa", team="Business", email="ewa@example.com", phone="+48 600 000 012"),
+    dict(name="Piotr", team="Finance", email="piotr@example.com", phone="+48 600 000 013"),
+]
+
+
+def seed_team_leads(db: Session) -> None:  # Osoba 2 – runs once, also on databases created before roles existed
+    if db.query(Person).filter(Person.role == "lead").count() > 0:
+        return
+    db.add_all([
+        Person(role="lead", channel_prefs={"critical": ["sms"], "warning": ["email"], "info": ["ui"]}, **lead)
+        for lead in TEAM_LEADS
     ])
 
 

@@ -16,6 +16,7 @@ router = APIRouter(prefix="/api/people", tags=["People"])
 
 Channel = Literal["email", "sms", "phone", "ui"]
 Severity = Literal["info", "warning", "critical"]
+Role = Literal["member", "lead"]
 HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
@@ -54,6 +55,7 @@ class PersonIn(BaseModel):
     email: Optional[str] = Field(None, max_length=200)
     phone: Optional[str] = Field(None, max_length=50)
     on_call: bool = False
+    role: Role = "member"  # "lead" approves risky runbook steps for the team
     channel_prefs: Dict[Severity, List[Channel]] = Field(default_factory=dict)
     quiet_hours: Dict[Channel, QuietWindow] = Field(default_factory=dict)
 
@@ -95,7 +97,8 @@ class PersonIn(BaseModel):
 def to_dict(p: Person) -> Dict[str, Any]:
     return {
         "id": p.id, "name": p.name, "team": p.team, "email": p.email, "phone": p.phone,
-        "on_call": bool(p.on_call), "channel_prefs": p.channel_prefs or {}, "quiet_hours": p.quiet_hours or {},
+        "on_call": bool(p.on_call), "role": p.role or "member",
+        "channel_prefs": p.channel_prefs or {}, "quiet_hours": p.quiet_hours or {},
     }
 
 
@@ -107,10 +110,13 @@ def _get_or_404(db: Session, person_id: int) -> Person:
 
 
 @router.get("")
-def list_people(team: Optional[str] = None, db: Session = Depends(get_db)):
+def list_people(team: Optional[str] = None, role: Optional[Role] = None, db: Session = Depends(get_db)):
+    """Optional filters, e.g. ?team=IT&role=lead returns the IT team leads."""
     q = db.query(Person)
     if team:
         q = q.filter(Person.team == team)
+    if role:
+        q = q.filter(Person.role == role)
     return [to_dict(p) for p in q.order_by(Person.team, Person.name).all()]
 
 

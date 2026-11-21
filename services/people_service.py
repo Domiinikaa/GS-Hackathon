@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, time
 from typing import Iterable
 
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from models import Alert, Person
@@ -119,6 +120,24 @@ def plan_recipients(
                 "; ".join([base_reason, *notes]),
             ))
     return out
+
+
+def ensure_people_role_column(engine) -> bool:
+    """Adds people.role to databases created before the column existed (SQLite and Postgres).
+    Returns True when the column was added."""
+    insp = inspect(engine)
+    if "people" not in insp.get_table_names():
+        return False  # fresh database: create_all() makes the table with the column
+    if any(col["name"] == "role" for col in insp.get_columns("people")):
+        return False
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE people ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'member'"))
+    return True
+
+
+def team_leads(db: Session, team: str) -> list[Person]:
+    """Leads of a team: they approve risky runbook steps for alerts of that team."""
+    return db.query(Person).filter(Person.team == team, Person.role == "lead").order_by(Person.name).all()
 
 
 def recipients_for(db: Session, alert: Alert, rule_channels: list[str]) -> list[Recipient]:
