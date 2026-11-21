@@ -186,11 +186,11 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
   return (
     <div className="space-y-8">
       {/* Header Banner */}
-      <div className="glass-card glass-card--static border border-amber-500/30 p-6 relative overflow-hidden">
+      <div className="glass-card glass-card--static border border-ios-green/30 p-6 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center space-x-2 mb-1">
-              <span className="p-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+              <span className="p-1 rounded bg-ios-green/15 text-ios-green border border-ios-green/30">
                 <ShieldAlert className="w-4 h-4" />
               </span>
               <h2 className="text-xl font-semibold text-white">Administrator Command Center</h2>
@@ -254,7 +254,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
               <div>
                 <span className="text-xs text-emerald-300 font-semibold block">
-                  New Single-Use {newlyCreatedInvite.is_admin ? 'ADMINISTRATOR' : 'STANDARD USER'} Invite Code Ready:
+                  New single-use {newlyCreatedInvite.is_admin ? 'administrator' : 'user'} invite code is ready:
                 </span>
                 <span className="text-lg font-mono font-semibold text-white tracking-wider">
                   {newlyCreatedInvite.code}
@@ -289,7 +289,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-base font-semibold text-white flex items-center space-x-2">
-              <Briefcase className="w-4 h-4 text-amber-400" />
+              <Briefcase className="w-4 h-4 text-ios-green" />
               <span>Teams ({teams.length})</span>
             </h3>
             <p className="text-xs text-ink-muted">
@@ -390,7 +390,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                         type="button"
                         onClick={() => startEditingTeam(team)}
                         title="Rename / edit team"
-                        className="opacity-70 group-hover:opacity-100 p-1.5 text-ink-muted hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition"
+                        className="opacity-70 group-hover:opacity-100 p-1.5 text-ink-muted hover:text-ios-green hover:bg-ios-green/25 rounded-lg transition"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -424,7 +424,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
           <div className="p-5 border-b border-white/[0.08] flex items-center justify-between">
             <div>
               <h3 className="text-base font-semibold text-white flex items-center space-x-2">
-                <Key className="w-4 h-4 text-amber-400" />
+                <Key className="w-4 h-4 text-ios-green" />
                 <span>Single-Use Invite Codes</span>
               </h3>
               <p className="text-xs text-ink-muted">Each code expires immediately after a single registration.</p>
@@ -452,9 +452,9 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                     </td>
                     <td className="px-5 py-3 font-sans">
                       {inv.is_admin_invite ? (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-ios-green/15 text-ios-green border border-ios-green/30">
                           <ShieldCheck className="w-3 h-3" />
-                          <span>ADMIN</span>
+                          <span>Admin</span>
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white/[0.06] text-ink-muted border border-white/10">
@@ -494,7 +494,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
         <div className="glass-card glass-card--static overflow-hidden h-fit">
           <div className="p-5 border-b border-white/[0.08] flex items-center justify-between">
             <h3 className="text-base font-semibold text-white flex items-center space-x-2">
-              <Users className="w-4 h-4 text-amber-400" />
+              <Users className="w-4 h-4 text-ios-green" />
               <span>Employees & Admins ({users.length})</span>
             </h3>
           </div>
@@ -513,8 +513,8 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                         {isSelf && <span className="ml-1 text-[10px] text-ink-muted font-normal">(You)</span>}
                       </span>
                       {u.is_admin ? (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-semibold">
-                          ADMIN
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-ios-green/15 text-ios-green border border-ios-green/30 font-semibold">
+                          Admin
                         </span>
                       ) : (
                         <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/[0.06] text-ink-muted border border-white/10 font-mono">
@@ -549,7 +549,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                         <button
                           onClick={() => handleToggleUserRole(u)}
                           disabled={isChanging}
-                          className="px-2 py-1 text-[10px] font-sans bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded flex items-center space-x-1 transition"
+                          className="px-2 py-1 text-[10px] font-sans bg-ios-green/15 hover:bg-ios-green/25 text-ios-green border border-ios-green/30 rounded flex items-center space-x-1 transition"
                           title="Grant Administrator privileges to this user"
                         >
                           <Shield className="w-3 h-3" />
