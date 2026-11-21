@@ -12,10 +12,10 @@ load_dotenv()
 from database import engine, Base, SessionLocal, startup_lock
 import models  # Registers all models with Base
 from services.connectors import ingest_manager
+from services.connectors.ingest_manager import ensure_sources_columns
 from services.delivery import ensure_delivery_columns, start_worker
 from services import runbook_runner
 from routers import api, auth, admin, alerts, rules, people, sources, deliveries, runbooks
-from seed import seed_all, purge_mock_data
 from services.alert_service import ensure_open_dedup_index
 from services.people_service import ensure_people_role_column, migrate_admins_to_leads
 from sqlalchemy import inspect, text
@@ -85,32 +85,6 @@ def ensure_invite_role_column(bind) -> None:
             conn.execute(text("ALTER TABLE invite_codes ADD COLUMN team VARCHAR(100)"))
 
 
-def ensure_sources_columns(bind) -> None:
-    """Adds new Source columns on existing SQLite or PostgreSQL databases."""
-    insp = inspect(bind)
-    if "sources" not in insp.get_table_names():
-        return
-    existing = {col["name"] for col in insp.get_columns("sources")}
-    is_pg = bind.dialect.name == "postgresql"
-    column_ddls = (
-        ("enabled", "ALTER TABLE sources ADD COLUMN enabled BOOLEAN NOT NULL DEFAULT TRUE"
-         if is_pg else "ALTER TABLE sources ADD COLUMN enabled BOOLEAN DEFAULT 1"),
-        ("status", "ALTER TABLE sources ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active'"
-         if is_pg else "ALTER TABLE sources ADD COLUMN status VARCHAR(20) DEFAULT 'active'"),
-        ("last_error", "ALTER TABLE sources ADD COLUMN last_error TEXT"),
-        ("last_event_at", "ALTER TABLE sources ADD COLUMN last_event_at TIMESTAMP"
-         if is_pg else "ALTER TABLE sources ADD COLUMN last_event_at DATETIME"),
-        ("events_count", "ALTER TABLE sources ADD COLUMN events_count INTEGER NOT NULL DEFAULT 0"
-         if is_pg else "ALTER TABLE sources ADD COLUMN events_count INTEGER DEFAULT 0"),
-    )
-    missing = [sql for name, sql in column_ddls if name not in existing]
-    if not missing:
-        return
-    with bind.begin() as conn:
-        for sql in missing:
-            conn.execute(text(sql))
-
-
 def purge_demo_user():
     """Removes any obsolete demo accounts from previous iterations."""
     db = SessionLocal()
@@ -127,30 +101,6 @@ def purge_demo_user():
         print(f"[CLEANUP ERROR] {e}")
     finally:
         db.close()
-
-
-def seed_default_teams():
-    """Initializes default teams if the table is empty (fully editable by Admin)."""
-    db = SessionLocal()
-    try:
-        if db.query(models.Team).count() == 0:
-            default_teams = [
-                models.Team(name="Settlements", description="Order settlement workflows and counterparty operations"),
-                models.Team(name="Pricing", description="Pricing engine services and market data latency"),
-                models.Team(name="Rates", description="Rates trading desk and trade gateway monitoring"),
-                models.Team(name="Payments", description="Payments API reliability and regional failover"),
-                models.Team(name="Management", description="Executive leadership and platform administration"),
-            ]
-            db.add_all(default_teams)
-            db.commit()
-            print("[SEED] Default teams initialized.")
-    except Exception as e:
-        print(f"[SEED ERROR] {e}")
-    finally:
-        db.close()
-
-
-seed_default_departments = seed_default_teams
 
 
 def sync_legacy_teams():
@@ -175,7 +125,7 @@ def sync_legacy_teams():
         db.close()
 
 
-# Startup initialization & seeding
+# Startup schema initialization & migrations (mock data is NOT seeded at startup; run `python seed.py` to load it)
 # Przy kilku kopiach serwera tylko jedna na raz przygotowuje bazę (patrz database.startup_lock)
 with startup_lock():
     Base.metadata.create_all(bind=engine)
@@ -186,13 +136,10 @@ with startup_lock():
     ensure_open_dedup_index(engine)
     ensure_people_role_column(engine)
     purge_demo_user()
-    seed_default_teams()
     sync_legacy_teams()
 
     startup_db = SessionLocal()
     try:
-        purge_mock_data(startup_db)
-        seed_all(startup_db)
         migrate_admins_to_leads(startup_db)
         runbook_runner.upgrade_runbook_steps(startup_db)   # stare runbooki -> rodzaje kroków i warunki
     finally:

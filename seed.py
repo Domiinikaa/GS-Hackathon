@@ -1,162 +1,266 @@
+#!/usr/bin/env python3
 """
-Dane startowe, żeby każdy mógł testować swój kawałek od razu (bez czekania na UI innych).
-Wrzucane tylko do pustych tabel. Każdy dopisuje swoje w swojej funkcji.
+CLI & library helpers for seeding sample (mock) data on demand.
+
+Usage:
+    python seed.py
+    python seed.py --with-people
+    python seed.py --only teams sources
 """
+from __future__ import annotations
+
+import argparse
+import sys
+from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
-from models import Person, Rule, Runbook, Source
+load_dotenv()
+
+from models import Person, Rule, Runbook, Source, Team  # noqa: E402
+
+SEED_CHOICES = ("teams", "sources", "rules", "runbooks", "people")
+
+DEFAULT_TEAMS = [
+    ("Settlements", "Order settlement workflows and counterparty operations"),
+    ("Pricing", "Pricing engine services and market data latency"),
+    ("Rates", "Rates trading desk and trade gateway monitoring"),
+    ("Payments", "Payments API reliability and regional failover"),
+    ("Management", "Executive leadership and platform administration"),
+]
 
 
-def seed_sources(db: Session) -> None:  # Osoba 3
-    if db.query(Source).count() == 0:
-        db.add_all([
-            Source(
-                key="demo",
-                name="demo-webhook",
-                team="All",
-                kind="webhook",
-                enabled=True,
-                status="active",
-                config={"auth_mode": "none", "parser": "auto", "sim_preset": "workflow_failure"},
-                sample_event={
-                    "type": "WORKFLOW_FAILED",
-                    "workflowId": "WF-20261121-00042",
-                    "workflowName": "order-settlement",
-                    "step": "validate-counterparty",
-                    "severity": "ERROR",
-                    "environment": "prod",
-                    "error": {"code": "TIMEOUT", "message": "Counterparty service did not respond in 5000 ms"},
-                },
-            ),
-            Source(
-                key="trade-gateway",
-                name="trade-gateway",
-                team="Rates",
-                kind="webhook",
-                enabled=True,
-                status="active",
-                config={"auth_mode": "none", "parser": "auto", "sim_preset": "trade_rejected"},
-                sample_event={
-                    "meta": {"schema": "trade.rejected.v2", "producer": "trade-gateway", "ts": 1792833245000},
-                    "payload": {"tradeId": "T-998877", "desk": "rates", "notional": 25000000, "currency": "EUR", "reason": "LIMIT_BREACH"},
-                },
-            ),
-            Source(
-                key="payments-webhook",
-                name="payments-webhook",
-                team="Payments",
-                kind="webhook",
-                enabled=True,
-                status="active",
-                config={"auth_mode": "none", "parser": "auto", "sim_preset": "metric_breach"},
-                sample_event={
-                    "alertname": "HighErrorRate",
-                    "labels": {"service": "payments-api", "region": "eu-west", "severity": "critical"},
-                    "annotations": {"summary": "Error rate 12% over the last 5 minutes"},
-                    "startsAt": "2026-11-21T00:13:00Z",
-                    "status": "firing",
-                },
-            ),
-            Source(
-                key="settlement-kafka",
-                name="settlement-kafka",
-                team="Settlements",
-                kind="kafka",
-                enabled=False,
-                status="paused",
-                config={
-                    "bootstrap_servers": "localhost:9092",
-                    "topic": "settlement.workflows",
-                    "group_id": "gs-alerting-consumer",
-                    "simulate": True,
-                    "sim_preset": "workflow_failure",
-                    "sim_interval_s": 10,
-                    "parser": "auto",
-                },
-                sample_event={
-                    "type": "WORKFLOW_FAILED",
-                    "workflowId": "WF-20261121-00042",
-                    "workflowName": "order-settlement",
-                    "step": "validate-counterparty",
-                    "severity": "ERROR",
-                    "environment": "prod",
-                    "error": {"code": "TIMEOUT", "message": "Counterparty service did not respond in 5000 ms"},
-                },
-            ),
-            Source(
-                key="pricing-engine-logs",
-                name="pricing-engine-logs",
-                team="Pricing",
-                kind="logfile",
-                enabled=False,
-                status="paused",
-                config={
-                    "file_path": "/tmp/gs-pricing-engine.log",
-                    "from_beginning": False,
-                    "poll_interval_s": 2,
-                    "simulate": True,
-                    "sim_preset": "pricing_log",
-                    "sim_interval_s": 10,
-                    "parser": "key_value",
-                },
-                sample_event={
-                    "timestamp": "2026-11-21T00:15:00Z",
-                    "level": "WARN",
-                    "service": "pricing-engine-eu1",
-                    "instrument": "EURUSD",
-                    "latency_ms": 1420,
-                    "message": "Cache latency exceeded 1000ms threshold",
-                },
-            ),
-        ])
+def seed_teams(db: Session) -> int:
+    existing = {name.lower() for (name,) in db.query(Team.name).all() if name}
+    added = 0
+    for name, description in DEFAULT_TEAMS:
+        if name.lower() in existing:
+            continue
+        db.add(Team(name=name, description=description))
+        existing.add(name.lower())
+        added += 1
+    return added
 
 
-def seed_rules(db: Session) -> None:  # Osoba 2 – 4 reguły z Appendix A
-    if db.query(Rule).count() > 0:
-        return
-    db.add_all([
-        Rule(id="settlements-prod", name="Settlement workflow failed in prod", team="Settlements",
-             condition={"and": [{"field": "type", "op": "eq", "value": "WORKFLOW_FAILED"},
-                                {"field": "workflowName", "op": "eq", "value": "order-settlement"},
-                                {"field": "environment", "op": "eq", "value": "prod"}]},
-             channels=["phone", "sms", "ui"], title="Workflow {{workflowName}} failed at step {{step}}",
-             body="{{error.message}}", severity="critical", color="red"),
-        Rule(id="pricing-warnings", name="Pricing engine warnings", team="Pricing",
-             condition={"and": [{"field": "service", "op": "wildcard", "value": "pricing-engine-*"},
-                                {"field": "level", "op": "in", "value": ["WARN", "ERROR", "FATAL"]}]},
-             channels=["ui"], title="Pricing warnings for {{instrument}}", severity="warning", color="amber"),
-        Rule(id="rates-big-rejections", name="Large rejected trades (rates desk)", team="Rates",
-             condition={"and": [{"field": "meta.schema", "op": "wildcard", "value": "trade.rejected.*"},
-                                {"field": "payload.desk", "op": "eq", "value": "rates"},
-                                {"field": "payload.notional", "op": "gt", "value": 10000000}]},
-             channels=["email", "ui"],
-             title="Rejected {{payload.currency}} {{payload.notional}} — {{payload.reason}}",
-             severity="warning", color="amber"),
-        Rule(id="anna-payments-critical", name="Critical payments-api alerts", team="Anna",
-             condition={"and": [{"field": "labels.service", "op": "eq", "value": "payments-api"},
-                                {"field": "labels.severity", "op": "eq", "value": "critical"}]},
-             channels=["sms"], title="{{alertname}} on {{labels.service}}", body="{{annotations.summary}}",
-             severity="critical", color="red"),
-    ])
+def _mock_sources() -> list[Source]:
+    return [
+        Source(
+            key="demo",
+            name="demo-webhook",
+            team="All",
+            kind="webhook",
+            enabled=True,
+            status="active",
+            config={"auth_mode": "none", "parser": "auto", "sim_preset": "workflow_failure"},
+            sample_event={
+                "type": "WORKFLOW_FAILED",
+                "workflowId": "WF-20261121-00042",
+                "workflowName": "order-settlement",
+                "step": "validate-counterparty",
+                "severity": "ERROR",
+                "environment": "prod",
+                "error": {"code": "TIMEOUT", "message": "Counterparty service did not respond in 5000 ms"},
+            },
+        ),
+        Source(
+            key="trade-gateway",
+            name="trade-gateway",
+            team="Rates",
+            kind="webhook",
+            enabled=True,
+            status="active",
+            config={"auth_mode": "none", "parser": "auto", "sim_preset": "trade_rejected"},
+            sample_event={
+                "meta": {"schema": "trade.rejected.v2", "producer": "trade-gateway", "ts": 1792833245000},
+                "payload": {"tradeId": "T-998877", "desk": "rates", "notional": 25000000, "currency": "EUR", "reason": "LIMIT_BREACH"},
+            },
+        ),
+        Source(
+            key="payments-webhook",
+            name="payments-webhook",
+            team="Payments",
+            kind="webhook",
+            enabled=True,
+            status="active",
+            config={"auth_mode": "none", "parser": "auto", "sim_preset": "metric_breach"},
+            sample_event={
+                "alertname": "HighErrorRate",
+                "labels": {"service": "payments-api", "region": "eu-west", "severity": "critical"},
+                "annotations": {"summary": "Error rate 12% over the last 5 minutes"},
+                "startsAt": "2026-11-21T00:13:00Z",
+                "status": "firing",
+            },
+        ),
+        Source(
+            key="settlement-kafka",
+            name="settlement-kafka",
+            team="Settlements",
+            kind="kafka",
+            enabled=False,
+            status="paused",
+            config={
+                "bootstrap_servers": "localhost:9092",
+                "topic": "settlement.workflows",
+                "group_id": "gs-alerting-consumer",
+                "simulate": True,
+                "sim_preset": "workflow_failure",
+                "sim_interval_s": 10,
+                "parser": "auto",
+            },
+            sample_event={
+                "type": "WORKFLOW_FAILED",
+                "workflowId": "WF-20261121-00042",
+                "workflowName": "order-settlement",
+                "step": "validate-counterparty",
+                "severity": "ERROR",
+                "environment": "prod",
+                "error": {"code": "TIMEOUT", "message": "Counterparty service did not respond in 5000 ms"},
+            },
+        ),
+        Source(
+            key="pricing-engine-logs",
+            name="pricing-engine-logs",
+            team="Pricing",
+            kind="logfile",
+            enabled=False,
+            status="paused",
+            config={
+                "file_path": "/tmp/gs-pricing-engine.log",
+                "from_beginning": False,
+                "poll_interval_s": 2,
+                "simulate": True,
+                "sim_preset": "pricing_log",
+                "sim_interval_s": 10,
+                "parser": "key_value",
+            },
+            sample_event={
+                "timestamp": "2026-11-21T00:15:00Z",
+                "level": "WARN",
+                "service": "pricing-engine-eu1",
+                "instrument": "EURUSD",
+                "latency_ms": 1420,
+                "message": "Cache latency exceeded 1000ms threshold",
+            },
+        ),
+    ]
 
 
-def seed_people(db: Session) -> None:  # Osoba 2
-    if db.query(Person).count() == 0:
-        _seed_members(db)
-    seed_team_leads(db)
+def seed_sources(db: Session) -> int:  # Osoba 3
+    existing_keys = {key for (key,) in db.query(Source.key).all()}
+    added = 0
+    for src in _mock_sources():
+        if src.key in existing_keys:
+            continue
+        db.add(src)
+        existing_keys.add(src.key)
+        added += 1
+    return added
 
 
-def _seed_members(db: Session) -> None:
-    db.add_all([
-        Person(name="Anna", team="Payments", email="anna@example.com", phone="+48 600 000 001",
-               channel_prefs={"critical": ["sms"], "warning": ["email"], "info": ["ui"]},
-               quiet_hours={"sms": {"from": "08:00", "to": "20:00", "else": "email"}}),
-        Person(name="Tom", team="Settlements", email="tom@example.com", phone="+48 600 000 002", on_call=True,
-               channel_prefs={"critical": ["phone", "sms"], "warning": ["email"], "info": ["ui"]}),
-        Person(name="Kasia", team="Rates", email="kasia@example.com",
-               channel_prefs={"critical": ["email"], "warning": ["email"], "info": ["ui"]}),
-    ])
+def _mock_rules() -> list[Rule]:
+    return [
+        Rule(
+            id="settlements-prod",
+            name="Settlement workflow failed in prod",
+            team="Settlements",
+            condition={
+                "and": [
+                    {"field": "type", "op": "eq", "value": "WORKFLOW_FAILED"},
+                    {"field": "workflowName", "op": "eq", "value": "order-settlement"},
+                    {"field": "environment", "op": "eq", "value": "prod"},
+                ]
+            },
+            channels=["phone", "sms", "ui"],
+            title="Workflow {{workflowName}} failed at step {{step}}",
+            body="{{error.message}}",
+            severity="critical",
+            color="red",
+        ),
+        Rule(
+            id="pricing-warnings",
+            name="Pricing engine warnings",
+            team="Pricing",
+            condition={
+                "and": [
+                    {"field": "service", "op": "wildcard", "value": "pricing-engine-*"},
+                    {"field": "level", "op": "in", "value": ["WARN", "ERROR", "FATAL"]},
+                ]
+            },
+            channels=["ui"],
+            title="Pricing warnings for {{instrument}}",
+            severity="warning",
+            color="amber",
+        ),
+        Rule(
+            id="rates-big-rejections",
+            name="Large rejected trades (rates desk)",
+            team="Rates",
+            condition={
+                "and": [
+                    {"field": "meta.schema", "op": "wildcard", "value": "trade.rejected.*"},
+                    {"field": "payload.desk", "op": "eq", "value": "rates"},
+                    {"field": "payload.notional", "op": "gt", "value": 10000000},
+                ]
+            },
+            channels=["email", "ui"],
+            title="Rejected {{payload.currency}} {{payload.notional}} — {{payload.reason}}",
+            severity="warning",
+            color="amber",
+        ),
+        Rule(
+            id="anna-payments-critical",
+            name="Critical payments-api alerts",
+            team="Anna",
+            condition={
+                "and": [
+                    {"field": "labels.service", "op": "eq", "value": "payments-api"},
+                    {"field": "labels.severity", "op": "eq", "value": "critical"},
+                ]
+            },
+            channels=["sms"],
+            title="{{alertname}} on {{labels.service}}",
+            body="{{annotations.summary}}",
+            severity="critical",
+            color="red",
+        ),
+    ]
 
+
+def seed_rules(db: Session) -> int:  # Osoba 2 – 4 reguły z Appendix A
+    existing_ids = {rid for (rid,) in db.query(Rule.id).all()}
+    added = 0
+    for rule in _mock_rules():
+        if rule.id in existing_ids:
+            continue
+        db.add(rule)
+        existing_ids.add(rule.id)
+        added += 1
+    return added
+
+
+MOCK_MEMBERS = [
+    dict(
+        name="Anna",
+        team="Payments",
+        email="anna@example.com",
+        phone="+48 600 000 001",
+        channel_prefs={"critical": ["sms"], "warning": ["email"], "info": ["ui"]},
+        quiet_hours={"sms": {"from": "08:00", "to": "20:00", "else": "email"}},
+    ),
+    dict(
+        name="Tom",
+        team="Settlements",
+        email="tom@example.com",
+        phone="+48 600 000 002",
+        on_call=True,
+        channel_prefs={"critical": ["phone", "sms"], "warning": ["email"], "info": ["ui"]},
+    ),
+    dict(
+        name="Kasia",
+        team="Rates",
+        email="kasia@example.com",
+        channel_prefs={"critical": ["email"], "warning": ["email"], "info": ["ui"]},
+    ),
+]
 
 TEAM_LEADS = [  # one lead per team that has example rules; leads approve risky runbook steps
     dict(name="Ewa", team="Settlements", email="ewa@example.com", phone="+48 600 000 012"),
@@ -166,13 +270,58 @@ TEAM_LEADS = [  # one lead per team that has example rules; leads approve risky 
 ]
 
 
-def seed_team_leads(db: Session) -> None:  # Osoba 2 – runs once, also on databases created before roles existed
+def _seed_members(db: Session) -> int:
+    members = [Person(**member) for member in MOCK_MEMBERS]
+    db.add_all(members)
+    return len(members)
+
+
+def seed_team_leads(db: Session) -> int:  # Osoba 2 – runs once, also on databases created before roles existed
     if db.query(Person).filter(Person.role == "lead").count() > 0:
-        return
-    db.add_all([
+        return 0
+    leads = [
         Person(role="lead", channel_prefs={"critical": ["sms"], "warning": ["email"], "info": ["ui"]}, **lead)
         for lead in TEAM_LEADS
-    ])
+    ]
+    db.add_all(leads)
+    return len(leads)
+
+
+def seed_people(db: Session, *, merge: bool = False) -> int:  # Osoba 2
+    if not merge:
+        added = 0
+        if db.query(Person).count() == 0:
+            added += _seed_members(db)
+        added += seed_team_leads(db)
+        return added
+
+    existing_emails = {
+        email.strip().lower()
+        for (email,) in db.query(Person.email).all()
+        if email
+    }
+    added = 0
+    for member in MOCK_MEMBERS:
+        email_key = member["email"].strip().lower()
+        if email_key in existing_emails:
+            continue
+        db.add(Person(**member))
+        existing_emails.add(email_key)
+        added += 1
+    for lead in TEAM_LEADS:
+        email_key = lead["email"].strip().lower()
+        if email_key in existing_emails:
+            continue
+        db.add(
+            Person(
+                role="lead",
+                channel_prefs={"critical": ["sms"], "warning": ["email"], "info": ["ui"]},
+                **lead,
+            )
+        )
+        existing_emails.add(email_key)
+        added += 1
+    return added
 
 
 SETTLEMENT_RUNBOOK = """\
@@ -208,105 +357,136 @@ PRICING_RUNBOOK = (
 )
 
 
-def seed_runbooks(db: Session) -> None:  # Osoba 4
-    if db.query(Runbook).count() > 0:
-        return
+def seed_runbooks(db: Session) -> int:  # Osoba 4
     from services.runbook_parser import parse_runbook_full
 
-    settlement_res = parse_runbook_full(SETTLEMENT_RUNBOOK, "yaml")
-    payments_res = parse_runbook_full(PAYMENTS_RUNBOOK, "markdown")
-    pricing_res = parse_runbook_full(PRICING_RUNBOOK, "text")
+    by_name = {rb.name: rb for rb in db.query(Runbook).all()}
+    specs = (
+        ("settlement-timeout", SETTLEMENT_RUNBOOK, "yaml"),
+        ("payments-high-error-rate", PAYMENTS_RUNBOOK, "markdown"),
+        ("pricing-warnings", PRICING_RUNBOOK, "text"),
+    )
+    added = 0
+    for name, raw, fmt in specs:
+        if name in by_name:
+            continue
+        res = parse_runbook_full(raw, fmt)
+        rb = Runbook(
+            name=name,
+            format=res.format,
+            raw=raw,
+            steps=res.steps,
+            matches=res.matches,
+        )
+        db.add(rb)
+        by_name[name] = rb
+        added += 1
 
-    settlement = Runbook(
-        name="settlement-timeout",
-        format=settlement_res.format,
-        raw=SETTLEMENT_RUNBOOK,
-        steps=settlement_res.steps,
-        matches=settlement_res.matches,
-    )
-    payments = Runbook(
-        name="payments-high-error-rate",
-        format=payments_res.format,
-        raw=PAYMENTS_RUNBOOK,
-        steps=payments_res.steps,
-        matches=payments_res.matches,
-    )
-    pricing = Runbook(
-        name="pricing-warnings",
-        format=pricing_res.format,
-        raw=PRICING_RUNBOOK,
-        steps=pricing_res.steps,
-        matches=pricing_res.matches,
-    )
-    db.add_all([settlement, payments, pricing])
     db.flush()  # nadaje id
-    for rule_id, rb in (
-        ("settlements-prod", settlement),
-        ("anna-payments-critical", payments),
-        ("pricing-warnings", pricing),
+    for rule_id, rb_name in (
+        ("settlements-prod", "settlement-timeout"),
+        ("anna-payments-critical", "payments-high-error-rate"),
+        ("pricing-warnings", "pricing-warnings"),
     ):
         rule = db.get(Rule, rule_id)
-        if rule is not None and rule.runbook_id is None:
+        rb = by_name.get(rb_name)
+        if rule is not None and rb is not None and rule.runbook_id is None:
             rule.runbook_id = rb.id
+    return added
 
 
-MOCK_SOURCE_KEYS = {"demo", "trade-gateway", "payments-webhook", "settlement-kafka", "pricing-engine-logs"}
-MOCK_RULE_IDS = {"settlements-prod", "pricing-warnings", "rates-big-rejections", "anna-payments-critical"}
-MOCK_RUNBOOK_NAMES = {"settlement-timeout", "payments-high-error-rate", "pricing-warnings"}
-MOCK_PEOPLE_EMAILS = {
-    "anna@example.com", "tom@example.com", "kasia@example.com",
-    "ewa@example.com", "marek@example.com", "piotr@example.com", "zofia@example.com",
-}
-
-
-def purge_mock_data(db: Session) -> None:
-    """Cleans up all hackathon mock/demo data from the database.
-    Ensures that on startup, only user-entered data and registered users exist.
-    """
-    from models import Alert, Delivery, Event, Person, Rule, Runbook, Source, User
-
-    # 1. Deliveries referencing mock alerts or mock people
-    mock_alerts = db.query(Alert).filter(Alert.rule_id.in_(MOCK_RULE_IDS)).all()
-    mock_alert_ids = [a.id for a in mock_alerts]
-    if mock_alert_ids:
-        db.query(Delivery).filter(Delivery.alert_id.in_(mock_alert_ids)).delete(synchronize_session=False)
-
-    db.query(Delivery).filter(
-        (Delivery.to.in_(MOCK_PEOPLE_EMAILS)) | (Delivery.to.like("%@example.com"))
-    ).delete(synchronize_session=False)
-
-    # 2. Mock alerts
-    if mock_alert_ids:
-        db.query(Alert).filter(Alert.id.in_(mock_alert_ids)).delete(synchronize_session=False)
-
-    # 3. Mock events
-    mock_source_ids = [s.id for s in db.query(Source).filter(Source.key.in_(MOCK_SOURCE_KEYS)).all()]
-    if mock_source_ids:
-        db.query(Event).filter(Event.source_id.in_(mock_source_ids)).delete(synchronize_session=False)
-
-    # 4. Mock rules
-    db.query(Rule).filter(Rule.id.in_(MOCK_RULE_IDS)).delete(synchronize_session=False)
-
-    # 5. Mock runbooks
-    db.query(Runbook).filter(Runbook.name.in_(MOCK_RUNBOOK_NAMES)).delete(synchronize_session=False)
-
-    # 6. Mock sources
-    db.query(Source).filter(Source.key.in_(MOCK_SOURCE_KEYS)).delete(synchronize_session=False)
-
-    # 7. Mock people (only delete if not registered in users table)
-    registered_emails = {u.email.lower() for u in db.query(User.email).all()}
-    mock_people = db.query(Person).filter(
-        (Person.email.in_(MOCK_PEOPLE_EMAILS)) | (Person.email.like("%@example.com"))
-    ).all()
-    for p in mock_people:
-        if (p.email or "").lower() not in registered_emails:
-            db.delete(p)
-
+def seed_all(db: Session, *, include_people: bool = False) -> dict[str, int]:
+    counts = {
+        "teams": seed_teams(db),
+        "sources": seed_sources(db),
+        "rules": seed_rules(db),
+        "people": seed_people(db, merge=True) if include_people else 0,
+    }
+    db.flush()
+    counts["runbooks"] = seed_runbooks(db)
     db.commit()
+    return {
+        "teams": counts["teams"],
+        "sources": counts["sources"],
+        "rules": counts["rules"],
+        "runbooks": counts["runbooks"],
+        "people": counts["people"],
+    }
 
 
-def seed_all(db: Session) -> None:
-    """Production mode: no mock data is seeded.
-    Purges any residual hackathon mock data on every server start.
-    """
-    purge_mock_data(db)
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Seed sample (mock) teams, sources, rules, runbooks, and optionally people into the database."
+    )
+    parser.add_argument(
+        "--with-people",
+        action="store_true",
+        help="Also seed sample people (3 members + 4 team leads).",
+    )
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        choices=SEED_CHOICES,
+        help="Seed only selected mock datasets.",
+    )
+    args = parser.parse_args(argv)
+
+    if args.only:
+        selected = list(dict.fromkeys(args.only))
+        if args.with_people and "people" not in selected:
+            selected.append("people")
+    else:
+        selected = ["teams", "sources", "rules", "runbooks"]
+        if args.with_people:
+            selected.append("people")
+
+    from database import Base, SessionLocal, engine, startup_lock
+    from services.alert_service import ensure_open_dedup_index
+    from services.connectors.ingest_manager import ensure_sources_columns
+    from services.delivery import ensure_delivery_columns
+    from services.people_service import ensure_people_role_column
+
+    with startup_lock():
+        Base.metadata.create_all(bind=engine)
+        ensure_sources_columns(engine)
+        ensure_delivery_columns(engine)
+        ensure_open_dedup_index(engine)
+        ensure_people_role_column(engine)
+
+        db = SessionLocal()
+        try:
+            added: dict[str, int] = {}
+            if "teams" in selected:
+                added["teams"] = seed_teams(db)
+            if "sources" in selected:
+                added["sources"] = seed_sources(db)
+            if "rules" in selected:
+                added["rules"] = seed_rules(db)
+            if "people" in selected:
+                added["people"] = seed_people(db, merge=True)
+            db.flush()
+            if "runbooks" in selected:
+                added["runbooks"] = seed_runbooks(db)
+            db.commit()
+
+            model_map = {
+                "teams": Team,
+                "sources": Source,
+                "rules": Rule,
+                "runbooks": Runbook,
+                "people": Person,
+            }
+            totals = {name: db.query(model_map[name]).count() for name in selected}
+        finally:
+            db.close()
+
+    print("[SEED] Mock data summary:")
+    for name in selected:
+        print(f"  - {name}: +{added[name]} added ({totals[name]} total)")
+    if sum(added.values()) == 0:
+        print("[SEED] All selected mock records already exist; nothing changed.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -117,7 +117,7 @@ Designed around a **declarative Connector Registry** (`CONNECTOR_REGISTRY`) so n
 
 ### 6. Security, Access Control & Seed Data (`seed.py`, `routers/auth.py`)
 - JWT authentication (`HS256`), single-use invite-code registration (`GS-XXXX-XXXX`), and CLI admin provisioning (`create_admin.py`).
-- Automatic startup seeding (under `startup_lock()`) for empty tables: 5 unified teams (`Settlements`, `Pricing`, `Rates`, `Payments`, `Management`), 5 sources (`demo`, `trade-gateway`, `payments-webhook`, `settlement-kafka`, `pricing-engine-logs`), 4 rules, 3 members + 4 team leads, and 3 Appendix B runbooks (YAML, Markdown, text).
+- Clean database startup: application startup initializes schema and migrations (under `startup_lock()`) **without** inserting any mock data. Sample data can be loaded on demand via the idempotent CLI tool `python seed.py` (5 unified teams: `Settlements`, `Pricing`, `Rates`, `Payments`, `Management`; 5 sources: `demo`, `trade-gateway`, `payments-webhook`, `settlement-kafka`, `pricing-engine-logs`; 4 rules; and 3 Appendix B runbooks). Pass `--with-people` to also seed 3 sample members + 4 team leads, or `--only teams sources ...` to seed specific datasets.
 - Source management endpoints use a centralized `require_source_manager` dependency in `routers/sources.py` (open for local/hackathon testing by default; set `REQUIRE_ADMIN_FOR_SOURCES = True` to restrict source mutations to administrators).
 
 ---
@@ -147,6 +147,10 @@ pip install -r requirements.txt
 
 # Optional: create an initial administrator
 python create_admin.py --uname admin --email admin@goldmansachs.com --password AdminSecret123!
+
+# Optional: populate sample mock data (teams, sources, rules, runbooks; add --with-people for sample responders)
+python seed.py
+# python seed.py --with-people
 
 uvicorn main:app --reload
 ```

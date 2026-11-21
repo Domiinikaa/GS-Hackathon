@@ -8,7 +8,7 @@ from typing import Iterable
 from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session
 
-from models import Alert, Person, User
+from models import Alert, Person, Team, User
 from services.contracts import Recipient
 
 PERSONAL_CHANNELS = ("phone", "sms", "email")
@@ -201,6 +201,14 @@ def sync_person_role_for_user(db: Session, user: User) -> Person | None:
     if not team and user.is_admin:
         team = "Management"
         user.dzial = team
+        if db.query(Team).filter(func.lower(Team.name) == "management").first() is None:
+            db.add(
+                Team(
+                    name="Management",
+                    description="Executive leadership and platform administration",
+                )
+            )
+            db.flush()
     if not team:
         return None
     return ensure_person_for_user(
