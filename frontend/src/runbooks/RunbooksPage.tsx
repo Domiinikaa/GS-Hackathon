@@ -6,6 +6,7 @@ import { MatchGroup, RuleRef, RunbookFormat, describeMatches, errorText, runbook
 import StepList from './StepList';
 import EngineTester from './EngineTester';
 import SimulatorPanel from './SimulatorPanel';
+import ActionsPanel from './ActionsPanel';
 import { withKind } from './stepKind';
 
 const FORMATS: { value: RunbookFormat; label: string }[] = [
@@ -228,6 +229,8 @@ export default function RunbooksPage() {
           <p className="text-center text-slate-500 py-8">No runbooks yet. Create the first one!</p>
         )}
       </div>
+
+      <ActionsPanel onChanged={reload} />
 
       <SimulatorPanel />
 

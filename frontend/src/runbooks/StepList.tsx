@@ -2,7 +2,7 @@
 // Z `onKindChange` przy każdym kroku jest lista do zmiany rodzaju (edytor runbooka).
 // Do użycia też w szczegółach alertu (Osoba 1): <StepList steps={alert.steps} />
 import type { RunbookStep, StepKind } from '../shared/types';
-import { ACTION_LABEL, KIND_CLASS, KIND_HINT, KIND_LABEL, allowedKinds, stepKind } from './stepKind';
+import { KIND_CLASS, KIND_HINT, KIND_LABEL, actionLabel, allowedKinds, stepKind } from './stepKind';
 
 interface Props {
   steps: RunbookStep[];
@@ -41,7 +41,7 @@ export default function StepList({ steps, empty = 'No steps.', onKindChange }: P
                   <KindBadge step={step} />
                 )}
                 {step.action && (
-                  <span className="font-mono text-slate-400">{ACTION_LABEL[step.action] ?? step.action}</span>
+                  <span className="font-mono text-slate-400">{actionLabel(step.action)}{step.custom && ' (team action)'}</span>
                 )}
                 {step.condition && (
                   <span className="text-slate-500">only if: <span className="text-slate-300">{step.condition}</span></span>

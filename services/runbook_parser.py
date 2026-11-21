@@ -70,6 +70,11 @@ def is_known_action(action: Any) -> bool:
     return isinstance(action, str) and action in ACTIONS
 
 
+def is_runnable(step: dict[str, Any]) -> bool:
+    """Czy aplikacja umie wykonać krok: wbudowana akcja albo własna akcja zespołu (krok ma "custom": true)."""
+    return is_known_action(step.get("action")) or bool(step.get("custom"))
+
+
 def condition_checkable(condition: str | None) -> bool:
     """Czy aplikacja umie sama sprawdzić warunek (mówi o sukcesie / porażce wcześniejszego kroku)."""
     return bool(condition) and bool(FAIL_WORDS.search(condition) or OK_WORDS.search(condition))
@@ -77,7 +82,7 @@ def condition_checkable(condition: str | None) -> bool:
 
 def step_kind(step: dict[str, Any]) -> str:
     """manual | auto | approve | approve_manual – ręczny wybór ("kind") wygrywa, jeśli ma sens."""
-    known = is_known_action(step.get("action"))
+    known = is_runnable(step)
     needs_ok = step.get("approval") == "required"
     kind = step.get("kind")
     if kind in KINDS and (known or kind in ("manual", "approve_manual")):
@@ -93,7 +98,7 @@ def set_kind(step: dict[str, Any], kind: str | None) -> dict[str, Any]:
     if kind not in KINDS:
         step["kind"] = None
         return step
-    if kind in ("auto", "approve") and not is_known_action(step.get("action")):
+    if kind in ("auto", "approve") and not is_runnable(step):
         raise ValueError(f"Step \"{_short(step.get('text', ''))}\" has no action the app can run, "
                          f"so it can only be manual")
     step["kind"] = kind
@@ -654,8 +659,19 @@ def infer_action(text: str) -> tuple[str | None, dict[str, Any]]:
     return None, {}
 
 
-def finalize_step(step: dict[str, Any]) -> dict[str, Any]:
-    """Uzupełnia krok po parsowaniu: znacznik [auto]/[manual], warunek, akcję z tekstu, domyślną zgodę."""
+def _infer_custom(text: str, custom: dict[str, dict[str, Any]]) -> str | None:
+    """'Clear cache on pricing-engine' + akcja zespołu "Clear cache" -> "clear_cache" (dłuższe nazwy najpierw)."""
+    for key, info in sorted(custom.items(), key=lambda kv: -len(str(kv[1].get("label") or ""))):
+        label = str(info.get("label") or "").strip()
+        if label and re.search(rf"(?<!\w){re.escape(label)}(?!\w)", text, re.I):
+            return key
+    return None
+
+
+def finalize_step(step: dict[str, Any], custom: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Uzupełnia krok po parsowaniu: znacznik [auto]/[manual], warunek, akcję z tekstu, domyślną zgodę.
+    `custom` = własne akcje zespołu {"clear_cache": {"label": "Clear cache", "risky": True}} (z bazy)."""
+    custom = custom or {}
     step = dict(step)
     explicit = bool(step.pop("_explicit", False))
     step.setdefault("condition", None)
@@ -676,13 +692,18 @@ def finalize_step(step: dict[str, Any]) -> dict[str, Any]:
         body = body.split(":", 1)[1].strip()          # "If retry fails twice: Escalate …" -> "Escalate …"
 
     if not step.get("action"):
-        action, params = infer_action(body)
+        action, params = (_infer_custom(body, custom), {}) if custom else (None, {})
+        if not action:
+            action, params = infer_action(body)
         if action:
             step["action"] = action
             step["params"] = {**params, **(step.get("params") or {})}
+    if step.get("action") in custom and not is_known_action(step.get("action")):
+        step["custom"] = True                           # akcja zespołu – wykona ją runner (adres z bazy)
 
-    known = is_known_action(step.get("action"))
-    if known and not explicit and ACTIONS[step["action"]]["risky"]:
+    known = is_runnable(step)
+    info = ACTIONS.get(step.get("action")) or custom.get(step.get("action")) or {}
+    if known and not explicit and info.get("risky", True):
         step["approval"] = "required"                   # ryzykowna akcja bez "approval: none" -> pytamy człowieka
     if known and step["condition"] and not condition_checkable(step["condition"]):
         step["approval"] = "required"                   # warunku nie sprawdzimy sami -> człowiek potwierdza
@@ -741,7 +762,8 @@ def _placeholder_warnings(steps: list[dict[str, Any]]) -> list[str]:
     return out
 
 
-def parse_runbook_full(raw: str, fmt: str = "auto") -> ParseResult:
+def parse_runbook_full(raw: str, fmt: str = "auto",
+                       custom_actions: dict[str, dict[str, Any]] | None = None) -> ParseResult:
     """Główne wejście: format, kroki, ostrzeżenia, proponowana nazwa i matches.
 
     - format wybrany ręcznie: tylko ten format; niepoprawny YAML / JSON -> ValueError z czytelnym komunikatem
@@ -751,7 +773,7 @@ def parse_runbook_full(raw: str, fmt: str = "auto") -> ParseResult:
     if not raw or not raw.strip():
         return ParseResult(format=fmt, steps=[])
     if fmt == "link" or (fmt == "auto" and detect_format(raw) == "link"):
-        return ParseResult(format="link", steps=[finalize_step(_step(f"Open runbook {raw.strip()}"))])
+        return ParseResult(format="link", steps=[finalize_step(_step(f"Open runbook {raw.strip()}"), custom_actions)])
 
     if fmt != "auto":
         result = _PARSERS.get(fmt, _parse_text)(raw)
@@ -773,7 +795,7 @@ def parse_runbook_full(raw: str, fmt: str = "auto") -> ParseResult:
                     f"so each line was used as a step. Check the steps below.")
             result = fallback
 
-    result.steps = [finalize_step(st) for st in result.steps]
+    result.steps = [finalize_step(st, custom_actions) for st in result.steps]
     if not result.steps:
         result.warnings.append("No steps found. Write one step per line, or as a numbered list.")
     result.warnings += _placeholder_warnings(result.steps)
@@ -819,6 +841,8 @@ def fill_steps(steps: list[dict[str, Any]], event_payload: Any) -> list[dict[str
             condition=render_template(step["condition"], event_payload) if step.get("condition") else None,
             kind=step.get("kind"),
         )
+        if step.get("custom"):
+            filled["custom"] = True
         filled["done"] = False
         out.append(filled)
     return out

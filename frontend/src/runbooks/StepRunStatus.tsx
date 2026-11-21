@@ -4,7 +4,7 @@
 //   przyciski: Approve gdy canApprove(step), Mark done gdy canMarkDone(step), Retry gdy canRetry(step)
 import { CheckCircle2, CircleSlash, Clock, XCircle } from 'lucide-react';
 import type { RunbookStep } from '../shared/types';
-import { ACTION_LABEL, KIND_CLASS, KIND_HINT, KIND_LABEL, stepKind } from './stepKind';
+import { KIND_CLASS, KIND_HINT, KIND_LABEL, actionLabel, stepKind } from './stepKind';
 
 export function stepFinished(step: RunbookStep): boolean {
   return !!step.done || ['succeeded', 'failed', 'skipped'].includes(step.status ?? '');
@@ -52,7 +52,7 @@ export default function StepRunStatus({ step }: { step: RunbookStep }) {
     <div className="space-y-1 mt-1">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span title={KIND_HINT[kind]} className={`px-1.5 py-0.5 rounded border ${KIND_CLASS[kind]}`}>{KIND_LABEL[kind]}</span>
-        {step.action && <span className="font-mono text-slate-500">{ACTION_LABEL[step.action] ?? step.action}</span>}
+        {step.action && <span className="font-mono text-slate-500">{actionLabel(step.action)}</span>}
         {step.condition && <span className="text-slate-500">only if: <span className="text-slate-300">{step.condition}</span></span>}
         {status && <span className={status.cls}>{status.label}</span>}
         {step.run_no && step.run_no > 1 ? <span className="text-slate-500">attempt {step.run_no}</span> : null}

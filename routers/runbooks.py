@@ -1,4 +1,5 @@
 """OSOBA 4 – runbooki (CRUD + podgląd parsowania) i test silnika reguł na sucho."""
+import re
 from dataclasses import asdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -8,7 +9,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Event, Rule, Runbook
+from models import CustomAction, Event, Rule, Runbook
 from routers.deps import get_optional_current_user
 from services import runbook_runner
 from services import simulator as sim
@@ -60,10 +61,11 @@ class EngineTestRequest(BaseModel):
     rule: Optional[Dict[str, Any]] = None     # albo reguła z formularza, jeszcze niezapisana
 
 
-def _parse_or_422(raw: str, fmt: str) -> ParseResult:
-    """Format, kroki, ostrzeżenia, nazwa, matches. Błąd tylko przy ręcznie wybranym, niepoprawnym YAML / JSON."""
+def _parse_or_422(raw: str, fmt: str, db: Session) -> ParseResult:
+    """Format, kroki, ostrzeżenia, nazwa, matches. Błąd tylko przy ręcznie wybranym, niepoprawnym YAML / JSON.
+    Rozpoznaje też własne akcje zespołu (Runbooks → Actions)."""
     try:
-        return parse_runbook_full(raw, fmt)
+        return parse_runbook_full(raw, fmt, runbook_runner.custom_actions(db))
     except ValueError as e:
         raise HTTPException(422, str(e))
 
@@ -110,9 +112,9 @@ def list_runbooks(db: Session = Depends(get_db)):
 
 
 @router.post("/runbooks/parse")
-def preview_parse(req: ParseRequest):
+def preview_parse(req: ParseRequest, db: Session = Depends(get_db)):
     """UI wkleja tekst i od razu widzi kroki, ostrzeżenia oraz (z YAML / JSON) nazwę i matches."""
-    r = _parse_or_422(req.raw, req.format)
+    r = _parse_or_422(req.raw, req.format, db)
     return {"format": r.format, "steps": r.steps, "warnings": r.warnings, "name": r.name, "matches": r.matches}
 
 
@@ -126,7 +128,7 @@ def get_runbook(runbook_id: int, db: Session = Depends(get_db)):
 
 @router.post("/runbooks")
 def create_runbook(payload: RunbookIn, db: Session = Depends(get_db)):
-    r = _parse_or_422(payload.raw, payload.format)
+    r = _parse_or_422(payload.raw, payload.format, db)
     # matches podane wprost wygrywają; inaczej bierzemy je z treści runbooka (YAML: "matches:")
     matches = normalize_matches(payload.matches) if payload.matches else r.matches
     steps = _apply_kinds(r.steps, payload.kinds) if payload.kinds is not None else r.steps
@@ -144,7 +146,7 @@ def update_runbook(runbook_id: int, payload: RunbookPatch, db: Session = Depends
         rb.name = payload.name
     if payload.raw is not None or payload.format is not None:
         raw = payload.raw if payload.raw is not None else rb.raw
-        r = _parse_or_422(raw, payload.format or rb.format)
+        r = _parse_or_422(raw, payload.format or rb.format, db)
         rb.format, rb.steps, rb.raw = r.format, _keep_kinds(rb.steps or [], r.steps), raw
         if r.format in ("yaml", "json"):
             rb.matches = r.matches              # treść runbooka mówi, do czego pasuje (albo już nie)
@@ -217,10 +219,101 @@ def engine_test(req: EngineTestRequest, db: Session = Depends(get_db)):
 # ---------------------------------------------------------------- kroki runbooka w alercie (wykonywanie)
 # Approve i Mark done są u Osoby 1 (routers/alerts.py); tutaj Retry nieudanego kroku.
 
-@router.get("/runbooks/actions/list")
-def list_actions():
-    """Akcje, które aplikacja umie wykonać sama, i rodzaje kroków – do edytora runbooka."""
-    return {"actions": ACTIONS, "kinds": list(KINDS)}
+# ---------------------------------------------------------------- akcje: wbudowane + własne zespołu
+# "Adding a new runbook or a new kind of action should be as easy as adding a rule" (kartka 2.6):
+# zespół dodaje akcję w UI (nazwa + adres + czy wymaga zgody), runbooki jej używają, zero zmian w kodzie.
+
+class CustomActionIn(BaseModel):
+    label: str                                 # "Clear cache"
+    url: str                                   # "https://{{service}}/cache/clear"
+    risky: bool = True
+    description: Optional[str] = None
+
+    @field_validator("label")
+    @classmethod
+    def _label(cls, v: str) -> str:
+        v = " ".join(v.split())
+        if len(v) < 2 or len(v) > 100:
+            raise ValueError("Name must be 2–100 characters")
+        return v
+
+    @field_validator("url")
+    @classmethod
+    def _url(cls, v: str) -> str:
+        v = v.strip()
+        if not re.match(r"^https?://\S+$", v):
+            raise ValueError("Address must start with http:// or https://, e.g. https://{{service}}/cache/clear")
+        return v
+
+
+def _action_key(label: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")[:64]
+
+
+def _action_out(a: CustomAction) -> Dict[str, Any]:
+    return {"id": a.id, "key": a.key, "label": a.label, "url": a.url, "risky": bool(a.risky),
+            "description": a.description}
+
+
+def _reparse_runbooks(db: Session) -> None:
+    """Po dodaniu / usunięciu akcji zapisane runbooki od razu ją rozpoznają (ręczne rodzaje kroków zostają)."""
+    custom = runbook_runner.custom_actions(db)
+    for rb in db.query(Runbook).all():
+        try:
+            rb.steps = _keep_kinds(rb.steps or [], parse_runbook_full(rb.raw, rb.format or "auto", custom).steps)
+        except ValueError:
+            continue
+
+
+@router.get("/actions")
+def list_actions(db: Session = Depends(get_db)):
+    """Akcje, które aplikacja umie wykonać: wbudowane (kod) i własne zespołów (dodane w UI)."""
+    builtin = [{"key": k, "label": v["label"], "risky": v["risky"]} for k, v in ACTIONS.items()]
+    return {"builtin": builtin, "custom": [_action_out(a) for a in db.query(CustomAction).order_by(CustomAction.label)],
+            "kinds": list(KINDS)}
+
+
+@router.post("/actions", status_code=201)
+def create_action(payload: CustomActionIn, db: Session = Depends(get_db)):
+    key = _action_key(payload.label)
+    if not key or key in ACTIONS:
+        raise HTTPException(409, f"“{payload.label}” is a built-in action – pick another name")
+    if db.query(CustomAction).filter(CustomAction.key == key).first():
+        raise HTTPException(409, f"An action called “{payload.label}” already exists")
+    action = CustomAction(key=key, label=payload.label, url=payload.url, risky=payload.risky,
+                          description=payload.description)
+    db.add(action)
+    db.flush()
+    _reparse_runbooks(db)
+    db.commit()
+    db.refresh(action)
+    return _action_out(action)
+
+
+@router.put("/actions/{action_id}")
+def update_action(action_id: int, payload: CustomActionIn, db: Session = Depends(get_db)):
+    action = db.get(CustomAction, action_id)
+    if action is None:
+        raise HTTPException(404, "Action not found")
+    action.url, action.risky, action.description = payload.url, payload.risky, payload.description
+    action.label = payload.label                      # nowa nazwa w tekście – klucz w YAML-u zostaje
+    db.flush()
+    _reparse_runbooks(db)                             # nazwa albo "risky" mogły się zmienić
+    db.commit()
+    db.refresh(action)
+    return _action_out(action)
+
+
+@router.delete("/actions/{action_id}")
+def delete_action(action_id: int, db: Session = Depends(get_db)):
+    action = db.get(CustomAction, action_id)
+    if action is None:
+        raise HTTPException(404, "Action not found")
+    db.delete(action)
+    db.flush()
+    _reparse_runbooks(db)
+    db.commit()
+    return {"deleted": action_id}
 
 
 @router.post("/alerts/{alert_id}/steps/{step_index}/retry")

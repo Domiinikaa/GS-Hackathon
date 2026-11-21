@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 from contextlib import contextmanager, nullcontext
 from datetime import datetime
@@ -36,10 +37,14 @@ from sqlalchemy import event as sa_event
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, engine
-from models import Alert, Runbook
+from models import Alert, CustomAction, Event, Person, Runbook, Team
 from services import live
 from services import simulator as sim
-from services.runbook_parser import FAIL_WORDS, OK_WORDS, condition_checkable, parse_runbook_full, step_kind
+from services.delivery import enqueue_deliveries
+from services.people_service import plan_recipients
+from services.rules_engine import render_template
+from services.runbook_parser import (ACTIONS, FAIL_WORDS, OK_WORDS, condition_checkable, parse_runbook_full,
+                                     step_kind)
 
 log = logging.getLogger("runbook_runner")
 
@@ -118,12 +123,46 @@ def evaluate_condition(condition: str, steps: list[dict[str, Any]], index: int) 
 
 # ---------------------------------------------------------------- wykonanie jednej akcji
 
+# ---------------------------------------------------------------- własne akcje zespołu (dodawane w UI)
+
+def custom_actions(db: Session) -> dict[str, dict[str, Any]]:
+    """{"clear_cache": {"label": "Clear cache", "risky": True}} – do parsera runbooków."""
+    return {a.key: {"label": a.label, "risky": bool(a.risky)} for a in db.query(CustomAction).all()}
+
+
+def run_custom_action(db: Session, step: dict[str, Any], alert: Alert) -> tuple[bool, str]:
+    """Akcja zespołu = POST na jej adres, z wartościami ze zdarzenia ({{service}}). Adres bierzemy z bazy przy
+    wykonaniu, więc zmiana w UI działa od razu dla wszystkich runbooków. Domyślnie przez symulator."""
+    key = step.get("action")
+    action = db.query(CustomAction).filter(CustomAction.key == key).first()
+    if action is None:
+        return False, f"Unknown action {key!r} – add it in Runbooks → Actions the app can run"
+    event = db.get(Event, alert.last_event_id) if alert.last_event_id else None
+    data = {**((event.payload if event and isinstance(event.payload, dict) else {}) or {}), **(step.get("params") or {})}
+    url = render_template(action.url, data) or action.url
+    if "{{" in url:
+        return False, f"{action.label}: can't fill {url} – the event has no such field"
+    body = {"action": key, "alert_id": alert.id, "alert": alert.title, "step": step.get("text")}
+    if ALLOW_REAL_HTTP:
+        import httpx
+        r = httpx.post(url, json=body, timeout=5, follow_redirects=False)
+        return r.status_code < 400, f"{action.label}: POST {url} -> {r.status_code}"
+    sim.webhook(db, url, body, alert.id)
+    return True, f"{action.label}: POST {url} (simulated)"
+
+
 def execute_step(db: Session, step: dict[str, Any], alert: Alert) -> tuple[bool, str]:
     """Wykonuje akcję kroku na symulatorze. Zwraca (udało się?, opis dla człowieka).
-    Nowa akcja = wpis w runbook_parser.ACTIONS + jedna gałąź tutaj (albo funkcja w simulator.py)."""
+    Nowa akcja bez kodu: Runbooks → Actions (run_custom_action); wbudowana: runbook_parser.ACTIONS + gałąź tutaj."""
     action = step.get("action")
     p = step.get("params") or {}
     aid = alert.id
+    if step.get("custom") or (action and action not in ACTIONS):
+        try:
+            return run_custom_action(db, step, alert)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("runbook: custom action %s failed", action)
+            return False, f"Error while running {action}: {exc}"
     try:
         if action == "http_get":
             url = p.get("url")
@@ -149,13 +188,56 @@ def execute_step(db: Session, step: dict[str, Any], alert: Alert) -> tuple[bool,
         if action == "open_ticket":
             return sim.open_ticket(db, str(p.get("summary") or step.get("text") or alert.title), aid)
         if action == "escalate":
-            return sim.escalate(db, str(p.get("team") or p.get("target") or alert.team), aid)
+            return escalate_to_team(db, alert, str(p.get("team") or p.get("target") or alert.team))
         if action == "wait":
             return True, f"Waited {p.get('seconds', 0)}s (simulated)"
         return False, f"Unknown action {action!r}"
     except Exception as exc:  # noqa: BLE001 – zepsuta akcja nie może wywrócić alertu
         log.exception("runbook: action %s failed", action)
         return False, f"Error while running {action}: {exc}"
+
+
+# ---------------------------------------------------------------- eskalacja do innego zespołu
+
+_FILLER = re.compile(r"\b(the|team|on-?call|person|people|engineers?)\b|[^\w\s-]", re.I)
+
+
+def _norm(name: str) -> str:
+    return " ".join(_FILLER.sub(" ", name.lower().replace("-", " ")).split())
+
+
+def resolve_team(db: Session, target: str) -> str | None:
+    """'the Settlements on-call' / 'pricing on-call person' / 'counterparty-support' -> nazwa zespołu z bazy."""
+    names = {t.name for t in db.query(Team.name).all()} | {p.team for p in db.query(Person.team).distinct() if p.team}
+    wanted = _norm(target)
+    if not wanted:
+        return None
+    for name in names:                                      # najpierw dokładnie ("counterparty-support")
+        if name.lower() == target.strip().lower() or _norm(name) == wanted:
+            return name
+    for name in sorted(names, key=len, reverse=True):       # potem nazwa zespołu jako słowo w tekście ("pricing")
+        if _norm(name) and re.search(rf"\b{re.escape(_norm(name))}\b", wanted):
+            return name
+    return None
+
+
+def escalate_to_team(db: Session, alert: Alert, target: str) -> tuple[bool, str]:
+    """Powiadamia ludzi z innego zespołu tym samym torem co nowy alert: preferencje i godziny (Osoba 2),
+    wysyłka z ponawianiem przez Outbox (Osoba 3). "…on-call" = tylko osoby na dyżurze, jeśli są."""
+    team = resolve_team(db, target)
+    if team is None:
+        return False, f"No team called “{target}” – add it (and its people) in Admin / People"
+    planned = plan_recipients(db, team, alert.severity or "critical", ["phone", "sms", "email"])
+    recipients = [pr.recipient for pr in planned if pr.recipient.to]
+    if re.search(r"on-?call", target, re.I):
+        on_call = {p.id for p in db.query(Person).filter(Person.team == team, Person.on_call.is_(True))}
+        recipients = [r for r in recipients if r.person_id in on_call] or recipients
+    if not recipients:
+        return False, f"Nobody in team {team} has a phone or e-mail – add them in People"
+    enqueue_deliveries(db, alert, recipients)
+    sim.escalate(db, team, alert.id)                         # wpis w dzienniku symulatora (panel na stronie)
+    who = ", ".join(f"{r.name} ({r.channel})" for r in recipients)
+    return True, f"Escalated to {team}: {who}"[:500]
 
 
 def _run(db: Session, alert: Alert, i: int, who: str = "system") -> None:
@@ -294,11 +376,12 @@ def resolve_recovered(db: Session, dedup_key: str, rule_id: str) -> int | None:
 def upgrade_runbook_steps(db: Session) -> int:
     """Runbooki zapisane przed runnerem nie mają warunków ani rodzajów kroków – parsujemy je ponownie."""
     n = 0
+    custom = custom_actions(db)
     for rb in db.query(Runbook).all():
         if rb.steps and all("condition" in s for s in rb.steps):
             continue
         try:
-            rb.steps = parse_runbook_full(rb.raw, rb.format or "auto").steps
+            rb.steps = parse_runbook_full(rb.raw, rb.format or "auto", custom).steps
             n += 1
         except ValueError:
             log.warning("runbook %s could not be re-parsed", rb.id)
