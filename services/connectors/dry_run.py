@@ -78,17 +78,53 @@ def _eval_single_condition(payload: dict[str, Any], cond: dict[str, Any]) -> dic
     }
 
 
-def _eval_rule_locally(payload: dict[str, Any], rule: Rule) -> tuple[bool, list[dict[str, Any]]]:
-    condition = rule.condition or {}
-    if "and" in condition and isinstance(condition["and"], list):
-        results = [_eval_single_condition(payload, c) for c in condition["and"]]
-        matched = bool(results) and all(r["passed"] for r in results)
-        return matched, results
-    if "or" in condition and isinstance(condition["or"], list):
-        results = [_eval_single_condition(payload, c) for c in condition["or"]]
-        matched = any(r["passed"] for r in results)
-        return matched, results
+def _eval_condition_node(payload: dict[str, Any], node: Any) -> tuple[bool, list[dict[str, Any]]]:
+    """
+    Recursively evaluate a condition tree supporting arbitrarily nested
+    'and', 'or', 'not' groups as well as leaf {'field', 'op', 'value'} nodes.
+    """
+    if not isinstance(node, dict):
+        return False, []
+
+    if "and" in node and isinstance(node["and"], list):
+        children = node["and"]
+        if not children:
+            return False, []
+        all_passed = True
+        collected: list[dict[str, Any]] = []
+        for child in children:
+            child_ok, child_leaves = _eval_condition_node(payload, child)
+            if not child_ok:
+                all_passed = False
+            collected.extend(child_leaves)
+        return all_passed, collected
+
+    if "or" in node and isinstance(node["or"], list):
+        children = node["or"]
+        if not children:
+            return False, []
+        any_passed = False
+        collected = []
+        for child in children:
+            child_ok, child_leaves = _eval_condition_node(payload, child)
+            if child_ok:
+                any_passed = True
+            collected.extend(child_leaves)
+        return any_passed, collected
+
+    if "not" in node:
+        child_ok, child_leaves = _eval_condition_node(payload, node["not"])
+        return (not child_ok), child_leaves
+
+    if "field" in node:
+        leaf = _eval_single_condition(payload, node)
+        return leaf["passed"], [leaf]
+
     return False, []
+
+
+def _eval_rule_locally(payload: dict[str, Any], rule: Rule) -> tuple[bool, list[dict[str, Any]]]:
+    return _eval_condition_node(payload, rule.condition or {})
 
 
 def dry_run_against_rules(db: Session, parsed_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
