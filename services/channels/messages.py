@@ -23,14 +23,19 @@ def alert_link(alert: Alert) -> str:
     return f"{APP_URL}/#alerts/{alert.id}"
 
 
-def build_message(alert: Alert, channel: str, to: str, name: str | None = None) -> Message:
+def build_message(alert: Alert, channel: str, to: str, name: str | None = None,
+                  reply_code: str | None = None) -> Message:
     if channel == "email":
         return _email(alert, to, name)
     if channel == "sms":
-        return _sms(alert, to)
+        return _sms(alert, to, reply_code)
     if channel == "phone":
         return _phone(alert, to)
     return Message(to=to, subject=alert.title, body=alert.title)
+
+
+def _needs_approval(alert: Alert) -> bool:
+    return any(s.get("approval") == "required" and not s.get("approved_by") for s in (alert.steps or []))
 
 
 def _steps_lines(alert: Alert) -> list[str]:
@@ -72,15 +77,22 @@ def _email(alert: Alert, to: str, name: str | None) -> Message:
     return Message(to=to, subject=subject, body="\n".join(text), html=body_html)
 
 
-def _sms(alert: Alert, to: str) -> Message:
+def _sms(alert: Alert, to: str, reply_code: str | None) -> Message:
+    """Np. "[CRIT] HighErrorRate on payments-api http://…/#alerts/8 Reply ACK 4821 / YES 4821=approve" (≤160)."""
     sev = (alert.severity or "info").upper()[:4]       # CRIT / WARN / INFO
     link = alert_link(alert)
-    room = 160 - len(f"[{sev}] ") - len(link) - 1
-    title = alert.title if len(alert.title) <= room else alert.title[: room - 1] + "…"
-    return Message(to=to, subject="", body=f"[{sev}] {title} {link}")
+    hint = ""
+    if reply_code:
+        hint = f" Reply ACK {reply_code}"
+        if _needs_approval(alert):
+            hint += f" / YES {reply_code}=approve"
+    room = 160 - len(f"[{sev}] ") - len(link) - 1 - len(hint)
+    title = alert.title if len(alert.title) <= room else alert.title[: max(room - 1, 10)] + "…"
+    return Message(to=to, subject="", body=f"[{sev}] {title} {link}{hint}")
 
 
 def _phone(alert: Alert, to: str) -> Message:
     sev = (alert.severity or "info").lower()
-    body = f"This is a {sev} alert for team {alert.team}. {alert.title}. Please check the alerting app."
+    body = (f"This is a {sev} alert for team {alert.team}. {alert.title}. "
+            f"Press 1 to acknowledge, or check the alerting app.")
     return Message(to=to, subject="", body=body)

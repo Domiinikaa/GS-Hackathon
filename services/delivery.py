@@ -16,6 +16,7 @@ Działa tak samo na SQLite i Postgresie.
 from __future__ import annotations
 
 import logging
+import secrets
 import threading
 import time
 from datetime import datetime, timedelta
@@ -48,11 +49,13 @@ def enqueue_deliveries(db: Session, alert: Alert, recipients: list[Recipient]) -
     for r in recipients:
         if r.channel == "ui" or not r.to:
             continue
-        msg = build_message(alert, r.channel, r.to, r.name)
+        # SMS i telefon dostają kod, którym człowiek może odpowiedzieć ("ACK 4821") – services/replies.py
+        code = f"{secrets.randbelow(9000) + 1000}" if r.channel in ("sms", "phone") else None
+        msg = build_message(alert, r.channel, r.to, r.name, reply_code=code)
         delivery = Delivery(
             alert_id=alert.id, person_id=r.person_id, channel=r.channel, to=r.to,
             status="pending", attempts=0, subject=msg.subject, body=msg.body, html=msg.html,
-            next_attempt_at=now, created_at=now,
+            next_attempt_at=now, created_at=now, recipient_name=r.name, reply_code=code,
         )
         db.add(delivery)
         created.append(delivery)
@@ -104,7 +107,7 @@ def _deliver(db: Session, delivery_id: int) -> None:
         if channel is None:
             raise ChannelError(f"channel '{delivery.channel}' is not configured")
         channel.send(Message(to=delivery.to, subject=delivery.subject or "",
-                             body=delivery.body or "", html=delivery.html))
+                             body=delivery.body or "", html=delivery.html, delivery_id=delivery.id))
         delivery.status = "sent"
         delivery.sent_at = datetime.utcnow()
         delivery.last_error = None
@@ -153,6 +156,8 @@ NEW_COLUMNS = {
     "body": "TEXT",
     "html": "TEXT",
     "next_attempt_at": "TIMESTAMP",
+    "recipient_name": "VARCHAR(100)",
+    "reply_code": "VARCHAR(8)",
 }
 
 

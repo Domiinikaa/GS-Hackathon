@@ -19,6 +19,7 @@ class Message:
     subject: str               # temat (mail); dla SMS/telefonu ignorowany
     body: str                  # treść zwykłym tekstem
     html: str | None = None    # opcjonalnie ładna wersja HTML (mail)
+    delivery_id: int | None = None  # która wysyłka z Outboxa (bramki mogą to zapisać)
 
 
 class ChannelError(Exception):

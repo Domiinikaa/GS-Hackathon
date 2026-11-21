@@ -12,12 +12,13 @@ import os
 
 from services.channels.base import Channel
 from services.channels.email_smtp import SmtpEmail
+from services.channels.fake_gateway import FakePhone, FakeSms
 
 # kanał → {nazwa dostawcy: klasa}
 PROVIDERS: dict[str, dict[str, type[Channel]]] = {
     "email": {"smtp": SmtpEmail},
-    # "sms":   {"fake": FakeSms, "twilio": TwilioSms},      ← następny krok
-    # "phone": {"fake": FakePhone, "twilio": TwilioVoice},
+    "sms":   {"fake": FakeSms},       # prawdziwy: "twilio": TwilioSms
+    "phone": {"fake": FakePhone},     # prawdziwy: "twilio": TwilioVoice
 }
 
 DEFAULT_PROVIDER = {"email": "smtp", "sms": "fake", "phone": "fake"}

@@ -204,3 +204,29 @@ class Delivery(Base):
     html = Column(Text, nullable=True)
     # Kiedy listonosz może (ponownie) spróbować; przy "sending" = do kiedy wysyłka jest zarezerwowana
     next_attempt_at = Column(DateTime, nullable=True, index=True)
+    recipient_name = Column(String(100), nullable=True)    # "Anna" – do Outboxa i do historii przy odpowiedzi
+    reply_code = Column(String(8), nullable=True, index=True)  # kod w SMS-ie: "odpowiedz ACK 4821"
+
+
+class GatewayMessage(Base):
+    """
+    Udawana bramka SMS / telefon: wszystko, co "wyszło" do telefonów i co z nich "przyszło".
+    Prawdziwa bramka (np. Twilio) trzymałaby to u siebie – tu pokazujemy to w widoku "fałszywego telefonu".
+    """
+    __tablename__ = "gateway_messages"
+
+    id = Column(Integer, primary_key=True)
+    channel = Column(String(20), nullable=False)           # sms | phone
+    direction = Column(String(10), nullable=False)         # out (do człowieka) | in (odpowiedź człowieka)
+    number = Column(String(50), nullable=False, index=True)
+    body = Column(Text, nullable=False)
+    delivery_id = Column(Integer, ForeignKey("deliveries.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class ChannelSetting(Base):
+    """Przełącznik awarii kanału do demo ("SMS gateway down"). W bazie, więc działa na wszystkich kopiach serwera."""
+    __tablename__ = "channel_settings"
+
+    channel = Column(String(20), primary_key=True)         # sms | phone | email
+    down = Column(Boolean, default=False, nullable=False)
