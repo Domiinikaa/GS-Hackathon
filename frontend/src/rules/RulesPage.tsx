@@ -54,10 +54,19 @@ export default function RulesPage() {
     window.setTimeout(() => setNotice(''), 3000);
   }
 
+  function duplicateRule(rule: Rule) {
+    const copy: Rule = {
+      ...rule,
+      id: '',
+      name: `${rule.name} (Copy)`,
+    };
+    setEditing(copy);
+  }
+
   // Returns an error message to show in the form, or null on success
   async function saveRule(rule: Rule): Promise<string | null> {
     try {
-      const isNew = editing === 'new';
+      const isNew = editing === 'new' || !rule.id;
       const saved = isNew ? await rulesApi.create(rule) : await rulesApi.update(rule);
       setRules((prev) => (isNew ? [...prev, saved] : prev.map((r) => (r.id === saved.id ? saved : r))));
       setEditing(null);
@@ -157,6 +166,7 @@ export default function RulesPage() {
             onToggleOpen={() => toggleOpen(rule.id)}
             onToggleEnabled={() => toggleEnabled(rule)}
             onEdit={() => setEditing(rule)}
+            onDuplicate={() => duplicateRule(rule)}
             onDelete={() => deleteRule(rule)}
           />
         ))}

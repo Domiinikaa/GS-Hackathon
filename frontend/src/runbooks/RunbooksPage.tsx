@@ -7,6 +7,7 @@ import StepList from './StepList';
 import { EmptyState, PageHeader, Row, ghostButton } from '../shared/ui';
 import EngineTester from './EngineTester';
 import SimulatorPanel from './SimulatorPanel';
+import ActionsPanel from './ActionsPanel';
 import { withKind } from './stepKind';
 
 const FORMATS: { value: RunbookFormat; label: string }[] = [
@@ -97,6 +98,15 @@ export default function RunbooksPage() {
       else next.add(id);
       return next;
     });
+  }
+
+  function duplicateRunbook(rb: Runbook) {
+    const copy: Runbook = {
+      ...rb,
+      id: 0,
+      name: `${rb.name}-copy`,
+    };
+    setEditing(copy);
   }
 
   // krótki komunikat po akcji (np. "Saved"), znika sam po 4 s
@@ -203,6 +213,7 @@ export default function RunbooksPage() {
             open={openIds.has(rb.id)}
             onToggleOpen={() => toggleOpen(rb.id)}
             onEdit={() => setEditing(rb)}
+            onDuplicate={() => duplicateRunbook(rb)}
             confirming={confirmDelete === rb.id}
             onAskDelete={() => setConfirmDelete(rb.id)}
             onCancelDelete={() => setConfirmDelete(null)}
@@ -214,6 +225,8 @@ export default function RunbooksPage() {
             text="Add one so responders see clear next steps on every alert." /></div>
         )}
       </div>
+
+      <ActionsPanel onChanged={reload} />
 
       <SimulatorPanel />
 
@@ -231,13 +244,14 @@ interface CardProps {
   open: boolean;
   onToggleOpen: () => void;
   onEdit: () => void;
+  onDuplicate: () => void;
   confirming: boolean;        // waiting for "Yes, delete"
   onAskDelete: () => void;
   onCancelDelete: () => void;
   onDelete: () => void;
 }
 
-function RunbookCard({ runbook: rb, attached, editing, open, onToggleOpen, onEdit, confirming, onAskDelete, onCancelDelete, onDelete }: CardProps) {
+function RunbookCard({ runbook: rb, attached, editing, open, onToggleOpen, onEdit, onDuplicate, confirming, onAskDelete, onCancelDelete, onDelete }: CardProps) {
   const stepsId = useId();
   const approvals = rb.steps.filter((s) => s.approval === 'required').length;
   const matches = (rb as Runbook & { matches?: MatchGroup | null }).matches;
@@ -280,7 +294,10 @@ function RunbookCard({ runbook: rb, attached, editing, open, onToggleOpen, onEdi
         </div>
       ) : (
         <div className="ios-row justify-between ios-divided">
-          <button type="button" onClick={onEdit} className="text-[15px] text-ios-blue hover:opacity-70">Edit runbook</button>
+          <div className="flex items-center gap-4">
+            <button type="button" onClick={onEdit} className="text-[15px] text-ios-blue hover:opacity-70">Edit runbook</button>
+            <button type="button" onClick={onDuplicate} className="text-[15px] text-amber-400 hover:opacity-70">Duplicate</button>
+          </div>
           <button type="button" onClick={onAskDelete} className="text-[15px] text-ios-red hover:opacity-70">Delete</button>
         </div>
       )}
@@ -350,7 +367,7 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
     setSaving(true);
     setSaveError('');
     try {
-      if (initial) {
+      if (initial && initial.id > 0) {
         onSaved(await runbookApi.update(initial.id, name.trim(), raw, format, kinds()), false);
         return;
       }
@@ -396,7 +413,9 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
   return (
     <section className="glass-card glass-card--static ring-1 ring-gs-gold/30 p-6 space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-ink">{initial ? `Edit ${initial.name}` : 'New runbook'}</h2>
+        <h2 className="text-lg font-semibold text-ink">
+          {initial && initial.id > 0 ? `Edit ${initial.name}` : initial ? `Duplicate "${name}"` : 'New runbook'}
+        </h2>
         <button onClick={onClose} title="Close editor" aria-label="Close editor"
           className="w-9 h-9 rounded-full flex items-center justify-center text-ink-muted hover:text-ink hover:bg-white/5">
           <X className="w-4 h-4" />

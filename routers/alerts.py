@@ -137,18 +137,22 @@ def _check_approve_permission(db: Session, alert: Alert, user: Optional[User]) -
         return
 
     email = getattr(user, "email", None)
-    if not email:
-        # Non-User actor (e.g. ReplyActor authenticated via phone number + SMS reply_code)
+    person_id = getattr(user, "person_id", None)
+    if person_id is not None:
+        # Odpowiedź SMS-em (ReplyActor): wiemy, do kogo poszedł SMS z tym kodem – ta osoba musi być leadem
+        person = db.get(Person, person_id)
+    elif not email:
+        # Non-User actor without a known person (e.g. SMS sent to a bare number) – demo fallback
         return
-
-    person = (
-        db.query(Person)
-        .filter(
-            (func.lower(Person.email) == email.lower())
-            | (func.lower(Person.name) == user.uname.lower())
+    else:
+        person = (
+            db.query(Person)
+            .filter(
+                (func.lower(Person.email) == email.lower())
+                | (func.lower(Person.name) == user.uname.lower())
+            )
+            .first()
         )
-        .first()
-    )
     if person is None:
         return
 

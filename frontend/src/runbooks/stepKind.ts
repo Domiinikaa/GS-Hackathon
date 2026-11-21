@@ -7,8 +7,16 @@ export const KNOWN_ACTIONS = ['http_get', 'retry_workflow', 'restart_service', '
 
 export const ALL_KINDS: StepKind[] = ['auto', 'approve', 'manual', 'approve_manual'];
 
+// Wbudowana akcja albo własna akcja zespołu (dodana w Runbooks → Actions) – aplikacja umie ją wykonać
 export function hasKnownAction(step: RunbookStep): boolean {
-  return !!step.action && KNOWN_ACTIONS.includes(step.action);
+  return !!step.custom || (!!step.action && KNOWN_ACTIONS.includes(step.action));
+}
+
+// "retry_workflow" -> "Retry workflow", "clear_cache" -> "Clear cache"
+export function actionLabel(action: string): string {
+  if (ACTION_LABEL[action]) return ACTION_LABEL[action];
+  const s = action.replace(/_/g, ' ');
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 export function stepKind(step: RunbookStep): StepKind {

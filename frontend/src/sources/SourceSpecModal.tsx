@@ -81,7 +81,7 @@ export default function SourceSpecModal({
   onClose,
   onSaved,
 }: SourceSpecModalProps) {
-  const isEditing = Boolean(existing);
+  const isEditing = Boolean(existing && existing.id > 0);
 
   const [editorMode, setEditorMode] = useState<'form' | 'raw'>(
     initialRawMode && !isEditing ? 'raw' : 'form'

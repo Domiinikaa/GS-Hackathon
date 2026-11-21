@@ -31,8 +31,9 @@ COMMANDS = {"ACK": "ack", "OK": "ack", "YES": "approve", "Y": "approve", "APPROV
 
 @dataclass
 class ReplyActor:
-    """Udaje zalogowanego użytkownika dla funkcji z routers/alerts.py (one czytają tylko .uname)."""
+    """Udaje zalogowanego użytkownika dla funkcji z routers/alerts.py (czytają .uname i .person_id)."""
     uname: str
+    person_id: int | None = None      # osoba, do której poszedł SMS – zatwierdzać kroki może tylko lead
 
 
 @dataclass
@@ -88,7 +89,7 @@ def _apply(db: Session, delivery: Delivery, action: str, via: str) -> ReplyResul
     alert = db.get(Alert, delivery.alert_id)
     if not alert:
         return ReplyResult(False, "Alert no longer exists.")
-    actor = ReplyActor(uname=f"{delivery.recipient_name or delivery.to} ({via})")
+    actor = ReplyActor(uname=f"{delivery.recipient_name or delivery.to} ({via})", person_id=delivery.person_id)
     try:
         if action == "ack":
             _change_status(db, alert.id, "acknowledged", ["open"], actor)

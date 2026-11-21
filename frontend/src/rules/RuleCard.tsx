@@ -13,10 +13,11 @@ interface Props {
   onToggleOpen: () => void;
   onToggleEnabled: () => void;
   onEdit: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }
 
-export default function RuleCard({ rule, runbookName, open, onToggleOpen, onToggleEnabled, onEdit, onDelete }: Props) {
+export default function RuleCard({ rule, runbookName, open, onToggleOpen, onToggleEnabled, onEdit, onDuplicate, onDelete }: Props) {
   const detailsId = useId();
   const isAnd = 'and' in rule.condition;
   const nodes = 'and' in rule.condition ? rule.condition.and : rule.condition.or;
@@ -70,7 +71,10 @@ export default function RuleCard({ rule, runbookName, open, onToggleOpen, onTogg
 
       {/* actions */}
       <div className="ios-row justify-between ios-divided">
-        <button type="button" onClick={onEdit} className="text-[15px] text-ios-blue hover:opacity-70">Edit rule</button>
+        <div className="flex items-center gap-4">
+          <button type="button" onClick={onEdit} className="text-[15px] text-ios-blue hover:opacity-70">Edit rule</button>
+          <button type="button" onClick={onDuplicate} className="text-[15px] text-amber-400 hover:opacity-70">Duplicate</button>
+        </div>
         <button type="button" onClick={onDelete} className="text-[15px] text-ios-red hover:opacity-70">Delete</button>
       </div>
     </article>

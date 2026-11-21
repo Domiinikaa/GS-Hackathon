@@ -62,6 +62,11 @@ export interface SimCall {
   at: string;
 }
 
+// akcje, które aplikacja umie wykonać: wbudowane i własne zespołu (Runbooks → Actions)
+export interface BuiltinAction { key: string; label: string; risky: boolean }
+export interface CustomAction { id: number; key: string; label: string; url: string; risky: boolean; description: string | null }
+export interface CustomActionIn { label: string; url: string; risky: boolean; description?: string | null }
+
 // rodzaj każdego kroku: wybrany ręcznie albo null = wykryj automatycznie
 export type StepKinds = (StepKind | null)[];
 
@@ -84,6 +89,11 @@ export const runbookApi = {
   // Retry nieudanego kroku w alercie (Approve i Mark done są w alertach – Osoba 1); stepIndex liczony od 0
   retryStep: (alertId: number, stepIndex: number) =>
     api<Alert>(`/alerts/${alertId}/steps/${stepIndex}/retry`, { method: 'POST' }),
+
+  actions: () => api<{ builtin: BuiltinAction[]; custom: CustomAction[] }>('/actions'),
+  createAction: (a: CustomActionIn) => api<CustomAction>('/actions', { method: 'POST', ...json(a) }),
+  updateAction: (id: number, a: CustomActionIn) => api<CustomAction>(`/actions/${id}`, { method: 'PUT', ...json(a) }),
+  removeAction: (id: number) => api<{ deleted: number }>(`/actions/${id}`, { method: 'DELETE' }),
 
   simServices: () => api<SimService[]>('/sim/services'),
   setSimService: (name: string, patch: Partial<Pick<SimService, 'healthy' | 'workflows_ok'>>) =>

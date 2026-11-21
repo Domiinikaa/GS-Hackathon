@@ -6,6 +6,7 @@ Usage locally or in Railway container:
 Or with arguments:
     python create_admin.py --uname admin --email admin@company.com --password SuperSecret123!
 """
+from __future__ import annotations
 import sys
 import argparse
 from dotenv import load_dotenv

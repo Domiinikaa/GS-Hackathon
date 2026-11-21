@@ -3,7 +3,7 @@
 // With `onKindChange` every step gets a picker to change its kind (runbook editor).
 // Also usable in alert details: <StepList steps={alert.steps} />
 import type { RunbookStep, StepKind } from '../shared/types';
-import { ACTION_LABEL, KIND_CLASS, KIND_HINT, KIND_LABEL, allowedKinds, stepKind } from './stepKind';
+import { KIND_CLASS, KIND_HINT, KIND_LABEL, actionLabel, allowedKinds, stepKind } from './stepKind';
 
 interface Props {
   steps: RunbookStep[];
@@ -55,7 +55,7 @@ export default function StepList({ steps, empty = 'No steps.', onKindChange }: P
                 )}
                 {step.action && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-white/5 text-ink-muted">
-                    {ACTION_LABEL[step.action] ?? step.action}
+                    {actionLabel(step.action)}{step.custom && ' (team action)'}
                   </span>
                 )}
                 {step.condition && (

@@ -251,6 +251,24 @@ class ChannelSetting(Base):
     down = Column(Boolean, default=False, nullable=False)
 
 
+# --- OSOBA 4: własne akcje kroków runbooka (dodawane w UI, bez zmian w kodzie) ---
+
+class CustomAction(Base):
+    """
+    Akcja zdefiniowana przez zespół: "Clear cache" -> POST na https://{{service}}/cache/clear.
+    Runbooki używają jej jak wbudowanej ("action: clear_cache" albo "Clear cache on pricing-engine").
+    """
+    __tablename__ = "custom_actions"
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String(64), unique=True, nullable=False)    # "clear_cache" – nazwa w YAML-u
+    label = Column(String(100), nullable=False)               # "Clear cache" – po tym rozpoznajemy tekst
+    url = Column(String(500), nullable=False)                 # szablon, np. "https://{{service}}/cache/clear"
+    risky = Column(Boolean, nullable=False, default=True)     # wymaga zgody leada, jeśli runbook nie mówi inaczej
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 # --- OSOBA 4: symulator systemów docelowych dla kroków runbooka (services/simulator.py) ---
 
 class SimService(Base):
