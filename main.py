@@ -191,12 +191,10 @@ with startup_lock():
 async def lifespan(_app: FastAPI):
     ensure_delivery_columns(engine)
     start_worker()
-    runbook_runner.start_worker()          # Osoba 4: wykonywanie kroków runbooka (jeden worker na kopię)
     await ingest_manager.start()
     try:
         yield
     finally:
-        runbook_runner.stop_worker()
         await ingest_manager.stop()
 
 

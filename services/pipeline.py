@@ -18,7 +18,7 @@ from services.alert_service import upsert_alert
 from services.delivery import enqueue_deliveries
 from services.people_service import recipients_for
 from services.rules_engine import evaluate
-from services.runbook_runner import start_after_commit
+from services.runbook_runner import is_recovery, resolve_recovered, start_after_commit
 
 
 def process_event(
@@ -31,7 +31,14 @@ def process_event(
     """Zwraca id alertów, które to zdarzenie utworzyło lub zaktualizowało."""
     active_rules = rules if rules is not None else db.query(Rule).filter(Rule.enabled.is_(True)).all()
     alert_ids: list[int] = []
+    recovery = is_recovery(event.payload)
     for match in evaluate(event, active_rules, db=db):
+        if recovery:
+            # Osoba 4: "close the alert when the problem goes away" – zdarzenie "status: resolved" zamyka alert
+            closed = resolve_recovered(db, match.dedup_key, match.rule_id)
+            if closed is not None:
+                alert_ids.append(closed)
+            continue
         alert = upsert_alert(db, match)
         if alert is None:
             continue
