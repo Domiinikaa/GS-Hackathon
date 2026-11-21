@@ -39,6 +39,7 @@ class RunbookIn(BaseModel):
     raw: str
     format: str = "auto"
     matches: Optional[Dict[str, Any]] = None  # grupa warunków jak w regułach – automatyczne podpinanie
+    kinds: Optional[List[Optional[str]]] = None  # rodzaj każdego kroku (jak w RunbookPatch)
 
     _name = field_validator("name")(_clean_name)
 
@@ -128,7 +129,8 @@ def create_runbook(payload: RunbookIn, db: Session = Depends(get_db)):
     r = _parse_or_422(payload.raw, payload.format)
     # matches podane wprost wygrywają; inaczej bierzemy je z treści runbooka (YAML: "matches:")
     matches = normalize_matches(payload.matches) if payload.matches else r.matches
-    rb = Runbook(name=payload.name, format=r.format, raw=payload.raw, steps=r.steps, matches=matches)
+    steps = _apply_kinds(r.steps, payload.kinds) if payload.kinds is not None else r.steps
+    rb = Runbook(name=payload.name, format=r.format, raw=payload.raw, steps=steps, matches=matches)
     db.add(rb)
     db.commit()
     db.refresh(rb)

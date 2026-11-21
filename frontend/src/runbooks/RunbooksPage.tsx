@@ -1,10 +1,12 @@
 // OSOBA 4 – runbooki: wklej YAML / Markdown / tekst, zobacz kroki na żywo, zapisz, podepnij do reguły.
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BookOpen, Check, Link2, Plus, Save, Trash2, Unlink, X } from 'lucide-react';
-import type { Runbook, RunbookStep } from '../shared/types';
+import type { Runbook, RunbookStep, StepKind } from '../shared/types';
 import { MatchGroup, RuleRef, RunbookFormat, describeMatches, errorText, runbookApi } from './runbookApi';
 import StepList from './StepList';
 import EngineTester from './EngineTester';
+import SimulatorPanel from './SimulatorPanel';
+import { withKind } from './stepKind';
 
 const FORMATS: { value: RunbookFormat; label: string }[] = [
   { value: 'auto', label: 'Auto-detect' },
@@ -168,6 +170,8 @@ export default function RunbooksPage() {
         )}
       </div>
 
+      <SimulatorPanel />
+
       <EngineTester />
     </div>
   );
@@ -195,6 +199,14 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
   const [ruleToAttach, setRuleToAttach] = useState('');
   const [warnings, setWarnings] = useState<string[]>([]);
   const [matches, setMatches] = useState<MatchGroup | null>(null);
+  // ręcznie wybrany rodzaj kroku, po tekście kroku (przetrwa edycję innych linijek)
+  const [kindByText, setKindByText] = useState<Record<string, StepKind>>(() =>
+    Object.fromEntries((initial?.steps ?? []).filter((s) => s.kind).map((s) => [s.text, s.kind as StepKind])));
+  const steps = useMemo(
+    () => preview.map((s) => (kindByText[s.text] ? withKind(s, kindByText[s.text]) : s)),
+    [preview, kindByText],
+  );
+  const kinds = () => preview.map((s) => kindByText[s.text] ?? null);
 
   // podgląd na żywo: pytamy backend 300 ms po ostatnim naciśnięciu klawisza
   useEffect(() => {
@@ -228,10 +240,10 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
     setSaveError('');
     try {
       if (initial) {
-        onSaved(await runbookApi.update(initial.id, name.trim(), raw, format), false);
+        onSaved(await runbookApi.update(initial.id, name.trim(), raw, format, kinds()), false);
         return;
       }
-      const rb = await runbookApi.create(name.trim(), raw, format);
+      const rb = await runbookApi.create(name.trim(), raw, format, kinds());
       // nowy runbook: od razu podpinamy do wybranej reguły (jeśli wybrano)
       if (!ruleToAttach) { onSaved(rb, true); return; }
       const rule = rules.find((r) => r.id === ruleToAttach);
@@ -306,7 +318,15 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
           </label>
           {parseError
             ? <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 whitespace-pre-wrap">{parseError}</p>
-            : <StepList steps={preview} empty="Start typing to see steps." />}
+            : <StepList steps={steps} empty="Start typing to see steps."
+                onKindChange={(i, kind) => setKindByText((k) => ({ ...k, [preview[i].text]: kind }))} />}
+          {!parseError && steps.length > 0 && (
+            <p className="text-xs text-slate-500 mt-2">
+              <span className="text-emerald-300">auto</span>: the app does it ·{' '}
+              <span className="text-amber-300">needs approval</span>: the app does it after a team lead approves ·{' '}
+              <span className="text-slate-300">manual</span>: a person does it. Change it with the label on each step.
+            </p>
+          )}
           {!parseError && warnings.length > 0 && (
             <div role="status" className="mt-3 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/40 rounded-lg px-3 py-2 space-y-1">
               {warnings.map((w) => (
