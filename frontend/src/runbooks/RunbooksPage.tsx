@@ -19,11 +19,56 @@ const FORMATS: { value: RunbookFormat; label: string }[] = [
   { value: 'link', label: 'Link' },
 ];
 
-const EXAMPLE = `# Settlement workflow failed
+// Przykłady w różnych formatach – pokazują, że runbook można wkleić w dowolnej postaci (kartka: Appendix B)
+const EXAMPLES: { label: string; hint: string; raw: string }[] = [
+  {
+    label: 'Numbered list',
+    hint: 'Markdown or a checklist copied from a doc',
+    raw: `# Settlement workflow failed
 1. Check settlement service health at https://settlement.internal/health
 2. Retry workflow {{workflowId}} from step {{step}}
 3. If the retry fails, call the Settlements on-call
-4. Open a JIRA ticket with error {{error.code}}`;
+4. Open a JIRA ticket with error {{error.code}}`,
+  },
+  {
+    label: 'YAML',
+    hint: 'Structured steps with actions and approvals',
+    raw: `runbook: settlement-timeout
+matches:
+  type: WORKFLOW_FAILED
+  "error.code": TIMEOUT
+steps:
+  - check: "Is counterparty-service healthy?"
+    action: http_get
+    url: "http://counterparty-service/health"
+  - action: retry_workflow
+    workflowId: "{{workflowId}}"
+    approval: none
+  - if: "retry fails twice"
+    action: escalate
+    team: counterparty-support
+    approval: required`,
+  },
+  {
+    label: 'Free text',
+    hint: 'A paragraph from a wiki or a chat message',
+    raw: `When pricing latency goes over a second, it's usually the cache. Restart the pricing-engine instance named in the alert, wait 2 minutes, and if latency is still high, call the pricing on-call person.`,
+  },
+  {
+    label: 'Wiki link',
+    hint: 'Just a link to Confluence or a wiki page',
+    raw: 'https://wiki.example.com/runbooks/payments-high-error-rate',
+  },
+];
+
+const PLACEHOLDER = `Paste a runbook in any format, for example:
+
+  1. Check service health at http://...    <- numbered list
+  steps:  - action: retry_workflow         <- YAML
+  When X happens, restart Y, then ...      <- free text
+  https://wiki.example.com/runbook         <- link
+
+No idea where to start? Click one of the example buttons under this box.`;
 
 const inputClass = 'field w-full px-3.5 py-2.5 text-sm';
 const labelClass = 'block text-[13px] font-medium text-ink-muted mb-1.5';
@@ -41,6 +86,7 @@ export default function RunbooksPage() {
   const [loadError, setLoadError] = useState('');
   const [editing, setEditing] = useState<Editing>(null);
   const [notice, setNotice] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);  // id runbooka czekającego na "Yes"
   const [openIds, setOpenIds] = useState<Set<number>>(new Set());
   const allOpen = runbooks.length > 0 && runbooks.every((r) => openIds.has(r.id));
 
@@ -92,14 +138,16 @@ export default function RunbooksPage() {
     setNotice(message);
   }
 
+  // potwierdzenie na karcie, nie window.confirm() – niektóre przeglądarki (np. wbudowane) go nie pokazują
   async function handleDelete(rb: Runbook) {
-    if (!confirm(`Delete runbook "${rb.name}"? Rules using it will be detached.`)) return;
+    setConfirmDelete(null);
     try {
       await runbookApi.remove(rb.id);
       if (editing !== null && editing !== 'new' && editing.id === rb.id) setEditing(null);
       await reload();
+      setNotice(`Deleted "${rb.name}".`);
     } catch (e) {
-      alert(errorText(e));
+      setLoadError(`Could not delete "${rb.name}": ${errorText(e)}`);
     }
   }
 
@@ -155,6 +203,9 @@ export default function RunbooksPage() {
             open={openIds.has(rb.id)}
             onToggleOpen={() => toggleOpen(rb.id)}
             onEdit={() => setEditing(rb)}
+            confirming={confirmDelete === rb.id}
+            onAskDelete={() => setConfirmDelete(rb.id)}
+            onCancelDelete={() => setConfirmDelete(null)}
             onDelete={() => handleDelete(rb)}
           />
         ))}
@@ -180,10 +231,13 @@ interface CardProps {
   open: boolean;
   onToggleOpen: () => void;
   onEdit: () => void;
+  confirming: boolean;        // waiting for "Yes, delete"
+  onAskDelete: () => void;
+  onCancelDelete: () => void;
   onDelete: () => void;
 }
 
-function RunbookCard({ runbook: rb, attached, editing, open, onToggleOpen, onEdit, onDelete }: CardProps) {
+function RunbookCard({ runbook: rb, attached, editing, open, onToggleOpen, onEdit, confirming, onAskDelete, onCancelDelete, onDelete }: CardProps) {
   const stepsId = useId();
   const approvals = rb.steps.filter((s) => s.approval === 'required').length;
   const matches = (rb as Runbook & { matches?: MatchGroup | null }).matches;
@@ -214,10 +268,22 @@ function RunbookCard({ runbook: rb, attached, editing, open, onToggleOpen, onEdi
         </div>
       </div>
 
-      <div className="ios-row justify-between ios-divided">
-        <button type="button" onClick={onEdit} className="text-[15px] text-ios-blue hover:opacity-70">Edit runbook</button>
-        <button type="button" onClick={onDelete} className="text-[15px] text-ios-red hover:opacity-70">Delete</button>
-      </div>
+      {confirming ? (
+        <div className="ios-row flex-wrap justify-between ios-divided">
+          <span className="text-[15px] text-white">
+            Delete?{attached.length > 0 && ` ${attached.length} rule${attached.length > 1 ? 's' : ''} will be detached.`}
+          </span>
+          <span className="flex items-center gap-4">
+            <button type="button" onClick={onCancelDelete} className="text-[15px] text-ios-blue hover:opacity-70">No</button>
+            <button type="button" onClick={onDelete} className="text-[15px] font-semibold text-ios-red hover:opacity-70">Yes, delete</button>
+          </span>
+        </div>
+      ) : (
+        <div className="ios-row justify-between ios-divided">
+          <button type="button" onClick={onEdit} className="text-[15px] text-ios-blue hover:opacity-70">Edit runbook</button>
+          <button type="button" onClick={onAskDelete} className="text-[15px] text-ios-red hover:opacity-70">Delete</button>
+        </div>
+      )}
     </article>
   );
 }
@@ -235,7 +301,7 @@ interface EditorProps {
 function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: EditorProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [format, setFormat] = useState<RunbookFormat>(initial ? (initial.format as RunbookFormat) : 'auto');
-  const [raw, setRaw] = useState(initial?.raw ?? EXAMPLE);
+  const [raw, setRaw] = useState(initial?.raw ?? '');
   const [preview, setPreview] = useState<RunbookStep[]>(initial?.steps ?? []);
   const [detected, setDetected] = useState('');
   const [parseError, setParseError] = useState('');
@@ -353,8 +419,19 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
       <div className="grid lg:grid-cols-2 gap-4">
         <div>
           <label className={labelClass}>Runbook content</label>
-          <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={14} spellCheck={false}
+          <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={14} spellCheck={false} placeholder={PLACEHOLDER}
             className={`${inputClass} font-mono !text-[13px] leading-relaxed`} />
+          {!raw.trim() && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-ink-muted">Start from an example:</span>
+              {EXAMPLES.map((ex) => (
+                <button key={ex.label} type="button" title={ex.hint} onClick={() => { setFormat('auto'); setRaw(ex.raw); }}
+                  className="text-xs px-2.5 py-1 rounded-full bg-ios-fill text-ios-blue hover:bg-white/[0.16] transition-colors">
+                  {ex.label}
+                </button>
+              ))}
+            </div>
+          )}
           <p className="text-xs text-ink-muted mt-1.5">
             Use <code className="font-mono text-ink">{'{{field}}'}</code> to insert values from the event, e.g.{' '}
             <code className="font-mono text-ink">{'{{workflowId}}'}</code>.

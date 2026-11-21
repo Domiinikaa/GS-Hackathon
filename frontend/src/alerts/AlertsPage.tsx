@@ -81,7 +81,7 @@ export default function AlertsPage({ currentUser }: { currentUser?: User | null 
   async function handleAction(alert: Alert, action: AlertAction, stepIndex?: number) {
     setBusyId(alert.id);
     setError(null);
-    const path = action === 'approve' || action === 'done'
+    const path = action === 'approve' || action === 'done' || action === 'retry'
       ? `/alerts/${alert.id}/steps/${stepIndex}/${action}`
       : `/alerts/${alert.id}/${action}`;
     try {

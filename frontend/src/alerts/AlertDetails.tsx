@@ -1,9 +1,10 @@
 // OSOBA 1 – rozwinięta część karty alertu: treść, kroki runbooka (Mark done / Approve) i historia.
 // Wymaganie 2.6: "An alert should tell people what to do next" + "record what was done and by whom".
-import { CheckCircle2, Circle, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import type { Alert, RunbookStep } from '../shared/types';
 import { parseUtc } from './AlertCard';
 import type { OnAlertAction } from './AlertCard';
+import StepRunStatus, { StepIcon, canApprove, canMarkDone, canRetry, stepFinished } from '../runbooks/StepRunStatus';
 
 // "21:14" (dzisiaj) albo "20 Nov 21:14" – w czasie lokalnym przeglądarki
 function clock(iso?: string): string {
@@ -50,7 +51,8 @@ export default function AlertDetails({ alert, onAction, busy }: Props) {
         alert.steps.map((step, i) => (
           <StepRow key={i} index={i} step={step} disabled={busy || closed}
             onApprove={() => onAction(alert, 'approve', i)}
-            onDone={() => onAction(alert, 'done', i)} />
+            onDone={() => onAction(alert, 'done', i)}
+            onRetry={() => onAction(alert, 'retry', i)} />
         ))
       ) : (
         <div className="ios-row text-[15px] text-ink-muted">No runbook attached to this alert yet.</div>
@@ -69,27 +71,23 @@ export default function AlertDetails({ alert, onAction, busy }: Props) {
   );
 }
 
-function StepRow({ index, step, disabled, onApprove, onDone }: {
-  index: number; step: RunbookStep; disabled: boolean; onApprove: () => void; onDone: () => void;
+function StepRow({ index, step, disabled, onApprove, onDone, onRetry }: {
+  index: number; step: RunbookStep; disabled: boolean; onApprove: () => void; onDone: () => void; onRetry: () => void;
 }) {
-  const risky = step.approval === 'required';
-  const waitingForApproval = risky && !step.approved_by;
+  // Osoba 4: status kroku (zrobione przez aplikację / nieudane / pominięte / czeka) i tylko pasujące przyciski
+  const finished = stepFinished(step);
+  const failed = step.status === 'failed' && !step.done;
 
   return (
-    <div className="ios-row items-start py-3">
-      {step.done
-        ? <CheckCircle2 className="w-[22px] h-[22px] shrink-0 text-ios-green" />
-        : <Circle className="w-[22px] h-[22px] shrink-0 text-ink-faint" />}
+    <div className={`ios-row items-start py-3 ${failed ? 'bg-ios-red/[0.06]' : ''}`}>
+      <StepIcon step={step} />
 
       <div className="flex-1 min-w-0">
-        <p className={step.done ? 'text-[15px] text-ink-muted line-through' : 'text-[15px] text-white'}>
+        <p className={finished && !failed ? 'text-[15px] text-ink-muted' : 'text-[15px] text-white'}>
           {index + 1}. {step.text}
         </p>
+        <StepRunStatus step={step} />
         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-0.5 text-[13px]">
-          {step.action && <span className="text-ink-muted">Runs <code className="font-mono">{step.action}</code></span>}
-          {waitingForApproval && (
-            <span className="flex items-center gap-1 text-ios-orange"><ShieldAlert className="w-3.5 h-3.5" />Needs approval</span>
-          )}
           {step.approved_by && (
             <span className="flex items-center gap-1 text-ios-blue">
               <ShieldCheck className="w-3.5 h-3.5" />Approved by {step.approved_by}, {clock(step.approved_at)}
@@ -99,19 +97,26 @@ function StepRow({ index, step, disabled, onApprove, onDone }: {
         </div>
       </div>
 
-      {!step.done && (
-        waitingForApproval ? (
+      <div className="shrink-0 flex gap-2">
+        {canApprove(step) && (
           <button disabled={disabled} onClick={onApprove}
-            className="btn-primary shrink-0 text-[13px] h-8 px-3.5 disabled:opacity-40">
+            className="btn-primary text-[13px] h-8 px-3.5 disabled:opacity-40">
             Approve
           </button>
-        ) : (
-          <button disabled={disabled} onClick={onDone}
-            className="shrink-0 h-8 px-3.5 rounded-full bg-ios-fill text-[13px] font-semibold text-ios-blue hover:bg-white/[0.16] transition-colors disabled:opacity-40">
+        )}
+        {canRetry(step) && (
+          <button disabled={disabled} onClick={onRetry} title="Let the app try this step again"
+            className="h-8 px-3.5 rounded-full bg-ios-fill text-[13px] font-semibold text-ios-red hover:bg-white/[0.16] transition-colors disabled:opacity-40">
+            Retry
+          </button>
+        )}
+        {canMarkDone(step) && (
+          <button disabled={disabled} onClick={onDone} title={failed ? 'You fixed it yourself' : 'You did this step'}
+            className="h-8 px-3.5 rounded-full bg-ios-fill text-[13px] font-semibold text-ios-blue hover:bg-white/[0.16] transition-colors disabled:opacity-40">
             Mark done
           </button>
-        )
-      )}
+        )}
+      </div>
     </div>
   );
 }

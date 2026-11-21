@@ -215,7 +215,7 @@ def engine_test(req: EngineTestRequest, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------- kroki runbooka w alercie (wykonywanie)
-# Approve jednego kroku i Mark done są u Osoby 1 (routers/alerts.py) – tu decyzje, które dotyczą całej procedury.
+# Approve i Mark done są u Osoby 1 (routers/alerts.py); tutaj Retry nieudanego kroku.
 
 @router.get("/runbooks/actions/list")
 def list_actions():
@@ -223,24 +223,11 @@ def list_actions():
     return {"actions": ACTIONS, "kinds": list(KINDS)}
 
 
-@router.post("/alerts/{alert_id}/steps/{step_index}/approve-until")
-def approve_until(alert_id: int, step_index: int, db: Session = Depends(get_db),
-                  user=Depends(get_optional_current_user)):
-    """Zatwierdza wszystkie kroki od obecnego do tego włącznie (najwyżej do pierwszego kroku manual)."""
-    return runbook_runner.approve_until(db, alert_id, step_index, user)
-
-
 @router.post("/alerts/{alert_id}/steps/{step_index}/retry")
 def retry_step(alert_id: int, step_index: int, db: Session = Depends(get_db),
                user=Depends(get_optional_current_user)):
-    """Ponów krok, który zatrzymał procedurę. Krok ze zgodą może ponowić tylko lead / admin."""
+    """Ponów nieudany krok. Krok ze zgodą może ponowić tylko lead / admin."""
     return runbook_runner.retry_step(db, alert_id, step_index, user)
-
-
-@router.post("/alerts/{alert_id}/runbook/abort")
-def abort_runbook(alert_id: int, db: Session = Depends(get_db), user=Depends(get_optional_current_user)):
-    """Przerwij procedurę: pozostałe kroki anulowane, alert zostaje otwarty."""
-    return runbook_runner.abort_runbook(db, alert_id, user)
 
 
 # ---------------------------------------------------------------- symulator systemów docelowych

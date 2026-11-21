@@ -81,13 +81,9 @@ export const runbookApi = {
   rules: () => api<RuleRef[]>('/rules'),
   testEngine: (event: unknown) => api<EngineResult>('/engine/test', { method: 'POST', ...json({ event }) }),
 
-  // kroki runbooka w alercie – decyzje dotyczące całej procedury (pojedynczy Approve / Mark done są w alertach)
-  // stepIndex liczony od 0
-  approveUntil: (alertId: number, stepIndex: number) =>
-    api<Alert>(`/alerts/${alertId}/steps/${stepIndex}/approve-until`, { method: 'POST' }),
+  // Retry nieudanego kroku w alercie (Approve i Mark done są w alertach – Osoba 1); stepIndex liczony od 0
   retryStep: (alertId: number, stepIndex: number) =>
     api<Alert>(`/alerts/${alertId}/steps/${stepIndex}/retry`, { method: 'POST' }),
-  abortRunbook: (alertId: number) => api<Alert>(`/alerts/${alertId}/runbook/abort`, { method: 'POST' }),
 
   simServices: () => api<SimService[]>('/sim/services'),
   setSimService: (name: string, patch: Partial<Pick<SimService, 'healthy' | 'workflows_ok'>>) =>
