@@ -1,4 +1,4 @@
-"""OSOBA 1 – alerty: lista, szczegóły, ack/resolve, live feed."""
+"""Alerty: lista, szczegóły, ack/resolve, live feed."""
 from datetime import datetime
 from typing import Optional
 import asyncio
@@ -18,7 +18,7 @@ from services.alert_service import upsert_alert
 from services.contracts import Match
 from services.people_service import team_leads
 
-router = APIRouter(prefix="/api/alerts", tags=["Alerts (Osoba 1)"])
+router = APIRouter(prefix="/api/alerts", tags=["Alerts"])
 
 
 @router.get("")
@@ -44,7 +44,7 @@ class TestAlertRequest(BaseModel):
 
 @router.post("/test")
 def create_test_alert(req: TestAlertRequest, db: Session = Depends(get_db)):
-    """TYLKO DO TESTÓW: udaje Osobę 4 i przepuszcza paczkę przez upsert_alert."""
+    """TYLKO DO TESTÓW: tworzy alert z pominięciem silnika reguł (prosto przez upsert_alert)."""
     match = Match(
         rule_id=req.rule_id,
         team=req.team,
@@ -173,7 +173,7 @@ def _check_approve_permission(db: Session, alert: Alert, user: Optional[User]) -
 
 def _update_step(db, alert_id, step_index, user, action):
     """
-    Osoba 4: zmiana kroku pod blokadą alertu (dwa kliknięcia naraz, także z różnych kopii serwera, się nie nadpiszą),
+    Zmiana kroku pod blokadą alertu (dwa kliknięcia naraz, także z różnych kopii serwera, się nie nadpiszą),
     a potem runbook idzie dalej (np. zatwierdzony krok trafia do wykonania).
     """
     from services import runbook_runner

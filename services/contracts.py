@@ -1,5 +1,5 @@
 """
-"Gniazdka" między osobami. Tę strukturę zmieniamy tylko po ustaleniu z całym zespołem.
+Struktury danych przekazywane między etapami przetwarzania zdarzenia (patrz services/pipeline.py).
 """
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 
 @dataclass
 class Match:
-    """Wynik silnika reguł (Osoba 4) -> wejście do alertów (Osoba 1)."""
+    """Wynik silnika reguł -> wejście do alertów."""
     rule_id: str
     team: str
     event_id: int
@@ -24,7 +24,7 @@ class Match:
 
 @dataclass
 class Recipient:
-    """Wynik preferencji ludzi (Osoba 2) -> wejście do wysyłki (Osoba 3)."""
+    """Wynik preferencji ludzi -> wejście do wysyłki."""
     person_id: int | None   # None for "ui": the team feed, not one person
     name: str
     channel: str            # email | sms | phone | ui

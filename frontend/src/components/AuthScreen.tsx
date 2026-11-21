@@ -154,7 +154,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. jsmith@goldmansachs.com"
+                  placeholder="e.g. jsmith@example.com"
                   className="field w-full pl-9 pr-3 py-2 text-sm placeholder-slate-600"
                 />
               </div>

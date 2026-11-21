@@ -1,4 +1,4 @@
-// OSOBA 4 – wywołania backendu dla runbooków i testu silnika (routers/runbooks.py).
+// Wywołania backendu dla runbooków i testu silnika (routers/runbooks.py).
 import { api } from '../shared/api';
 import type { Alert, Runbook, RunbookStep, StepKind } from '../shared/types';
 
@@ -86,7 +86,7 @@ export const runbookApi = {
   rules: () => api<RuleRef[]>('/rules'),
   testEngine: (event: unknown) => api<EngineResult>('/engine/test', { method: 'POST', ...json({ event }) }),
 
-  // Retry nieudanego kroku w alercie (Approve i Mark done są w alertach – Osoba 1); stepIndex liczony od 0
+  // Retry nieudanego kroku w alercie (Approve i Mark done są w alertach); stepIndex liczony od 0
   retryStep: (alertId: number, stepIndex: number) =>
     api<Alert>(`/alerts/${alertId}/steps/${stepIndex}/retry`, { method: 'POST' }),
 

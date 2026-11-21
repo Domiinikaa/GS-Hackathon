@@ -1,10 +1,10 @@
 """
-Testy API Osoby 4 na ŚWIEŻEJ, tymczasowej bazie SQLite (app.db nie jest ruszane).
+Testy API na ŚWIEŻEJ, tymczasowej bazie SQLite (app.db nie jest ruszane).
 
     python tests/test_api.py
 
 Sprawdza: dane startowe, runbooki (CRUD, podgląd, podpinanie, błędy), /api/engine/test
-oraz pełną drogę zdarzenia /api/ingest -> baza -> silnik reguł -> przekazanie do Osoby 1.
+oraz pełną drogę zdarzenia /api/ingest -> baza -> silnik reguł -> alert.
 """
 import os
 import sys
@@ -60,7 +60,7 @@ def test_seed_runbooks_attached_to_rules():
     assert runbooks["settlement-timeout"]["steps"][0]["action"] == "http_get"
     assert runbooks["settlement-timeout"]["steps"][2]["approval"] == "required"
     assert runbooks["payments-high-error-rate"]["steps"][1]["approval"] == "required"
-    # Osoba 4: z wolnego tekstu rozpoznajemy akcje (restart, wait, eskalacja); ryzykowne czekają na zgodę
+    # Z wolnego tekstu rozpoznajemy akcje (restart, wait, eskalacja); ryzykowne czekają na zgodę
     pricing = runbooks["pricing-warnings"]["steps"]
     assert [s["action"] for s in pricing] == [None, "restart_service", "wait", "escalate"]
     assert [s["approval"] for s in pricing] == ["none", "required", "none", "required"]
@@ -152,7 +152,7 @@ def test_parse_preview_returns_warnings_name_and_matches():
     assert r["name"] == "x" and r["matches"] == {"and": [{"field": "type", "op": "eq", "value": "T"}]}
 
 
-def test_appendix_b_yaml_runbook_attaches_itself_by_matches():
+def test_yaml_runbook_attaches_itself_by_matches():
     yaml_rb = ("runbook: settlement-timeout-b\nmatches:\n  type: WORKFLOW_FAILED\n  \"error.code\": CIRCUIT_OPEN\n"
                "steps:\n  - action: retry_workflow\n    workflowId: \"{{workflowId}}\"\n")
     rb = ok(client.post("/api/runbooks", json={"name": "settlement-timeout-b", "raw": yaml_rb}))
@@ -234,7 +234,7 @@ def test_disabled_rule_is_skipped_by_engine():
 def test_ingest_end_to_end_hands_matches_to_person_1():
     captured = []
     real = pipeline.upsert_alert
-    pipeline.upsert_alert = lambda db, match: captured.append(match)  # udajemy Osobę 1
+    pipeline.upsert_alert = lambda db, match: captured.append(match)  # podglądamy dopasowanie zamiast tworzyć alert
     try:
         r = ok(client.post("/api/ingest/trade-gateway", json=[TRADE, TRADE, {"noise": True}]))
         assert r["accepted"] == 3

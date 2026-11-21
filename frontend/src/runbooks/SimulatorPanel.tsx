@@ -1,4 +1,4 @@
-// OSOBA 4 – symulator systemów docelowych: przełączniki "działa / nie działa" + dziennik tego,
+// Symulator systemów docelowych: przełączniki "działa / nie działa" + dziennik tego,
 // co aplikacja zrobiła w udawanym świecie (sprawdzenie zdrowia, ponowienie, restart, ticket, eskalacja).
 import { useEffect, useState } from 'react';
 import { Server } from 'lucide-react';

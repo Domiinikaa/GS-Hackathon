@@ -144,7 +144,7 @@ def _mock_sources() -> list[Source]:
     ]
 
 
-def seed_sources(db: Session) -> int:  # Osoba 3
+def seed_sources(db: Session) -> int:
     existing_keys = {key for (key,) in db.query(Source.key).all()}
     added = 0
     for src in _mock_sources():
@@ -225,7 +225,7 @@ def _mock_rules() -> list[Rule]:
     ]
 
 
-def seed_rules(db: Session) -> int:  # Osoba 2 – 4 reguły z Appendix A
+def seed_rules(db: Session) -> int:
     existing_ids = {rid for (rid,) in db.query(Rule.id).all()}
     added = 0
     for rule in _mock_rules():
@@ -276,7 +276,7 @@ def _seed_members(db: Session) -> int:
     return len(members)
 
 
-def seed_team_leads(db: Session) -> int:  # Osoba 2 – runs once, also on databases created before roles existed
+def seed_team_leads(db: Session) -> int:  # runs once: skipped when any lead already exists
     if db.query(Person).filter(Person.role == "lead").count() > 0:
         return 0
     leads = [
@@ -287,7 +287,7 @@ def seed_team_leads(db: Session) -> int:  # Osoba 2 – runs once, also on datab
     return len(leads)
 
 
-def seed_people(db: Session, *, merge: bool = False) -> int:  # Osoba 2
+def seed_people(db: Session, *, merge: bool = False) -> int:
     if not merge:
         added = 0
         if db.query(Person).count() == 0:
@@ -357,7 +357,7 @@ PRICING_RUNBOOK = (
 )
 
 
-def seed_runbooks(db: Session) -> int:  # Osoba 4
+def seed_runbooks(db: Session) -> int:
     from services.runbook_parser import parse_runbook_full
 
     by_name = {rb.name: rb for rb in db.query(Runbook).all()}
@@ -441,17 +441,9 @@ def main(argv: list[str] | None = None) -> int:
             selected.append("people")
 
     from database import Base, SessionLocal, engine, startup_lock
-    from services.alert_service import ensure_open_dedup_index
-    from services.connectors.ingest_manager import ensure_sources_columns
-    from services.delivery import ensure_delivery_columns
-    from services.people_service import ensure_people_role_column
 
     with startup_lock():
         Base.metadata.create_all(bind=engine)
-        ensure_sources_columns(engine)
-        ensure_delivery_columns(engine)
-        ensure_open_dedup_index(engine)
-        ensure_people_role_column(engine)
 
         db = SessionLocal()
         try:

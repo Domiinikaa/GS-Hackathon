@@ -1,8 +1,6 @@
 """
-OSOBA 4 – wykonywanie kroków runbooka w alercie (kartka 2.6).
-
-  "Steps can be actions… Risky actions need a human to approve them first, from the UI or by replying."
-  "Record what was done and by whom, and close the alert when the problem goes away."
+Wykonywanie kroków runbooka w alercie. Ryzykowne kroki czekają na zgodę człowieka (z UI albo odpowiedzią SMS),
+każdy krok zapisuje co i kto zrobił, a alert zamyka się sam, gdy problem minie.
 
 Rodzaje kroków (services/runbook_parser.step_kind):
   auto            aplikacja robi sama
@@ -37,13 +35,13 @@ from sqlalchemy import event as sa_event
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, engine
-from models import Alert, CustomAction, Event, Person, Runbook, Team
+from models import Alert, CustomAction, Event, Person, Team
 from services import live
 from services import simulator as sim
 from services.delivery import enqueue_deliveries
 from services.people_service import plan_recipients
 from services.rules_engine import render_template
-from services.runbook_parser import (ACTIONS, FAIL_WORDS, OK_WORDS, condition_checkable, parse_runbook_full,
+from services.runbook_parser import (ACTIONS, FAIL_WORDS, OK_WORDS, condition_checkable,
                                      step_kind)
 
 log = logging.getLogger("runbook_runner")
@@ -222,8 +220,8 @@ def resolve_team(db: Session, target: str) -> str | None:
 
 
 def escalate_to_team(db: Session, alert: Alert, target: str) -> tuple[bool, str]:
-    """Powiadamia ludzi z innego zespołu tym samym torem co nowy alert: preferencje i godziny (Osoba 2),
-    wysyłka z ponawianiem przez Outbox (Osoba 3). "…on-call" = tylko osoby na dyżurze, jeśli są."""
+    """Powiadamia ludzi z innego zespołu tym samym torem co nowy alert: preferencje i godziny,
+    wysyłka z ponawianiem przez Outbox. "…on-call" = tylko osoby na dyżurze, jeśli są."""
     team = resolve_team(db, target)
     if team is None:
         return False, f"No team called “{target}” – add it (and its people) in Admin / People"
@@ -335,7 +333,7 @@ def retry_step(db: Session, alert_id: int, index: int, user: Any) -> Alert:
         if step.get("status") != "failed" or step.get("done"):
             raise HTTPException(409, "Only a failed step can be retried")
         if step.get("approval") == "required":
-            from routers.alerts import _check_approve_permission  # ta sama zasada co Approve (Osoba 1)
+            from routers.alerts import _check_approve_permission  # ta sama zasada co Approve w UI
             _check_approve_permission(db, alert, user)
         who = getattr(user, "uname", None) or "anonymous"
         _set(alert, index, run_no=int(step.get("run_no") or 1) + 1)
@@ -353,7 +351,7 @@ RECOVERY_WORDS = {"resolved", "ok", "recovered", "closed", "cleared", "normal", 
 
 
 def is_recovery(payload: Any) -> bool:
-    """Zdarzenie mówi, że problem minął: {"status": "resolved"} (Alertmanager z kartki), state: ok itp."""
+    """Zdarzenie mówi, że problem minął: {"status": "resolved"} (Alertmanager), state: ok itp."""
     if not isinstance(payload, dict):
         return False
     return any(str(payload.get(k, "")).strip().lower() in RECOVERY_WORDS for k in ("status", "state"))
@@ -369,22 +367,3 @@ def resolve_recovered(db: Session, dedup_key: str, rule_id: str) -> int | None:
     _hist(alert, "system", f"resolved – the problem went away (recovery event for rule {rule_id})")
     live.publish(alert)
     return alert.id
-
-
-# ---------------------------------------------------------------- start serwera
-
-def upgrade_runbook_steps(db: Session) -> int:
-    """Runbooki zapisane przed runnerem nie mają warunków ani rodzajów kroków – parsujemy je ponownie."""
-    n = 0
-    custom = custom_actions(db)
-    for rb in db.query(Runbook).all():
-        if rb.steps and all("condition" in s for s in rb.steps):
-            continue
-        try:
-            rb.steps = parse_runbook_full(rb.raw, rb.format or "auto", custom).steps
-            n += 1
-        except ValueError:
-            log.warning("runbook %s could not be re-parsed", rb.id)
-    if n:
-        db.commit()
-    return n

@@ -33,7 +33,7 @@ import main  # noqa: E402
 from database import SessionLocal  # noqa: E402
 from models import Alert, ChannelSetting, Delivery, GatewayMessage  # noqa: E402
 from services.channels.messages import build_message  # noqa: E402
-from services.delivery import MAX_ATTEMPTS, ensure_delivery_columns, process_due  # noqa: E402
+from services.delivery import MAX_ATTEMPTS, process_due  # noqa: E402
 
 # czysta baza z danymi startowymi przed testami tego pliku – patrz tests/conftest.py
 SEED = {"include_people": True}
@@ -611,26 +611,3 @@ def test_lifespan_starts_delivery_worker_automatically():
             time.sleep(0.2)
 
         assert status == "sent"
-
-
-# ---------------------------------------------------------------- 10. Schema migration for existing DBs
-
-def test_ensure_delivery_columns_migrates_old_table():
-    eng = create_engine("sqlite://")
-    with eng.begin() as conn:
-        conn.execute(text(
-            "CREATE TABLE deliveries ("
-            "id INTEGER PRIMARY KEY, alert_id INTEGER, person_id INTEGER, channel VARCHAR(20), "
-            "\"to\" VARCHAR(200), status VARCHAR(20), attempts INTEGER, last_error TEXT, "
-            "created_at TIMESTAMP, sent_at TIMESTAMP)"
-        ))
-        conn.execute(text("INSERT INTO deliveries (alert_id, channel, status) VALUES (1, 'sms', 'pending')"))
-
-    ensure_delivery_columns(eng)
-    cols = {c["name"] for c in inspect(eng).get_columns("deliveries")}
-    assert {"subject", "body", "html", "next_attempt_at", "recipient_name", "reply_code"}.issubset(cols)
-
-    # Idempotent on second call
-    ensure_delivery_columns(eng)
-    with eng.connect() as conn:
-        assert conn.execute(text("SELECT COUNT(*) FROM deliveries")).scalar() == 1

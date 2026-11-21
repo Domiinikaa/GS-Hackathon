@@ -1,5 +1,5 @@
 """
-Odpowiedzi na alert z telefonu (kartka 2.6: "approve … by replying to the alert").
+Odpowiedzi na alert z telefonu.
 
 SMS:   "ACK 4821"      → przejmij alert (acknowledge)
        "YES 4821"      → zatwierdź pierwszy krok runbooka, który czeka na zgodę (approve)

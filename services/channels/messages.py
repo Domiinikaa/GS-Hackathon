@@ -1,5 +1,5 @@
 """
-Treść wiadomości o alercie – inna dla każdego kanału (wymaganie 2.6):
+Treść wiadomości o alercie – inna dla każdego kanału:
   e-mail  → pełna treść + wszystkie kroki runbooka + link
   SMS     → krótko (≤160 znaków) + link do alertu
   telefon → krótki tekst do przeczytania przez syntezator mowy

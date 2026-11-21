@@ -1,7 +1,7 @@
 """
-End-to-end integration tests for the unified pipeline before handing off to Notifications (Osoba 3).
+End-to-end integration tests for the unified pipeline: ingest -> rules -> alerts -> recipients.
 
-    /Users/koperek/Desktop/programy/GS-Hackathon/.venv/bin/python tests/test_integration_pipeline.py
+    python tests/test_integration_pipeline.py
 """
 import json
 import os
@@ -190,7 +190,7 @@ def test_pricing_logfile_key_value_and_grouping():
     assert d["title"] == "Pricing warnings for EURUSD"
     # zespół zawsze dostaje wpis w UI; Marek (Pricing) ma domyślnie e-mail dla ostrzeżeń (warning)
     assert d["recipients"] == [(None, "team:Pricing", "ui", None), (5, "Marek", "email", "marek@example.com")]
-    assert len(d["steps"]) == 4  # Appendix B pricing text splits into 4 steps
+    assert len(d["steps"]) == 4  # the pricing free-text runbook splits into 4 steps
     alert = ok(client.get(f"/api/alerts/{d['alert_id']}"))
     assert alert["count"] == 2
     assert alert["dedup_key"] == "pricing-warnings"  # repeats of the same rule share one alert

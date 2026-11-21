@@ -1,5 +1,5 @@
 """
-Testy Osoby 4: silnik reguł + parser runbooków. Bez serwera i bez bazy.
+Testy: silnik reguł + parser runbooków. Bez serwera i bez bazy.
 
     python tests/test_engine.py        (albo: pytest tests/)
 """
@@ -191,7 +191,7 @@ def texts(steps):
 
 
 def test_actions_and_kinds_from_text():
-    """Osoba 4: z tekstu rozpoznajemy akcje; ryzykowne (retry, restart, eskalacja) domyślnie wymagają zgody."""
+    """Z tekstu rozpoznajemy akcje; ryzykowne (retry, restart, eskalacja) domyślnie wymagają zgody."""
     from services.runbook_parser import step_kind
     yaml_steps = parse_runbook(YAML, "yaml")
     assert [step_kind(s) for s in yaml_steps] == ["manual", "approve", "approve"]
@@ -269,9 +269,9 @@ def test_fill_steps():
     assert steps[1]["text"].startswith("Retry workflow {{")  # oryginał nietknięty
 
 
-# ---------------------------------------------------------------- Appendix B (kartka zadania), słowo w słowo
+# ---------------------------------------------------------------- przykładowe runbooki w trzech formatach
 
-APPENDIX_YAML = """runbook: settlement-timeout
+SETTLEMENT_YAML = """runbook: settlement-timeout
 matches:
   type: WORKFLOW_FAILED
   "error.code": TIMEOUT
@@ -288,20 +288,20 @@ steps:
     approval: required
 """
 
-APPENDIX_MD = """# HighErrorRate on payments-api
+PAYMENTS_MD = """# HighErrorRate on payments-api
 1. Open the payments dashboard and check if errors are in one region only.
 2. If one region: fail traffic over to the other region (needs approval from the team lead).
 3. If all regions: check the last deployment and roll it back.
 4. Post an update in the #payments-incidents channel every 15 minutes.
 """
 
-APPENDIX_TEXT = ("When pricing latency goes over a second, it's usually the cache. Restart the pricing-engine "
+PRICING_TEXT = ("When pricing latency goes over a second, it's usually the cache. Restart the pricing-engine "
                  "instance named in the alert, wait 2 minutes, and if latency is still high, call the pricing "
                  "on-call person.")
 
 
-def test_appendix_b_yaml():
-    r = parse_runbook_full(APPENDIX_YAML, "auto")
+def test_yaml_runbook():
+    r = parse_runbook_full(SETTLEMENT_YAML, "auto")
     assert r.format == "yaml" and r.name == "settlement-timeout" and not r.warnings
     assert texts(r.steps) == [
         "Check: Is counterparty-service healthy? (action: http_get; url: http://counterparty-service/health)",
@@ -326,8 +326,8 @@ def test_appendix_b_yaml():
     assert filled[2]["approval"] == "required"
 
 
-def test_appendix_b_markdown():
-    r = parse_runbook_full(APPENDIX_MD, "auto")
+def test_markdown_runbook():
+    r = parse_runbook_full(PAYMENTS_MD, "auto")
     assert r.format == "markdown" and not r.warnings
     assert len(r.steps) == 4
     assert r.steps[0]["approval"] == "none"
@@ -336,8 +336,8 @@ def test_appendix_b_markdown():
                                   "(needs approval from the team lead).")
 
 
-def test_appendix_b_free_text():
-    r = parse_runbook_full(APPENDIX_TEXT, "auto")
+def test_free_text_runbook():
+    r = parse_runbook_full(PRICING_TEXT, "auto")
     assert r.format == "text" and not r.warnings
     assert texts(r.steps) == [
         "When pricing latency goes over a second, it's usually the cache",
@@ -348,7 +348,7 @@ def test_appendix_b_free_text():
 
 
 def test_runbook_matches_work_in_engine():
-    m = parse_runbook_full(APPENDIX_YAML).matches
+    m = parse_runbook_full(SETTLEMENT_YAML).matches
     assert check_group({"type": "WORKFLOW_FAILED", "error": {"code": "TIMEOUT"}}, m)
     assert not check_group({"type": "WORKFLOW_FAILED", "error": {"code": "DB_DOWN"}}, m)
     # prosty zapis bez normalizacji też działa

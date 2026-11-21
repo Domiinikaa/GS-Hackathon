@@ -34,7 +34,7 @@ def list_deliveries(status: Optional[str] = None, alert_id: Optional[int] = None
 
 
 class TestDeliveryRequest(BaseModel):
-    """Udawany odbiorca – do testów, zanim recipients_for (Osoba 2) jest w main."""
+    """Ręczna wysyłka testowa do podanego odbiorcy – sprawdza kanał bez reguł i ludzi."""
     channel: str = "email"            # email | sms | phone
     to: str = "kasia@example.com"     # dla sms/phone: numer, np. +48 600 000 001
     name: str = "Kasia"

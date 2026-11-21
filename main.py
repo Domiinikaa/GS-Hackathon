@@ -9,145 +9,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from database import engine, Base, SessionLocal, startup_lock
-import models  # Registers all models with Base
+from database import engine, Base, startup_lock
+import models  # noqa: F401  (registers all tables with Base)
 from services.connectors import ingest_manager
-from services.connectors.ingest_manager import ensure_sources_columns
-from services.delivery import ensure_delivery_columns, start_worker
-from services import runbook_runner
-from routers import api, auth, admin, alerts, rules, people, sources, deliveries, runbooks
-from services.alert_service import ensure_open_dedup_index
-from services.people_service import ensure_people_role_column, migrate_admins_to_leads
-from sqlalchemy import inspect, text
+from services.delivery import start_worker
+from routers import auth, admin, alerts, rules, people, sources, deliveries, runbooks
 
-# Tabele (SQLite / PostgreSQL) są tworzone niżej, w bloku startowym pod startup_lock()
-
-
-def ensure_sqlite_columns():
-    """Ensures backwards compatibility schema migrations in local SQLite development."""
-    if engine.dialect.name != "sqlite":
-        return
-    with engine.connect() as conn:
-        try:
-            conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0"))
-            conn.commit()
-        except Exception:
-            pass
-        try:
-            conn.execute(text("ALTER TABLE items ADD COLUMN user_id INTEGER REFERENCES users(id)"))
-            conn.commit()
-        except Exception:
-            pass
-        try:
-            conn.execute(text("ALTER TABLE invite_codes ADD COLUMN is_admin_invite BOOLEAN DEFAULT 0"))
-            conn.commit()
-        except Exception:
-            pass
-        try:
-            conn.execute(text("ALTER TABLE invite_codes ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'member'"))
-            conn.execute(text("UPDATE invite_codes SET role = 'lead' WHERE is_admin_invite = 1"))
-            conn.commit()
-        except Exception:
-            pass
-        try:
-            conn.execute(text("ALTER TABLE invite_codes ADD COLUMN team VARCHAR(100)"))
-            conn.commit()
-        except Exception:
-            pass
-        for col_sql in (
-            "ALTER TABLE sources ADD COLUMN enabled BOOLEAN DEFAULT 1",
-            "ALTER TABLE sources ADD COLUMN status VARCHAR(20) DEFAULT 'active'",
-            "ALTER TABLE sources ADD COLUMN last_error TEXT",
-            "ALTER TABLE sources ADD COLUMN last_event_at DATETIME",
-            "ALTER TABLE sources ADD COLUMN events_count INTEGER DEFAULT 0",
-        ):
-            try:
-                conn.execute(text(col_sql))
-                conn.commit()
-            except Exception:
-                pass
-
-
-def ensure_invite_role_column(bind) -> None:
-    """Adds invite_codes.role and invite_codes.team on existing SQLite or PostgreSQL databases."""
-    insp = inspect(bind)
-    if "invite_codes" not in insp.get_table_names():
-        return
-    existing = {col["name"] for col in insp.get_columns("invite_codes")}
-    with bind.begin() as conn:
-        if "role" not in existing:
-            conn.execute(text("ALTER TABLE invite_codes ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'member'"))
-            if bind.dialect.name == "postgresql":
-                conn.execute(text("UPDATE invite_codes SET role = 'lead' WHERE is_admin_invite IS TRUE"))
-            else:
-                conn.execute(text("UPDATE invite_codes SET role = 'lead' WHERE is_admin_invite = 1"))
-        if "team" not in existing:
-            conn.execute(text("ALTER TABLE invite_codes ADD COLUMN team VARCHAR(100)"))
-
-
-def purge_demo_user():
-    """Removes any obsolete demo accounts from previous iterations."""
-    db = SessionLocal()
-    try:
-        demo = db.query(models.User).filter(
-            (models.User.uname == "demo_goldman") | (models.User.email == "demo@goldmansachs.com")
-        ).first()
-        if demo:
-            db.query(models.Item).filter(models.Item.user_id == demo.id).delete()
-            db.delete(demo)
-            db.commit()
-            print("[CLEANUP] Obsolete demo account successfully removed from database.")
-    except Exception as e:
-        print(f"[CLEANUP ERROR] {e}")
-    finally:
-        db.close()
-
-
-def sync_legacy_teams():
-    """Databases created before Teams were unified keep their teams in the old `teams`
-    table, which nothing reads any more. People and rules still point at those names,
-    so editing such a person failed with "team does not exist". Copy the missing names
-    into the unified registry once; afterwards Admin & Teams manages them as usual."""
-    db = SessionLocal()
-    try:
-        if "teams" not in inspect(db.get_bind()).get_table_names():
-            return
-        legacy = [row[0] for row in db.execute(text("SELECT name FROM teams")) if row[0]]
-        known = {t.name.lower() for t in db.query(models.Team).all()}
-        missing = [name for name in legacy if name.strip().lower() not in known]
-        if missing:
-            db.add_all(models.Team(name=name.strip()) for name in missing)
-            db.commit()
-            print(f"[MIGRATE] Registered legacy teams: {', '.join(missing)}")
-    except Exception as e:
-        print(f"[MIGRATE ERROR] {e}")
-    finally:
-        db.close()
-
-
-# Startup schema initialization & migrations (mock data is NOT seeded at startup; run `python seed.py` to load it)
-# Przy kilku kopiach serwera tylko jedna na raz przygotowuje bazę (patrz database.startup_lock)
+# Create tables on startup (sample data is loaded separately: `python seed.py`).
+# With several replicas only one prepares the schema at a time (see database.startup_lock).
 with startup_lock():
     Base.metadata.create_all(bind=engine)
-    ensure_sqlite_columns()
-    ensure_invite_role_column(engine)
-    ensure_sources_columns(engine)
-    ensure_delivery_columns(engine)
-    ensure_open_dedup_index(engine)
-    ensure_people_role_column(engine)
-    purge_demo_user()
-    sync_legacy_teams()
 
-    startup_db = SessionLocal()
-    try:
-        migrate_admins_to_leads(startup_db)
-        runbook_runner.upgrade_runbook_steps(startup_db)   # stare runbooki -> rodzaje kroków i warunki
-    finally:
-        startup_db.close()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    ensure_delivery_columns(engine)
     start_worker()
     await ingest_manager.start()
     try:
@@ -172,13 +47,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Authentication & Administration routers
-app.include_router(auth.router)
-app.include_router(admin.router)
-app.include_router(api.router)
-
-# Alerting system routers (from feature/rules-ui)
-for r in (alerts, rules, people, sources, deliveries, runbooks):
+for r in (auth, admin, alerts, rules, people, sources, deliveries, runbooks):
     app.include_router(r.router)
 
 

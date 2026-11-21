@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, time
 from typing import Iterable
 
-from sqlalchemy import func, inspect, text
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models import Alert, Person, Team, User
@@ -129,19 +129,6 @@ def plan_recipients(
     return out
 
 
-def ensure_people_role_column(engine) -> bool:
-    """Adds people.role to databases created before the column existed (SQLite and Postgres).
-    Returns True when the column was added."""
-    insp = inspect(engine)
-    if "people" not in insp.get_table_names():
-        return False  # fresh database: create_all() makes the table with the column
-    if any(col["name"] == "role" for col in insp.get_columns("people")):
-        return False
-    with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE people ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'member'"))
-    return True
-
-
 def team_leads(db: Session, team: str) -> list[Person]:
     """Leads of a team: they approve risky runbook steps for alerts of that team."""
     return db.query(Person).filter(Person.team == team, Person.role == "lead").order_by(Person.name).all()
@@ -231,25 +218,6 @@ def sync_user_admin_for_person(db: Session, person: Person) -> User | None:
     if user is not None:
         user.is_admin = person.role == "lead"
     return user
-
-
-def migrate_admins_to_leads(db: Session) -> int:
-    """Idempotent startup migration: every User with is_admin=True is synced to Person.role='lead'."""
-    admins = db.query(User).filter(User.is_admin == True).all()  # noqa: E712
-    updated = 0
-    for admin in admins:
-        person = _find_person_for_user(db, admin)
-        if person is not None:
-            if person.role != "lead":
-                person.role = "lead"
-                updated += 1
-        else:
-            synced = sync_person_role_for_user(db, admin)
-            if synced is not None:
-                updated += 1
-    if updated:
-        db.commit()
-    return updated
 
 
 def recipients_for(db: Session, alert: Alert, rule_channels: list[str] | None = None) -> list[Recipient]:

@@ -21,7 +21,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from sqlalchemy import or_, text, update
+from sqlalchemy import or_, update
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
@@ -148,24 +148,3 @@ def start_worker() -> None:
             _worker = threading.Thread(target=_loop, name="delivery-worker", daemon=True)
             _worker.start()
             log.info("delivery worker started (channels: %s)", ", ".join(available_channels()) or "none")
-
-
-# ---------------------------------------------------------------- nowe kolumny w istniejących bazach
-NEW_COLUMNS = {
-    "subject": "VARCHAR(300)",
-    "body": "TEXT",
-    "html": "TEXT",
-    "next_attempt_at": "TIMESTAMP",
-    "recipient_name": "VARCHAR(100)",
-    "reply_code": "VARCHAR(8)",
-}
-
-
-def ensure_delivery_columns(engine) -> None:
-    """create_all nie dodaje kolumn do istniejących tabel – dopisujemy brakujące przy starcie."""
-    for column, sql_type in NEW_COLUMNS.items():
-        try:
-            with engine.begin() as conn:  # osobna transakcja na każdą kolumnę (Postgres)
-                conn.execute(text(f"ALTER TABLE deliveries ADD COLUMN {column} {sql_type}"))
-        except Exception:  # noqa: BLE001 – kolumna już jest
-            pass

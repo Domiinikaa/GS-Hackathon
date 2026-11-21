@@ -1,5 +1,5 @@
 """
-OSOBA 4 – silnik reguł.
+Silnik reguł.
 
 Dla jednego zdarzenia sprawdza wszystkie reguły i zwraca dopasowania (Match).
 
@@ -9,7 +9,7 @@ Dla jednego zdarzenia sprawdza wszystkie reguły i zwraca dopasowania (Match).
 - operatory: eq neq gt gte lt lte in contains wildcard (te same co frontend/src/rules/ruleTypes.ts).
 - szablony: "Rejected {{payload.currency}}" -> "Rejected EUR". Brak pola -> placeholder zostaje widoczny.
 - dedup_key: rule.id [| wartość pola group_by] [| numer okna czasowego, jeśli group_window_s].
-  Ten sam klucz = ten sam alert (Osoba 1 robi count += 1), więc "jeden alert na instrument co 5 min"
+  Ten sam klucz = ten sam alert (alert_service robi count += 1), więc "jeden alert na instrument co 5 min"
   wychodzi sam z siebie: po 5 minutach zmienia się numer okna, więc powstaje nowy alert.
 - kroki runbooka: z rule.runbook_id albo z runbooka, którego `matches` pasuje do zdarzenia;
   wartości ze zdarzenia są podstawione (services/runbook_parser.fill_steps).
@@ -159,7 +159,7 @@ def check_group(data: Any, group: dict[str, Any] | None) -> bool:
         return not items or any(check_condition(data, c) for c in items)
     if "field" in group:  # pojedynczy warunek bez grupy też akceptujemy
         return check_condition(data, group)
-    # prosty zapis z runbooka (Appendix B): {"type": "WORKFLOW_FAILED", "error.code": "TIMEOUT"}
+    # prosty zapis z runbooka: {"type": "WORKFLOW_FAILED", "error.code": "TIMEOUT"}
     return check_group(data, normalize_matches(group))
 
 

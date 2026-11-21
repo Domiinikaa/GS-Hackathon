@@ -1,5 +1,5 @@
 """
-Built-in realistic event simulator & sample presets (Appendix A + extra scenarios).
+Built-in realistic event simulator & sample presets.
 Allows simulating every source type (Webhook, Polled API, SSE, Log File, Kafka,
 RabbitMQ, Custom) with zero external infrastructure.
 """

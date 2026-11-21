@@ -1,6 +1,6 @@
 """
-Testy Osoby 4: wykonywanie kroków runbooka (auto / approve / manual) na symulatorze i zamykanie alertu,
-gdy problem minął (kartka 2.6). ŚWIEŻA, tymczasowa baza SQLite.
+Testy: wykonywanie kroków runbooka (auto / approve / manual) na symulatorze i zamykanie alertu,
+gdy problem minął. ŚWIEŻA, tymczasowa baza SQLite.
 
     python tests/test_runner.py
 
@@ -28,7 +28,7 @@ SEED = {}
 
 client = TestClient(main.app)
 
-APPENDIX_YAML = """runbook: settlement-timeout
+SETTLEMENT_YAML = """runbook: settlement-timeout
 matches:
   type: WORKFLOW_FAILED
   "error.code": TIMEOUT
@@ -84,7 +84,7 @@ def statuses(aid):
 
 
 def add_person(name, team, phone=None, email=None, role="member", on_call=False, prefs=None):
-    """Osoba w bazie (seed nie dodaje już przykładowych osób). Zespół tworzy, jeśli go nie ma."""
+    """Osoba w bazie (ten plik nie wgrywa przykładowych osób). Zespół tworzy, jeśli go nie ma."""
     db = SessionLocal()
     try:
         if not db.query(Team).filter(Team.name == team).first():
@@ -116,11 +116,11 @@ def sim_calls(action, alert_id):
         db.close()
 
 
-# ---------------------------------------------------------------- runbook z kartki (Appendix B)
+# ---------------------------------------------------------------- przykładowy runbook settlement-timeout
 
 def test_healthy_service_runs_everything_and_skips_escalation():
     reset_sim()
-    use_runbook(APPENDIX_YAML)
+    use_runbook(SETTLEMENT_YAML)
     aid = fire()
     a = alert(aid)
     assert [s["status"] for s in a["steps"]] == ["succeeded", "succeeded", "skipped"]
@@ -132,7 +132,7 @@ def test_healthy_service_runs_everything_and_skips_escalation():
 def test_broken_service_waits_for_approval_then_escalates():
     reset_sim()
     add_person("Ola", "counterparty-support", phone="+48 600 100 001", on_call=True, prefs={"critical": ["sms"]})
-    use_runbook(APPENDIX_YAML)
+    use_runbook(SETTLEMENT_YAML)
     set_sim("counterparty-service", healthy=False)
     aid = fire()
     steps = alert(aid)["steps"]
@@ -149,7 +149,7 @@ def test_broken_service_waits_for_approval_then_escalates():
 
 def test_duplicate_event_does_not_run_steps_again():
     reset_sim()
-    use_runbook(APPENDIX_YAML)
+    use_runbook(SETTLEMENT_YAML)
     aid = fire()
     before = (sim_calls("http_get", aid), sim_calls("retry_workflow", aid))
     assert fire() == aid                                        # ten sam alert, licznik ×2
@@ -174,7 +174,7 @@ def test_approve_then_manual():
     use_runbook("1. Fail traffic over to the other region (needs approval from the team lead)")
     aid = fire()
     assert statuses(aid) == ["waiting_approval"]
-    ok(client.post(f"/api/alerts/{aid}/steps/0/done"), 409)     # najpierw zgoda (zasada Osoby 1)
+    ok(client.post(f"/api/alerts/{aid}/steps/0/done"), 409)     # najpierw zgoda
     ok(client.post(f"/api/alerts/{aid}/steps/0/approve"))
     assert statuses(aid) == ["waiting"]                         # zgoda jest, robi człowiek
     assert ok(client.post(f"/api/alerts/{aid}/steps/0/done"))["steps"][0]["done"]

@@ -1,4 +1,4 @@
-"""OSOBA 4 – runbooki (CRUD + podgląd parsowania) i test silnika reguł na sucho."""
+"""Runbooki (CRUD + podgląd parsowania) i test silnika reguł na sucho."""
 import re
 from dataclasses import asdict
 from datetime import datetime
@@ -16,7 +16,7 @@ from services import simulator as sim
 from services.rules_engine import evaluate
 from services.runbook_parser import ACTIONS, KINDS, ParseResult, normalize_matches, parse_runbook_full, set_kind
 
-router = APIRouter(prefix="/api", tags=["Runbooks & engine (Osoba 4)"])
+router = APIRouter(prefix="/api", tags=["Runbooks & engine"])
 
 
 # ---------------------------------------------------------------- schematy
@@ -217,11 +217,10 @@ def engine_test(req: EngineTestRequest, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------- kroki runbooka w alercie (wykonywanie)
-# Approve i Mark done są u Osoby 1 (routers/alerts.py); tutaj Retry nieudanego kroku.
+# Approve i Mark done są w routers/alerts.py; tutaj Retry nieudanego kroku.
 
 # ---------------------------------------------------------------- akcje: wbudowane + własne zespołu
-# "Adding a new runbook or a new kind of action should be as easy as adding a rule" (kartka 2.6):
-# zespół dodaje akcję w UI (nazwa + adres + czy wymaga zgody), runbooki jej używają, zero zmian w kodzie.
+# Zespół dodaje akcję w UI (nazwa + adres + czy wymaga zgody), runbooki jej używają, zero zmian w kodzie.
 
 class CustomActionIn(BaseModel):
     label: str                                 # "Clear cache"

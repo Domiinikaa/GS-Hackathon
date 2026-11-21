@@ -1,6 +1,5 @@
-// OSOBA 4 – akcje, które aplikacja umie wykonać w krokach runbooka.
-// Wbudowane (w kodzie) + własne zespołu: nazwa + adres + czy wymaga zgody. Nowa akcja = formularz, bez kodu
-// (kartka 2.6: "Adding a new runbook or a new kind of action should be as easy as adding a rule").
+// Akcje, które aplikacja umie wykonać w krokach runbooka.
+// Wbudowane (w kodzie) + własne zespołu: nazwa + adres + czy wymaga zgody. Nowa akcja = formularz, bez kodu.
 import { useEffect, useState } from 'react';
 import { Pencil, Plus, Trash2, Zap } from 'lucide-react';
 import { BuiltinAction, CustomAction, errorText, runbookApi } from './runbookApi';

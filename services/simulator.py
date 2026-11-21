@@ -1,7 +1,7 @@
 """
-OSOBA 4 – symulator systemów docelowych.
+Symulator systemów docelowych.
 
-Na hackathonie nie mamy prawdziwego counterparty-service, silnika procesów ani pricing-engine.
+W środowisku demo nie ma prawdziwego counterparty-service, silnika procesów ani pricing-engine.
 Zamiast nich są tu udawane serwisy, a aplikacja NAPRAWDĘ wykonuje na nich akcje z runbooka:
 sprawdza zdrowie, ponawia proces, restartuje, woła webhook, zakłada ticket, eskaluje.
 

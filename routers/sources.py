@@ -32,10 +32,9 @@ except ImportError:
 
 from database import get_db
 from models import Event, Source, User
-from routers.deps import get_current_admin_user, get_optional_current_user
+from routers.deps import get_optional_current_user
 from routers.people import team_name
 from services.connectors import (
-    CONNECTOR_REGISTRY,
     dry_run_against_rules,
     extract_fields,
     generate_simulated_event,

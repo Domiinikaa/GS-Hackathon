@@ -1,6 +1,6 @@
 # GS Alerting & Orchestration Engine
 
-**Flexible Alerting & Notification Service** built for the Goldman Sachs Software Engineering Hackathon.
+**Flexible Alerting & Notification Service.**
 
 The platform ingests heterogeneous events and logs from arbitrary sources, evaluates dynamic filtering rules at runtime, deduplicates and groups alerts, attaches actionable runbooks, and delivers notifications through each responder's preferred channels.
 
@@ -70,7 +70,7 @@ Designed around a **declarative Connector Registry** (`CONNECTOR_REGISTRY`) so n
   - Paste any unseen JSON payload or raw log line into `POST /api/sources/dry-run` (or the UI playground) to inspect parsed output, discovered fields, and matching active rules **without persisting events or alerts**.
   - Supports **arbitrarily nested / recursive `and`, `or`, and `not` condition trees** as well as leaf `{field, op, value}` conditions.
 - **Built-in Simulator & Connection Tester:**
-  - Simulate 1–50 realistic events for any source (`POST /api/sources/{id}/simulate`) using Appendix A presets or custom payloads, and probe live connectivity via `POST /api/sources/{id}/test-connection`.
+  - Simulate 1–50 realistic events for any source (`POST /api/sources/{id}/simulate`) using built-in presets or custom payloads, and probe live connectivity via `POST /api/sources/{id}/test-connection`.
 - **Live Event Inspector:**
   - Real-time event viewer (`GET /api/events`) with source filtering, payload search, and auto-refresh.
 
@@ -117,8 +117,8 @@ Designed around a **declarative Connector Registry** (`CONNECTOR_REGISTRY`) so n
 
 ### 6. Security, Access Control & Seed Data (`seed.py`, `routers/auth.py`)
 - JWT authentication (`HS256`), single-use invite-code registration (`GS-XXXX-XXXX`), and CLI admin provisioning (`create_admin.py`).
-- Clean database startup: application startup initializes schema and migrations (under `startup_lock()`) **without** inserting any mock data. Sample data can be loaded on demand via the idempotent CLI tool `python seed.py` (5 unified teams: `Settlements`, `Pricing`, `Rates`, `Payments`, `Management`; 5 sources: `demo`, `trade-gateway`, `payments-webhook`, `settlement-kafka`, `pricing-engine-logs`; 4 rules; and 3 Appendix B runbooks). Pass `--with-people` to also seed 3 sample members + 4 team leads, or `--only teams sources ...` to seed specific datasets.
-- Source management endpoints use a centralized `require_source_manager` dependency in `routers/sources.py` (open for local/hackathon testing by default; set `REQUIRE_ADMIN_FOR_SOURCES = True` to restrict source mutations to administrators).
+- Clean database startup: application startup creates the schema (under `startup_lock()`) **without** inserting any mock data. Sample data can be loaded on demand via the idempotent CLI tool `python seed.py` (5 unified teams: `Settlements`, `Pricing`, `Rates`, `Payments`, `Management`; 5 sources: `demo`, `trade-gateway`, `payments-webhook`, `settlement-kafka`, `pricing-engine-logs`; 4 rules; and 3 sample runbooks). Pass `--with-people` to also seed 3 sample members + 4 team leads, or `--only teams sources ...` to seed specific datasets.
+- Source management endpoints use a centralized `require_source_manager` dependency in `routers/sources.py` (open for local testing by default; set `REQUIRE_ADMIN_FOR_SOURCES = True` to restrict source mutations to administrators).
 
 ---
 
@@ -146,7 +146,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # Optional: create an initial administrator
-python create_admin.py --uname admin --email admin@goldmansachs.com --password AdminSecret123!
+python create_admin.py --uname admin --email admin@example.com --password AdminSecret123!
 
 # Optional: populate sample mock data (teams, sources, rules, runbooks; add --with-people for sample responders)
 python seed.py
@@ -252,4 +252,4 @@ All backend tests run against isolated temporary SQLite databases without modify
 - `tests/test_api.py` — Runbook CRUD, engine preview API, and `/api/ingest` integration
 - `tests/test_integration_pipeline.py` — End-to-end Sources → Rules → Runbooks → Alerts → People → Outbox, anti-flood dedup, step approval RBAC, and unified Teams
 - `tests/test_channels_delivery.py` — SMTP email delivery, backoff & dead-letter retries, fake gateway outage recovery, two-way SMS/phone replies, and background worker lifecycle
-- `tests/test_people_service.py`, `tests/test_rules_people_api.py`, `tests/test_people_roles.py` — Recipient planning, quiet hours, API validation, and team lead seeding/migrations
+- `tests/test_people_service.py`, `tests/test_rules_people_api.py`, `tests/test_people_roles.py` — Recipient planning, quiet hours, API validation, and team lead seeding

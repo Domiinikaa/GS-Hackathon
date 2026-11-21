@@ -23,11 +23,9 @@ def _fresh_seeded_db(request):
 
     from database import Base, SessionLocal, engine
     from seed import seed_all
-    from services.alert_service import ensure_open_dedup_index
 
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    ensure_open_dedup_index(engine)
     with SessionLocal() as db:
         seed_all(db, **seed_kwargs)
     yield

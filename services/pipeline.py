@@ -1,13 +1,11 @@
 """
-Droga jednego zdarzenia przez system. Plik wspólny – nie zmieniaj bez ustalenia z zespołem.
+Droga jednego zdarzenia przez system.
 
-    zdarzenie (Osoba 3: /api/ingest)
-      -> evaluate(event, rules)          -> list[Match]      services/rules_engine.py   (Osoba 4)
-      -> upsert_alert(db, match)         -> Alert            services/alert_service.py  (Osoba 1)
-      -> recipients_for(db, alert)       -> list[Recipient]  services/people_service.py (Osoba 2)
-      -> enqueue_deliveries(db, alert, recipients) -> list[Delivery]  services/delivery.py (Osoba 3)
-
-Dopóki ktoś nie napisze swojej funkcji, jego stub zwraca pustą listę / None i reszta działa dalej.
+    zdarzenie (/api/ingest)
+      -> evaluate(event, rules)          -> list[Match]      services/rules_engine.py
+      -> upsert_alert(db, match)         -> Alert            services/alert_service.py
+      -> recipients_for(db, alert)       -> list[Recipient]  services/people_service.py
+      -> enqueue_deliveries(db, alert, recipients) -> list[Delivery]  services/delivery.py
 """
 from __future__ import annotations
 
@@ -34,7 +32,7 @@ def process_event(
     recovery = is_recovery(event.payload)
     for match in evaluate(event, active_rules, db=db):
         if recovery:
-            # Osoba 4: "close the alert when the problem goes away" – zdarzenie "status: resolved" zamyka alert
+            # Zdarzenie "status: resolved" zamyka alert
             closed = resolve_recovered(db, match.dedup_key, match.rule_id)
             if closed is not None:
                 alert_ids.append(closed)
@@ -47,7 +45,7 @@ def process_event(
             recipients = recipients_for(db, alert, match.channels)
             enqueue_deliveries(db, alert, recipients)
             if alert.steps:
-                start_after_commit(db, alert.id)   # Osoba 4: kroki runbooka ruszą, gdy zapis alertu się uda
+                start_after_commit(db, alert.id)   # kroki runbooka ruszą, gdy zapis alertu się uda
     if commit:
         db.commit()
     return alert_ids

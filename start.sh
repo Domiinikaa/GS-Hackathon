@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Goldman Sachs Hackathon - Unified Application Startup Script
+# GS Alerting - application startup script
 # Starts both FastAPI Backend (port 8000) and React Vite Frontend (port 5173).
 # Usage:
 #   ./start.sh          -> Starts in Development mode (hot-reloading enabled)
@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "=================================================="
-echo "  GS Hackathon - Alerting & Management Platform   "
+echo "  GS Alerting - Alerting & Orchestration Platform  "
 echo "=================================================="
 
 # 1. Environment file (.env) setup

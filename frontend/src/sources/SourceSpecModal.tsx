@@ -795,7 +795,7 @@ config:
                         onClick={() => handleApplyPreset(p.id)}
                         className="text-[11px] px-2 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 transition"
                       >
-                        {p.label.replace(' (Appendix A)', '')}
+                        {p.label}
                       </button>
                     ))}
                   </div>

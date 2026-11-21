@@ -1,5 +1,5 @@
 """
-Udawana bramka SMS i telefoniczna (kartka 2.3: "a fake SMS/phone gateway that logs or shows deliveries").
+Udawana bramka SMS i telefoniczna.
 
 "Wysłanie" = zapis w tabeli gateway_messages. Widok "fałszywego telefonu" na stronie Outbox pokazuje
 te wiadomości jak w komunikatorze i pozwala na nie odpowiedzieć (services/replies.py).

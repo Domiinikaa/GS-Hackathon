@@ -14,7 +14,7 @@ export interface RunbookStep {
   done_at?: string;
   approved_by?: string;           // kto zatwierdził ryzykowny krok
   approved_at?: string;
-  // Osoba 4 – wykonywanie kroków (services/runbook_runner.py)
+  // Wykonywanie kroków (services/runbook_runner.py)
   condition?: string | null;      // "retry fails twice" – krok wykona się tylko, gdy warunek jest spełniony
   kind?: StepKind | null;         // ręcznie wybrany rodzaj; null = wykryty automatycznie
   custom?: boolean;               // własna akcja zespołu (Runbooks → Actions), np. "clear_cache"

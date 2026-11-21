@@ -1,5 +1,5 @@
 """
-OSOBA 1 – live feed alertów (Server-Sent Events: serwer sam wypycha zmiany do przeglądarek).
+Live feed alertów (Server-Sent Events: serwer sam wypycha zmiany do przeglądarek).
 
 Dwa tryby, wybierane automatycznie po adresie bazy (DATABASE_URL):
 
@@ -23,7 +23,6 @@ import logging
 import select
 import threading
 import time
-from typing import Any
 
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import text
@@ -60,11 +59,6 @@ def unsubscribe(queue: asyncio.Queue) -> None:
     """Przeglądarka się rozłączyła (zamknięta karta): usuwamy jej skrzynkę."""
     with _lock:
         _listeners[:] = [(loop, q) for loop, q in _listeners if q is not queue]
-
-
-def listener_count() -> int:
-    with _lock:
-        return len(_listeners)
 
 
 # ---------------------------------------------------------------- nadawanie

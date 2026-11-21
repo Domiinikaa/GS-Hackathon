@@ -1,5 +1,4 @@
-// OSOBA 1 – rozwinięta część karty alertu: treść, kroki runbooka (Mark done / Approve) i historia.
-// Wymaganie 2.6: "An alert should tell people what to do next" + "record what was done and by whom".
+// Rozwinięta część karty alertu: treść, kroki runbooka (Mark done / Approve) i historia – co zrobiono i kto.
 import { ShieldCheck } from 'lucide-react';
 import type { Alert, RunbookStep } from '../shared/types';
 import { parseUtc } from './AlertCard';
@@ -74,7 +73,7 @@ export default function AlertDetails({ alert, onAction, busy }: Props) {
 function StepRow({ index, step, disabled, onApprove, onDone, onRetry }: {
   index: number; step: RunbookStep; disabled: boolean; onApprove: () => void; onDone: () => void; onRetry: () => void;
 }) {
-  // Osoba 4: status kroku (zrobione przez aplikację / nieudane / pominięte / czeka) i tylko pasujące przyciski
+  // Status kroku (zrobione przez aplikację / nieudane / pominięte / czeka) i tylko pasujące przyciski
   const finished = stepFinished(step);
   const failed = step.status === 'failed' && !step.done;
 

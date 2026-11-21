@@ -9,7 +9,6 @@ from database import Base
 from models import Person, User
 from services.people_service import (
     ensure_person_for_user,
-    migrate_admins_to_leads,
     sync_person_role_for_user,
     sync_user_admin_for_person,
 )
@@ -105,14 +104,7 @@ def test_create_or_promote_admin_conflict_between_two_users(db):
         create_or_promote_admin(db, uname="alice", email="bob@example.com", password="Secret123!")
 
 
-def test_sync_and_migrate_admins_to_leads(db):
-    old_admin = User(
-        uname="old_admin",
-        email="old_admin@example.com",
-        hashed_password=hash_password("p1"),
-        dzial="Rates",
-        is_admin=True,
-    )
+def test_admin_flag_and_lead_role_stay_in_sync(db):
     member_user = User(
         uname="worker",
         email="worker@example.com",
@@ -120,16 +112,9 @@ def test_sync_and_migrate_admins_to_leads(db):
         dzial="Payments",
         is_admin=False,
     )
-    db.add_all([old_admin, member_user])
-    db.add(Person(name="old_admin", team="Rates", email="old_admin@example.com", role="member"))
+    db.add(member_user)
     db.add(Person(name="worker", team="Payments", email="worker@example.com", role="member"))
     db.commit()
-
-    # Startup migration promotes every existing admin to lead
-    assert migrate_admins_to_leads(db) == 1
-    assert migrate_admins_to_leads(db) == 0  # idempotent
-    old_person = db.query(Person).filter(Person.email == "old_admin@example.com").first()
-    assert old_person.role == "lead"
 
     # Promoting/demoting User.is_admin syncs Person.role
     member_user.is_admin = True

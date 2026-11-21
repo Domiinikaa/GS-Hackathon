@@ -1,5 +1,5 @@
 """
-OSOBA 1 – tworzenie i aktualizacja alertów (deduplikacja).
+Tworzenie i aktualizacja alertów (deduplikacja).
 
 Ten sam dedup_key i alert nie jest resolved -> count += 1, last_seen = teraz.
 W przeciwnym razie nowy alert. Potem powiadomienie live feed (services/live.py).
@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -22,27 +21,6 @@ from services import live
 from services.contracts import Match
 
 log = logging.getLogger("alerts")
-
-OPEN_DEDUP_INDEX_SQL = (
-    "CREATE UNIQUE INDEX IF NOT EXISTS uq_alerts_open_dedup "
-    "ON alerts (dedup_key) WHERE status != 'resolved'"
-)
-
-
-def ensure_open_dedup_index(engine) -> bool:
-    """
-    Zakłada indeks w istniejących bazach (create_all dodaje go tylko do nowych tabel).
-    Wołane raz przy starcie serwera. Gdy w bazie są już duplikaty, indeksu nie da się założyć –
-    serwer działa dalej, a upsert_alert przechodzi na wolniejszą, nieatomową ścieżkę.
-    """
-    try:
-        with engine.begin() as conn:
-            conn.execute(text(OPEN_DEDUP_INDEX_SQL))
-        return True
-    except Exception as exc:  # noqa: BLE001
-        log.warning("alerts: could not create uq_alerts_open_dedup (duplicate open alerts?): %s", exc)
-        return False
-
 
 def _insert_for(db: Session):
     """INSERT z obsługą ON CONFLICT – osobny dla każdej bazy, ale z tym samym API."""

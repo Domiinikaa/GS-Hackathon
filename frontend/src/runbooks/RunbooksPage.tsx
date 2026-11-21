@@ -1,4 +1,4 @@
-// OSOBA 4 – runbooki: wklej YAML / Markdown / tekst, zobacz kroki na żywo, zapisz, podepnij do reguły.
+// Runbooki: wklej YAML / Markdown / tekst, zobacz kroki na żywo, zapisz, podepnij do reguły.
 import { useEffect, useId, useMemo, useState } from 'react';
 import { AlertTriangle, BookOpen, Check, ChevronRight, Info, Link2, Plus, Save, Unlink, X } from 'lucide-react';
 import type { Runbook, RunbookStep, StepKind } from '../shared/types';
@@ -20,7 +20,7 @@ const FORMATS: { value: RunbookFormat; label: string }[] = [
   { value: 'link', label: 'Link' },
 ];
 
-// Przykłady w różnych formatach – pokazują, że runbook można wkleić w dowolnej postaci (kartka: Appendix B)
+// Przykłady w różnych formatach – pokazują, że runbook można wkleić w dowolnej postaci
 const EXAMPLES: { label: string; hint: string; raw: string }[] = [
   {
     label: 'Numbered list',

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, Float, JSON, String, Text, text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text, text
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -46,9 +46,6 @@ class User(Base):
     def team(self, value):
         self.dzial = value
 
-    # Personal items owned by this user
-    items = relationship("Item", back_populates="owner", cascade="all, delete-orphan")
-
     # Invite codes created by this administrator
     created_invites = relationship("InviteCode", foreign_keys="InviteCode.created_by_id", back_populates="created_by")
     # Invite code used by this user to register
@@ -77,25 +74,7 @@ class InviteCode(Base):
     used_by = relationship("User", foreign_keys=[used_by_id], back_populates="used_invite")
 
 
-class Item(Base):
-    """
-    User panel record / asset position model.
-    Scoped to the owner user via user_id.
-    """
-    __tablename__ = "items"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
-    title = Column(String(100), nullable=False)
-    category = Column(String(50), default="General")
-    value = Column(Float, default=0.0)
-    description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    owner = relationship("User", back_populates="items")
-
-
-# --- Alerting & Incident Response Models (from feature/rules-ui) ---
+# --- Alerting & incident response ---
 
 class Source(Base):
     """Programs, brokers, APIs, and log files streaming events to the ingest pipeline."""
@@ -195,7 +174,6 @@ class Alert(Base):
 
     # Zasada w bazie: jeden dedup_key = najwyżej jeden NIEROZWIĄZANY alert.
     # Chroni przed duplikatami, gdy kilka kopii serwera dostanie to samo zdarzenie naraz.
-    # Dla istniejących baz indeks zakłada services/alert_service.ensure_open_dedup_index().
     __table_args__ = (
         Index("uq_alerts_open_dedup", "dedup_key", unique=True,
               sqlite_where=text("status != 'resolved'"),
@@ -251,7 +229,7 @@ class ChannelSetting(Base):
     down = Column(Boolean, default=False, nullable=False)
 
 
-# --- OSOBA 4: własne akcje kroków runbooka (dodawane w UI, bez zmian w kodzie) ---
+# --- Własne akcje kroków runbooka (dodawane w UI, bez zmian w kodzie) ---
 
 class CustomAction(Base):
     """
@@ -269,7 +247,7 @@ class CustomAction(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
-# --- OSOBA 4: symulator systemów docelowych dla kroków runbooka (services/simulator.py) ---
+# --- Symulator systemów docelowych dla kroków runbooka (services/simulator.py) ---
 
 class SimService(Base):
     """Udawany system docelowy (counterparty-service, settlement…). Stan w bazie = ten sam na każdej kopii."""

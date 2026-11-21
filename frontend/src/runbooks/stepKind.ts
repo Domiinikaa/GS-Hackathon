@@ -1,4 +1,4 @@
-// OSOBA 4 – rodzaj kroku runbooka (to samo co services/runbook_parser.step_kind po stronie backendu).
+// Rodzaj kroku runbooka (to samo co services/runbook_parser.step_kind po stronie backendu).
 import type { RunbookStep, StepKind } from '../shared/types';
 
 export type { StepKind };

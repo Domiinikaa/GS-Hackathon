@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal, Optional, List
+from typing import Literal, Optional
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -42,7 +42,7 @@ DepartmentResponse = TeamResponse
 
 class UserRegister(BaseModel):
     uname: str = Field(..., min_length=3, max_length=50, example="j_smith")
-    email: EmailStr = Field(..., example="jsmith@goldmansachs.com")
+    email: EmailStr = Field(..., example="jsmith@example.com")
     password: str = Field(..., min_length=6, max_length=128, example="SuperSecret123!")
     confirm_password: Optional[str] = Field(None, min_length=6, max_length=128, example="SuperSecret123!")
     invite_code: str = Field(..., min_length=4, max_length=64, example="GS-7F8A-9B2C")
@@ -127,25 +127,3 @@ class InviteCodeCreateResponse(BaseModel):
     role: InviteRole = "member"
     team: Optional[str] = None
     message: str
-
-
-# --- Panel Item Schemas ---
-
-class ItemBase(BaseModel):
-    title: str = Field(..., example="Goldman Sachs Group (GS)")
-    category: Optional[str] = Field("Equity", example="Equity")
-    value: Optional[float] = Field(0.0, example=475.50)
-    description: Optional[str] = Field(None, example="Core portfolio holding")
-
-
-class ItemCreate(ItemBase):
-    pass
-
-
-class ItemResponse(ItemBase):
-    id: int
-    user_id: Optional[int] = None
-    created_at: datetime
-
-    class Config:
-        from_attributes = True

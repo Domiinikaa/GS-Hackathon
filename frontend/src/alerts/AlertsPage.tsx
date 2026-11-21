@@ -1,4 +1,4 @@
-// OSOBA 1 – lista alertów z filtrami, aktualizowana na żywo (SSE z /api/alerts/stream).
+// Lista alertów z filtrami, aktualizowana na żywo (SSE z /api/alerts/stream).
 import { useEffect, useState } from 'react';
 import { BellOff } from 'lucide-react';
 import { EmptyState, Notice, PageHeader, Section, Segmented } from '../shared/ui';

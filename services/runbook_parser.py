@@ -1,5 +1,5 @@
 """
-OSOBA 4 – zamiana runbooka w DOWOLNEJ formie na listę kroków (kartka zadania: Appendix B).
+Zamiana runbooka w DOWOLNEJ formie (YAML, JSON, Markdown, zwykły tekst) na listę kroków.
 
 Zasada: przy "auto" nigdy błąd i nic nie ginie po cichu – jeśli czegoś nie użyliśmy,
 mówimy o tym w ostrzeżeniu (warnings). Zachowujemy pola `action`, `params` i `approval`
@@ -93,7 +93,7 @@ def step_kind(step: dict[str, Any]) -> str:
 
 
 def set_kind(step: dict[str, Any], kind: str | None) -> dict[str, Any]:
-    """Ustawia rodzaj kroku z UI i zgodne z nim pole approval (przyciski Osoby 1 patrzą na approval)."""
+    """Ustawia rodzaj kroku z UI i zgodne z nim pole approval (przyciski w alercie patrzą na approval)."""
     step = dict(step)
     if kind not in KINDS:
         step["kind"] = None

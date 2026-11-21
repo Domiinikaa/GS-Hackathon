@@ -1,5 +1,5 @@
-// OSOBA 4 – jak idzie krok runbooka w alercie: rodzaj (auto / manual / approve), warunek, status i wynik.
-// Do użycia w szczegółach alertu (frontend/src/alerts/AlertDetails.tsx – Osoba 1):
+// Jak idzie krok runbooka w alercie: rodzaj (auto / manual / approve), warunek, status i wynik.
+// Do użycia w szczegółach alertu (frontend/src/alerts/AlertDetails.tsx):
 //   <StepIcon step={step} />  <StepRunStatus step={step} />
 //   przyciski: Approve gdy canApprove(step), Mark done gdy canMarkDone(step), Retry gdy canRetry(step)
 import { CheckCircle2, CircleSlash, Clock, XCircle } from 'lucide-react';

@@ -1,5 +1,4 @@
-// OSOBA 1 – wygląd JEDNEGO alertu na liście.
-// Kolor i ważność biorą się z reguły (wymaganie 2.2 "per-rule presentation").
+// Wygląd JEDNEGO alertu na liście. Kolor i ważność biorą się z reguły.
 import { ChevronDown } from 'lucide-react';
 import type { Alert } from '../shared/types';
 import type { Color } from '../rules/ruleTypes';
