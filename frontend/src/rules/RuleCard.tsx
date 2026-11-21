@@ -4,7 +4,7 @@ import { useId } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { Rule } from './ruleTypes';
 import RuleConditions, { conditionText, countConditions } from './RuleConditions';
-import { ChannelList, Row, SEVERITY_DOT, SeverityBadge, type SeverityLevel, Toggle, cn } from '../shared/ui';
+import { Row, SEVERITY_DOT, SeverityBadge, type SeverityLevel, Toggle, cn } from '../shared/ui';
 
 interface Props {
   rule: Rule;
@@ -40,7 +40,7 @@ export default function RuleCard({ rule, runbookName, open, onToggleOpen, onTogg
 
       <Row label="When" value={<span className="font-mono text-[13px] text-white break-words">{summary}</span>} />
       <Row label="Send to" value={<span className="text-white">{rule.team}</span>} />
-      <Row label="Channels" value={<ChannelList channels={rule.channels} />} />
+      <Row label="Notifies" value="Team feed and each person's choice" />
       <Row label="Urgency" value={<SeverityBadge severity={rule.severity} />} />
       {rule.runbook_id && <Row label="Runbook" value={runbookName ?? `#${rule.runbook_id}`} />}
 

@@ -42,7 +42,6 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
       ? groupItems(initial.condition).filter(isLeaf).map((c) => ({ field: c.field, op: c.op, value: valueToText(c.value) }))
       : [{ ...EMPTY_ROW }],
   );
-  const [channels, setChannels] = useState<Channel[]>(initial?.channels ?? ['ui']);
   const [title, setTitle] = useState(initial?.title ?? '');
   const [body, setBody] = useState(initial?.body ?? '');
   const [severity, setSeverity] = useState<Severity>(initial?.severity ?? 'warning');
@@ -66,15 +65,15 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
   // "Who will be notified" preview, refreshed half a second after the last change
   useEffect(() => {
     const target = team.trim();
-    if (!target || channels.length === 0) {
+    if (!target) {
       setRecipients(null);
       return;
     }
     const timer = window.setTimeout(() => {
-      rulesApi.previewRecipients(target, severity, channels).then(setRecipients).catch(() => setRecipients(null));
+      rulesApi.previewRecipients(target, severity, []).then(setRecipients).catch(() => setRecipients(null));
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [team, severity, channels]);
+  }, [team, severity]);
 
   // Builds the rule from the current form state
   function buildRule(): Rule {
@@ -87,7 +86,8 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
       team: team.trim(),
       enabled: initial?.enabled ?? true,
       condition: nested && initial ? initial.condition : mode === 'and' ? { and: conditions } : { or: conditions },
-      channels,
+      // How each person is reached comes from People; the team's app feed is always on
+      channels: ['ui'],
       title: title.trim(),
       body: body.trim() || undefined,
       severity,
@@ -100,17 +100,12 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
     };
   }
 
-  function toggleChannel(ch: Channel) {
-    setChannels(channels.includes(ch) ? channels.filter((c) => c !== ch) : [...channels, ch]);
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const rule = buildRule();
     if (!rule.name) return setError('Give the rule a name.');
     if (!rule.team) return setError('Choose who receives the alerts (team or person).');
     if (groupItems(rule.condition).length === 0) return setError('Add at least one condition.');
-    if (rule.channels.length === 0) return setError('Pick at least one way to notify.');
     if (!rule.title) return setError('Add an alert headline.');
     setError('');
     setSaving(true);
@@ -190,25 +185,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
         </div>
       </div>
 
-      {/* 4. Channels */}
-      <div>
-        <span className={labelClass}>Notify via</span>
-        <div className="flex flex-wrap gap-2">
-          {CHANNELS.map((ch) => (
-            <button key={ch.value} type="button" onClick={() => toggleChannel(ch.value)}
-              className={`px-3 py-1.5 rounded-lg text-sm border transition ${
-                channels.includes(ch.value)
-                  ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                  : 'border-white/10 text-ink-muted hover:border-white/25'
-              }`}>
-              {ch.label}
-            </button>
-          ))}
-        </div>
-        <p className={hintClass}>UI = live feed in this app</p>
-      </div>
-
-      {/* 5. Alert text */}
+      {/* 4. Alert text */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className={labelClass}>Alert headline</label>
@@ -223,7 +200,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
                   </div>
       </div>
 
-      {/* 6. Attached runbook (optional) */}
+      {/* 5. Attached runbook (optional) */}
       <div>
         <label className={labelClass}>Attach runbook (optional)</label>
         <select
@@ -247,18 +224,22 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
       {/* Who gets alerts from this rule, computed by the backend from people's preferences */}
       {recipients && (
         <div className="surface-well p-4">
-          <p className="text-xs font-semibold uppercase text-slate-500 mb-2 flex items-center gap-1">
-            <Users className="w-3.5 h-3.5" /> Who will be notified (right now)
+          <p className="text-[13px] text-ink-muted mb-2 flex items-center gap-1.5">
+            <Users className="w-3.5 h-3.5" /> Who will be notified right now
           </p>
-          {recipients.length === 0 ? (
-            <p className="text-sm text-amber-300">Nobody – no people in “{team.trim()}”. Add them on the People page.</p>
-          ) : (
+          <p className="text-xs text-ink-muted mb-2">
+            The team feed in the app always gets the alert. Each person is reached the way they chose on the People page.
+          </p>
+          {recipients.every((r) => r.name.startsWith('team:')) && (
+            <p className="text-sm text-ios-orange mb-1">No people in “{team.trim()}” yet, so only the team feed gets it. Add them on the People page.</p>
+          )}
+          {(
             <ul className="space-y-1">
               {recipients.map((r, i) => (
                 <li key={i} className="text-sm text-slate-200">
                   <span className="font-semibold">{r.name.startsWith('team:') ? `Team feed (${r.name.slice(5)})` : r.name}</span>
                   {' → '}
-                  <span className="text-amber-300">{CHANNELS.find((c) => c.value === r.channel)?.label ?? r.channel}</span>
+                  <span className="text-ios-blue">{CHANNELS.find((c) => c.value === r.channel)?.label ?? r.channel}</span>
                   {r.to && <span className="text-slate-500 font-mono"> {r.to}</span>}
                   <span className="block text-xs text-slate-500">{r.reason}</span>
                 </li>

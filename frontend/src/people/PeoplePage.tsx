@@ -169,6 +169,13 @@ export default function PeoplePage() {
   );
 }
 
+// What happens when a person has not chosen channels (matches DEFAULT_CHANNELS in people_service.py)
+const DEFAULT_LABEL: Record<string, string> = {
+  critical: 'Default: phone and SMS',
+  warning: 'Default: email',
+  info: 'App only',
+};
+
 function PersonRow({ person, open, onToggleOpen, onToggleOnCall, onEdit, onDelete }: {
   person: Person; open: boolean; onToggleOpen: () => void; onToggleOnCall: () => void; onEdit: () => void; onDelete: () => void;
 }) {
@@ -202,14 +209,14 @@ function PersonRow({ person, open, onToggleOpen, onToggleOnCall, onEdit, onDelet
             <Row label="Email" value={person.email ?? 'Not set'} />
             <Row label="Phone" value={person.phone ?? 'Not set'} />
             {SEVERITY_ORDER.map((sev) => {
-              const chans = person.channel_prefs?.[sev] ?? [];
+              const chans = (person.channel_prefs?.[sev] ?? []).filter((c) => c !== 'ui');
               return (
                 <Row key={sev}
                   label={<span className="inline-flex items-center gap-2">
                     <span className={cn('w-2 h-2 rounded-full', SEVERITY_DOT[sev as SeverityLevel] ?? 'bg-ink-faint')} />
                     {SEVERITY_LABEL[sev]} alerts
                   </span>}
-                  value={chans.length ? <ChannelList channels={chans} /> : "Rule's channels"} />
+                  value={chans.length ? <ChannelList channels={chans} /> : <span>{DEFAULT_LABEL[sev] ?? 'Default'}</span>} />
               );
             })}
             <Row label="Quiet hours" value={quiet.length ? quiet.join(' ') : 'None'} />

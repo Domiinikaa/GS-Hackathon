@@ -8,6 +8,8 @@ import { SEVERITY_LABEL, SEVERITY_ORDER, SEVERITY_STYLE } from './describePerson
 
 // Channels that can be limited to working hours (UI is always on)
 const TIMED_CHANNELS: Channel[] = ['sms', 'phone', 'email'];
+// The app feed is always on, so people only choose their personal channels
+const PERSONAL_CHANNELS = CHANNELS.filter((c) => c.value !== 'ui');
 
 interface QuietRow {
   enabled: boolean;
@@ -19,7 +21,7 @@ interface QuietRow {
 const DEFAULT_PREFS: Person['channel_prefs'] = {
   critical: ['phone', 'sms'],
   warning: ['email'],
-  info: ['ui'],
+  info: [],
 };
 
 interface Props {
@@ -147,7 +149,7 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
 
       <label className="flex items-center gap-3 cursor-pointer select-none">
         <input type="checkbox" checked={onCall} onChange={(e) => setOnCall(e.target.checked)}
-          className="w-4 h-4 accent-amber-500" />
+          className="w-4 h-4 accent-ios-blue" />
         <span className="text-sm text-slate-200">
           On call <span className="text-slate-500">– only the on-call person gets phone calls; others get an SMS instead</span>
         </span>
@@ -155,7 +157,7 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
 
       <label className="flex items-center gap-3 cursor-pointer select-none">
         <input type="checkbox" checked={isLead} onChange={(e) => setIsLead(e.target.checked)}
-          className="w-4 h-4 accent-amber-500" />
+          className="w-4 h-4 accent-ios-blue" />
         <span className="text-sm text-slate-200">
           Team lead <span className="text-slate-500">– approves risky runbook steps for this team</span>
         </span>
@@ -169,7 +171,7 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
             <thead>
               <tr className="text-ink-muted text-xs">
                 <th className="text-left font-semibold py-2 pr-4">Severity</th>
-                {CHANNELS.map((c) => <th key={c.value} className="font-semibold py-2 px-3">{c.label}</th>)}
+                {PERSONAL_CHANNELS.map((c) => <th key={c.value} className="font-semibold py-2 px-3">{c.label}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -178,11 +180,11 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
                   <td className="py-2 pr-4">
                     <span className={`text-xs border px-2 py-0.5 rounded ${SEVERITY_STYLE[sev]}`}>{SEVERITY_LABEL[sev]}</span>
                   </td>
-                  {CHANNELS.map((c) => (
+                  {PERSONAL_CHANNELS.map((c) => (
                     <td key={c.value} className="text-center py-2 px-3">
                       <input type="checkbox" aria-label={`${SEVERITY_LABEL[sev]} via ${c.label}`}
                         checked={(prefs[sev] ?? []).includes(c.value)} onChange={() => toggle(sev, c.value)}
-                        className="w-4 h-4 accent-amber-500" />
+                        className="w-4 h-4 accent-ios-blue" />
                     </td>
                   ))}
                 </tr>
@@ -191,7 +193,7 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
           </table>
         </div>
         <p className="text-xs text-slate-500 mt-1">
-          The rule decides which channels are allowed; these preferences pick from them. A row with nothing ticked uses the rule's channels.
+          Every alert also appears in the team feed in the app. A row with nothing ticked uses the default: phone and SMS for critical, email for warning, app only for info.
         </p>
       </div>
 
@@ -206,7 +208,7 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
               <div key={ch} className="flex items-center gap-2 flex-wrap text-sm text-slate-300">
                 <label className="flex items-center gap-2 w-52 cursor-pointer whitespace-nowrap">
                   <input type="checkbox" checked={row.enabled} onChange={(e) => updateQuiet(ch, { enabled: e.target.checked })}
-                    className="w-4 h-4 accent-amber-500" />
+                    className="w-4 h-4 accent-ios-blue" />
                   <span>{label} only between</span>
                 </label>
                 <input type="time" disabled={!row.enabled} value={row.from} onChange={(e) => updateQuiet(ch, { from: e.target.value })}
@@ -217,7 +219,7 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
                 <span>, otherwise</span>
                 <select disabled={!row.enabled} value={row.else} onChange={(e) => updateQuiet(ch, { else: e.target.value as Channel })}
                   className={`${inputClass} w-36 disabled:opacity-40`}>
-                  {CHANNELS.filter((c) => c.value !== ch).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  {CHANNELS.filter((c) => c.value !== ch).map((c) => <option key={c.value} value={c.value}>{c.value === 'ui' ? 'App only' : c.label}</option>)}
                 </select>
               </div>
             );

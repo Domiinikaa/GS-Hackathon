@@ -78,7 +78,6 @@ def test_rules_crud(client):
     {"condition": {"and": []}},
     {"condition": {"and": [{"field": "x", "op": "gt", "value": "abc"}]}},
     {"condition": {"and": [{"field": "x", "op": "like", "value": "a"}]}},
-    {"channels": []},
     {"channels": ["pigeon"]},
     {"title": "   "},
 ])
@@ -144,8 +143,8 @@ def test_teams_and_preview(client):
 
     night = client.post("/api/people/preview", json={
         "team": "Anna", "severity": "critical", "channels": ["sms"], "at": "2026-11-20T23:00:00"}).json()
-    assert [(r["name"], r["channel"]) for r in night] == [("Anna", "email")]
-    assert "08:00" in night[0]["reason"]
+    assert [(r["name"], r["channel"]) for r in night] == [("team:Anna", "ui"), ("Anna", "email")]
+    assert "08:00" in night[1]["reason"]
 
 
 def test_field_hints_shape(client):

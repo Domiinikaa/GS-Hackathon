@@ -185,7 +185,8 @@ def test_pricing_logfile_key_value_and_grouping():
     d = DELIVERIES_LOG[0]
     assert d["rule_id"] == "pricing-warnings"
     assert d["title"] == "Pricing warnings for EURUSD"
-    assert d["recipients"] == [(None, "team:Pricing", "ui", None)]
+    # Team feed always; Marek (Pricing lead) has no warning preference -> default email
+    assert d["recipients"] == [(None, "team:Pricing", "ui", None), (5, "Marek", "email", "marek@example.com")]
     assert len(d["steps"]) == 4  # Appendix B pricing text splits into 4 steps
     alert = ok(client.get(f"/api/alerts/{d['alert_id']}"))
     assert alert["count"] == 2
@@ -225,14 +226,14 @@ def test_payments_anna_quiet_hours_and_runbook_approval():
     assert d["steps"][1]["approval"] == "required"
 
     expected_ch = "sms" if 8 <= datetime.now().hour < 20 else "email"
-    assert [(name, ch) for _, name, ch, _ in d["recipients"]] == [("Anna", expected_ch)]
+    assert [(name, ch) for _, name, ch, _ in d["recipients"]] == [("team:Anna", "ui"), ("Anna", expected_ch)]
 
     db = SessionLocal()
     try:
         day_r = plan_recipients(db, "Anna", "critical", ["sms"], datetime(2026, 11, 21, 12, 0))
         night_r = plan_recipients(db, "Anna", "critical", ["sms"], datetime(2026, 11, 21, 23, 0))
-        assert [(p.recipient.name, p.recipient.channel) for p in day_r] == [("Anna", "sms")]
-        assert [(p.recipient.name, p.recipient.channel) for p in night_r] == [("Anna", "email")]
+        assert [(p.recipient.name, p.recipient.channel) for p in day_r] == [("team:Anna", "ui"), ("Anna", "sms")]
+        assert [(p.recipient.name, p.recipient.channel) for p in night_r] == [("team:Anna", "ui"), ("Anna", "email")]
     finally:
         db.close()
 
