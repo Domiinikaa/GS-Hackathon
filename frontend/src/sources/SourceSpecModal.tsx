@@ -87,8 +87,6 @@ export default function SourceSpecModal({
     initialRawMode && !isEditing ? 'raw' : 'form'
   );
   const [name, setName] = useState(existing?.name || '');
-  const [team, setTeam] = useState(existing?.team || 'All');
-  const [customKey, setCustomKey] = useState(existing?.key || '');
   const [kind, setKind] = useState<SourceKind>(existing?.kind || 'webhook');
   const [enabled, setEnabled] = useState<boolean>(existing ? existing.enabled : true);
 
@@ -212,7 +210,6 @@ config:
         }
         const obj = {
           name: name || 'my-source',
-          team: team || 'All',
           kind,
           enabled,
           config: finalCfg,
@@ -297,7 +294,6 @@ config:
           method: 'PUT',
           body: JSON.stringify({
             name: name.trim(),
-            team: team.trim() || 'All',
             kind,
             enabled,
             config: finalCfg,
@@ -309,9 +305,8 @@ config:
           method: 'POST',
           body: JSON.stringify({
             name: name.trim(),
-            team: team.trim() || 'All',
+            team: 'All',
             kind,
-            key: customKey.trim() || undefined,
             enabled,
             config: finalCfg,
             sample_event: sampleValue,
@@ -571,7 +566,7 @@ config:
               {/* 1. Source Type Selector */}
               <section className="space-y-2.5">
                 <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  1. Source Connector Type
+                  Source Connector Type
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                   {types.map((t) => {
@@ -609,7 +604,7 @@ config:
               </section>
 
               {/* 2. Basic Metadata */}
-              <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-800">
+              <section className="pt-2 border-t border-slate-800">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">
                     Source Name *
@@ -622,38 +617,13 @@ config:
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
-                    Owning Team
-                  </label>
-                  <input
-                    type="text"
-                    value={team}
-                    onChange={(e) => setTeam(e.target.value)}
-                    placeholder="e.g. Rates, Settlements, Payments, All"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
-                    Endpoint Key {isEditing ? '(immutable)' : '(optional slug)'}
-                  </label>
-                  <input
-                    type="text"
-                    disabled={isEditing}
-                    value={customKey}
-                    onChange={(e) => setCustomKey(e.target.value)}
-                    placeholder="Auto-generated from name"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white disabled:opacity-50 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
               </section>
 
               {/* 3. Dynamic Connection Spec */}
               {connectionFields.length > 0 && (
                 <section className="space-y-3 pt-2 border-t border-slate-800">
                   <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    2. Connection Specification ({activeSpec?.label})
+                    Connection Specification ({activeSpec?.label})
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {connectionFields.map(renderConfigField)}
@@ -661,23 +631,10 @@ config:
                 </section>
               )}
 
-              {/* 4. Simulation Mode Settings */}
-              {simulationFields.length > 0 && (
-                <section className="space-y-3 pt-2 border-t border-slate-800">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    3. Built-in Simulation Settings (Optional — Test Without External Infra)
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {simulationFields.map(renderConfigField)}
-                  </div>
-                </section>
-              )}
-
-              {/* 5. Parsing, Envelope Unwrapping & Field Aliases (Idea 5) */}
+              {/* 3. Parsing, Envelope Unwrapping & Field Aliases (Idea 5) */}
               <section className="space-y-3 pt-2 border-t border-slate-800">
                 <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  4. Schema-Less Parsing, Envelope Unwrapping & Field Aliases
+                  Schema-Less Parsing, Envelope Unwrapping & Field Aliases
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -701,7 +658,7 @@ config:
                       <option value="auto">Auto-detect (JSON / NDJSON / Key-Value / Regex)</option>
                       <option value="json">Strict JSON (object or array)</option>
                       <option value="ndjson">NDJSON (JSON Lines)</option>
-                      <option value="key_value">Key=Value Log Lines (e.g. pricing-engine)</option>
+                      <option value="key_value">Key=Value Log Lines</option>
                       <option value="regex">Custom Regex (Named Capture Groups)</option>
                     </select>
                   </div>
@@ -747,7 +704,7 @@ config:
                     <button
                       type="button"
                       onClick={() => setAliases((prev) => [...prev, { from: '', to: '' }])}
-                      className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1"
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-xs font-semibold text-amber-300 flex items-center gap-1 transition"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Add Alias
@@ -794,7 +751,7 @@ config:
               <section className="space-y-3 pt-2 border-t border-slate-800">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    5. Unseen Schema Playground & Live Rule Dry-Run
+                    Unseen Schema Playground & Live Rule Dry-Run
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {presets.slice(0, 4).map((p) => (
@@ -818,7 +775,7 @@ config:
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs font-mono text-emerald-300 focus:outline-none focus:border-amber-500"
                 />
 
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center justify-start gap-3">
                   <button
                     type="button"
                     disabled={dryRunLoading}
@@ -828,16 +785,6 @@ config:
                     <Play className="w-3.5 h-3.5" />
                     {dryRunLoading ? 'Running Dry-Run...' : 'Dry-Run Parse & Match Rules'}
                   </button>
-
-                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={enabled}
-                      onChange={(e) => setEnabled(e.target.checked)}
-                      className="rounded border-slate-600 bg-slate-950 text-amber-500 focus:ring-amber-500"
-                    />
-                    Enable source immediately on save
-                  </label>
                 </div>
 
                 {dryRunError && (
@@ -909,19 +856,42 @@ config:
                   </div>
                 )}
               </section>
+
+              {/* 5. Simulation Mode Settings (at the very bottom) */}
+              {simulationFields.length > 0 && (
+                <section className="space-y-3 pt-2 border-t border-slate-800">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Built-in Simulation Settings (Optional — Test Without External Infra)
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {simulationFields.map(renderConfigField)}
+                  </div>
+                </section>
+              )}
             </>
           )}
+        </div>
 
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/80 shrink-0 space-y-3">
           {saveError && (
             <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{saveError}</span>
             </div>
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-end gap-2 bg-slate-900/80 shrink-0">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+                className="rounded border-slate-600 bg-slate-950 text-amber-500 focus:ring-amber-500"
+              />
+              Enable source immediately on save
+            </label>
+            <div className="flex items-center gap-2 ml-auto">
           <button
             type="button"
             onClick={onClose}
@@ -943,6 +913,8 @@ config:
               ? 'Save Changes'
               : 'Create Source'}
           </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

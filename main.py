@@ -23,6 +23,8 @@ Base.metadata.create_all(bind=engine)
 
 def ensure_sqlite_columns():
     """Ensures backwards compatibility schema migrations in local SQLite development."""
+    if engine.dialect.name != "sqlite":
+        return
     with engine.connect() as conn:
         try:
             conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0"))

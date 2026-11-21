@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Plus,
-  Upload,
   Download,
   RefreshCw,
   Copy,
@@ -113,7 +112,6 @@ export default function SourcesPage() {
 
   // Modals
   const [showSpecModal, setShowSpecModal] = useState(false);
-  const [specInitialRaw, setSpecInitialRaw] = useState(false);
   const [editingSource, setEditingSource] = useState<Source | null>(null);
   const [simulatingSource, setSimulatingSource] = useState<Source | null>(null);
   const [exportModal, setExportModal] = useState<ExportSpecResult | null>(null);
@@ -282,19 +280,6 @@ export default function SourcesPage() {
             type="button"
             onClick={() => {
               setEditingSource(null);
-              setSpecInitialRaw(true);
-              setShowSpecModal(true);
-            }}
-            className="px-3.5 py-2 rounded-lg text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition"
-          >
-            <Upload className="w-4 h-4 text-amber-400" />
-            Import YAML / JSON
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingSource(null);
-              setSpecInitialRaw(false);
               setShowSpecModal(true);
             }}
             className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow transition"
@@ -346,7 +331,7 @@ export default function SourcesPage() {
             }`}
           >
             <Activity className="w-4 h-4" />
-            Live Event Inspector ({events.length})
+            Live Event Inspector
           </button>
         </div>
 
@@ -396,7 +381,6 @@ export default function SourcesPage() {
               type="button"
               onClick={() => {
                 setEditingSource(null);
-                setSpecInitialRaw(false);
                 setShowSpecModal(true);
               }}
               className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950"
@@ -434,10 +418,6 @@ export default function SourcesPage() {
                         <StatusPill status={src.status} workerRunning={src.worker_running} />
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                        <span>
-                          Team: <strong className="text-slate-200">{src.team}</strong>
-                        </span>
-                        <span>•</span>
                         <span>
                           Events: <strong className="text-amber-300">{src.events_count || 0}</strong>
                         </span>
@@ -496,7 +476,7 @@ export default function SourcesPage() {
                       <button
                         type="button"
                         onClick={() => handleExport(src, 'yaml')}
-                        title="Export YAML / JSON Spec"
+                        title="Export YAML Spec"
                         className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition"
                       >
                         <Download className="w-4 h-4" />
@@ -506,7 +486,6 @@ export default function SourcesPage() {
                         type="button"
                         onClick={() => {
                           setEditingSource(src);
-                          setSpecInitialRaw(false);
                           setShowSpecModal(true);
                         }}
                         title="Edit specification"
@@ -744,7 +723,6 @@ export default function SourcesPage() {
           types={types}
           presets={presets}
           existing={editingSource}
-          initialRawMode={specInitialRaw}
           onClose={() => setShowSpecModal(false)}
           onSaved={() => {
             setShowSpecModal(false);

@@ -1,40 +1,52 @@
 """
-Background Ingestion Worker Manager & Unified Ingest Pipeline.
+Horizontally Scalable Background Ingestion Worker Manager & Unified Ingest Pipeline.
 
-Manages live asyncio workers for pull/stream/simulated sources:
-  - polled_api (real httpx polling OR built-in simulation)
-  - sse        (real httpx SSE streaming OR built-in simulation)
-  - logfile    (real file tailing, optionally appending simulated log lines to disk)
-  - kafka      (real aiokafka if available & simulate=False, otherwise built-in simulation)
-  - rabbitmq   (real aio_pika if available & simulate=False, otherwise built-in simulation)
-  - custom     (built-in simulation when simulate=True)
-
-Supports hot-reloading whenever sources are created, updated, toggled, or deleted.
+Compliant with SKALOWANIE.md (N stateless replicas + shared PostgreSQL / local SQLite):
+  - Atomic SQL counter updates (`events_count = coalesce(events_count, 0) + N`) to prevent
+    lost increments under concurrent ingestion across replicas.
+  - PostgreSQL session advisory locks (`pg_try_advisory_lock`) for singleton pull/stream
+    workers (`polled_api`, `sse`, `logfile`, and `simulate=True`) so only ONE replica polls
+    a given source; automatic failover if the leader replica dies.
+  - Real `kafka` (consumer groups) and `rabbitmq` (competing consumers) intentionally run
+    WITHOUT advisory locks so partitions/queues distribute across all N replicas.
+  - Periodic DB reconciler loop (every 5s) synchronizes worker state across replicas when
+    sources are created, edited, toggled, or deleted on another replica.
+  - Polled REST API cursor IDs are persisted in `Source.config["_seen_cursors"]` so
+    deduplication survives restarts and replica failovers.
 """
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
-import os
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
-from database import SessionLocal
+from database import DATABASE_URL, SessionLocal, engine
 from models import Event, Source
 from services.connectors.parser import get_by_path, parse_raw_payload
 from services.connectors.simulator import generate_simulated_event
 from services.pipeline import process_event
 
 
+USE_POSTGRES = DATABASE_URL.startswith("postgresql")
+ADVISORY_LOCK_BASE = 700_000
+RECONCILE_INTERVAL_S = 5.0
+MAX_STORED_CURSORS = 200
+
+
 def ingest_records(db: Session, source: Source, raw_payload: Any) -> dict[str, Any]:
     """
     Universal ingestion entrypoint used by HTTP /api/ingest/{key}, background
     pull/stream workers, and the manual Simulate button.
+    Uses atomic SQL increment for `events_count` (safe under N concurrent replicas).
     """
     records = parse_raw_payload(raw_payload, source.config)
     if not records:
@@ -48,16 +60,22 @@ def ingest_records(db: Session, source: Source, raw_payload: Any) -> dict[str, A
         alert_ids += process_event(db, event)
 
     now = datetime.utcnow()
-    source.events_count = (source.events_count or 0) + len(records)
-    source.last_event_at = now
-    source.last_error = None
-    if source.sample_event is None and records:
-        source.sample_event = records[0]
-
     cfg = source.config or {}
-    if source.enabled:
-        source.status = "simulating" if cfg.get("simulate") else "active"
+    next_status = ("simulating" if cfg.get("simulate") else "active") if source.enabled else "paused"
 
+    update_values: dict[Any, Any] = {
+        Source.events_count: func.coalesce(Source.events_count, 0) + len(records),
+        Source.last_event_at: now,
+        Source.last_error: None,
+        Source.status: next_status,
+    }
+    if source.sample_event is None and records:
+        update_values[Source.sample_event] = records[0]
+
+    db.query(Source).filter(Source.id == source.id).update(
+        update_values,
+        synchronize_session=False,
+    )
     db.commit()
     return {"accepted": len(records), "alerts": alert_ids, "parsed": records}
 
@@ -65,11 +83,14 @@ def ingest_records(db: Session, source: Source, raw_payload: Any) -> dict[str, A
 def _record_source_error(source_id: int, error_msg: str) -> None:
     db = SessionLocal()
     try:
-        src = db.query(Source).filter(Source.id == source_id).first()
-        if src:
-            src.status = "error"
-            src.last_error = error_msg[:500]
-            db.commit()
+        db.query(Source).filter(Source.id == source_id).update(
+            {
+                Source.status: "error",
+                Source.last_error: error_msg[:500],
+            },
+            synchronize_session=False,
+        )
+        db.commit()
     except Exception:
         pass
     finally:
@@ -88,11 +109,60 @@ def _ingest_in_fresh_session(source_id: int, raw_payload: Any) -> int:
         db.close()
 
 
+def _load_seen_cursors(source_id: int) -> list[str]:
+    db = SessionLocal()
+    try:
+        src = db.query(Source).filter(Source.id == source_id).first()
+        if not src or not isinstance(src.config, dict):
+            return []
+        raw = src.config.get("_seen_cursors")
+        return [str(x) for x in raw] if isinstance(raw, list) else []
+    finally:
+        db.close()
+
+
+def _save_seen_cursors(source_id: int, cursors: list[str]) -> None:
+    db = SessionLocal()
+    try:
+        src = db.query(Source).filter(Source.id == source_id).first()
+        if not src:
+            return
+        cfg = dict(src.config or {})
+        cfg["_seen_cursors"] = cursors[-MAX_STORED_CURSORS:]
+        src.config = cfg
+        flag_modified(src, "config")
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
+
+
+def _config_fingerprint(source: Source) -> str:
+    """Hash source worker-relevant settings (ignoring internal _seen_cursors) for reconciler."""
+    cfg = {k: v for k, v in (source.config or {}).items() if not str(k).startswith("_")}
+    raw = json.dumps({"kind": source.kind, "enabled": bool(source.enabled), "config": cfg}, sort_keys=True)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _needs_singleton_lock(kind: str, config: dict[str, Any]) -> bool:
+    """
+    Real Kafka (consumer group) & RabbitMQ (competing consumers) scale natively across
+    all replicas. Polled APIs, SSE streams, log files, and simulations must run on
+    only ONE replica at a time via PostgreSQL advisory locks.
+    """
+    if bool(config.get("simulate", False)):
+        return True
+    return kind in ("polled_api", "sse", "logfile", "custom")
+
+
 class IngestManager:
-    """Manages lifecycle of background source ingestion tasks."""
+    """Manages lifecycle of background source ingestion tasks across N replicas."""
 
     def __init__(self) -> None:
         self._tasks: dict[int, asyncio.Task[Any]] = {}
+        self._fingerprints: dict[int, str] = {}
+        self._reconcile_task: asyncio.Task[Any] | None = None
         self._running = False
 
     def is_worker_running(self, source_id: int) -> bool:
@@ -103,27 +173,32 @@ class IngestManager:
         return [sid for sid, t in self._tasks.items() if not t.done()]
 
     async def start(self) -> None:
-        """Start background workers for all enabled pull/stream/simulated sources."""
+        """Start background workers and the cross-replica DB reconciler."""
         self._running = True
-        db = SessionLocal()
-        try:
-            sources = db.query(Source).filter(Source.enabled.is_(True)).all()
-            for src in sources:
-                await self.sync_source(src)
-        finally:
-            db.close()
+        await self._reconcile_once()
+        self._reconcile_task = asyncio.create_task(self._reconcile_loop(), name="ingest-reconciler")
 
     async def stop(self) -> None:
-        """Gracefully cancel all running background workers."""
+        """Gracefully cancel the reconciler and all running background workers."""
         self._running = False
+        if self._reconcile_task and not self._reconcile_task.done():
+            self._reconcile_task.cancel()
+            try:
+                await self._reconcile_task
+            except asyncio.CancelledError:
+                pass
+        self._reconcile_task = None
+
         tasks = list(self._tasks.values())
         for task in tasks:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._tasks.clear()
+        self._fingerprints.clear()
 
     async def stop_source(self, source_id: int) -> None:
+        self._fingerprints.pop(source_id, None)
         task = self._tasks.pop(source_id, None)
         if task and not task.done():
             task.cancel()
@@ -153,10 +228,115 @@ class IngestManager:
         source_id = source.id
         kind = source.kind
         config = dict(source.config or {})
+        fp = _config_fingerprint(source)
 
         coro = self._dispatch_worker(source_id, kind, config)
         if coro is not None:
-            self._tasks[source_id] = asyncio.create_task(coro, name=f"source-{source_id}-{kind}")
+            self._fingerprints[source_id] = fp
+            self._tasks[source_id] = asyncio.create_task(
+                self._run_with_optional_advisory_lock(source_id, kind, config, coro),
+                name=f"source-{source_id}-{kind}",
+            )
+
+    async def _reconcile_loop(self) -> None:
+        try:
+            while self._running:
+                await asyncio.sleep(RECONCILE_INTERVAL_S)
+                await self._reconcile_once()
+        except asyncio.CancelledError:
+            raise
+
+    async def _reconcile_once(self) -> None:
+        """Synchronize local workers with DB state (handles multi-replica edits & failover)."""
+        def _fetch_sources() -> list[tuple[int, str, bool, dict[str, Any], str]]:
+            db = SessionLocal()
+            try:
+                rows = db.query(Source).all()
+                return [
+                    (s.id, s.kind, bool(s.enabled), dict(s.config or {}), _config_fingerprint(s))
+                    for s in rows
+                ]
+            finally:
+                db.close()
+
+        try:
+            snapshot = await asyncio.to_thread(_fetch_sources)
+        except Exception:
+            return
+
+        db_ids = {row[0] for row in snapshot}
+
+        # Stop workers for deleted sources
+        for running_id in list(self._tasks.keys()):
+            if running_id not in db_ids:
+                await self.stop_source(running_id)
+
+        # Start, stop, or restart workers whose config/enabled state changed on another replica
+        for sid, kind, enabled, cfg, fp in snapshot:
+            needs = enabled and (
+                kind in ("polled_api", "sse", "logfile", "kafka", "rabbitmq")
+                or (kind == "custom" and bool(cfg.get("simulate", False)))
+            )
+            running = self.is_worker_running(sid)
+            prev_fp = self._fingerprints.get(sid)
+
+            if not needs:
+                if running or sid in self._tasks:
+                    await self.stop_source(sid)
+                continue
+
+            if not running or prev_fp != fp:
+                await self.stop_source(sid)
+                coro = self._dispatch_worker(sid, kind, cfg)
+                if coro is not None:
+                    self._fingerprints[sid] = fp
+                    self._tasks[sid] = asyncio.create_task(
+                        self._run_with_optional_advisory_lock(sid, kind, cfg, coro),
+                        name=f"source-{sid}-{kind}",
+                    )
+
+    async def _run_with_optional_advisory_lock(
+        self,
+        source_id: int,
+        kind: str,
+        config: dict[str, Any],
+        worker_coro: Any,
+    ) -> None:
+        """
+        On PostgreSQL, hold a session-level advisory lock for singleton workers so only
+        one replica executes polling/streaming/simulation for a given source_id.
+        If another replica already holds the lock, close the coroutine and exit cleanly;
+        the reconciler will retry on failover.
+        """
+        if not USE_POSTGRES or not _needs_singleton_lock(kind, config):
+            await worker_coro
+            return
+
+        lock_key = ADVISORY_LOCK_BASE + source_id
+        lock_conn = None
+        try:
+            lock_conn = await asyncio.to_thread(engine.connect)
+            acquired = await asyncio.to_thread(
+                lambda: bool(lock_conn.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": lock_key}).scalar())
+            )
+            if not acquired:
+                worker_coro.close()
+                return
+            await worker_coro
+        except asyncio.CancelledError:
+            raise
+        finally:
+            if lock_conn is not None:
+                try:
+                    await asyncio.to_thread(
+                        lambda: lock_conn.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": lock_key})
+                    )
+                except Exception:
+                    pass
+                try:
+                    await asyncio.to_thread(lock_conn.close)
+                except Exception:
+                    pass
 
     def _dispatch_worker(self, source_id: int, kind: str, config: dict[str, Any]):
         simulate = bool(config.get("simulate", False))
@@ -196,11 +376,13 @@ class IngestManager:
         records_path = str(config.get("records_path") or "").strip()
         cursor_field = str(config.get("cursor_field") or "id").strip()
         headers = config.get("headers_json") if isinstance(config.get("headers_json"), dict) else {}
-        seen_ids: set[str] = set()
 
         if not url:
             _record_source_error(source_id, "Polled REST API requires a valid 'url' or Simulation Mode enabled.")
             return
+
+        seen_list = await asyncio.to_thread(_load_seen_cursors, source_id)
+        seen_set = set(seen_list)
 
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
             try:
@@ -216,21 +398,26 @@ class IngestManager:
                             items = [{"value": items}]
 
                         new_items: list[Any] = []
+                        cursors_dirty = False
                         for item in items:
                             if cursor_field and isinstance(item, dict):
                                 cid = get_by_path(item, cursor_field)
                                 if cid is not None:
                                     cid_str = str(cid)
-                                    if cid_str in seen_ids:
+                                    if cid_str in seen_set:
                                         continue
-                                    seen_ids.add(cid_str)
-                                    if len(seen_ids) > 5000:
-                                        seen_ids.clear()
+                                    seen_set.add(cid_str)
+                                    seen_list.append(cid_str)
+                                    cursors_dirty = True
                             new_items.append(item)
 
                         if new_items:
-                            # Cap initial backfill burst to 25 items per poll
                             await asyncio.to_thread(_ingest_in_fresh_session, source_id, new_items[:25])
+                        if cursors_dirty:
+                            if len(seen_list) > MAX_STORED_CURSORS:
+                                seen_list = seen_list[-MAX_STORED_CURSORS:]
+                                seen_set = set(seen_list)
+                            await asyncio.to_thread(_save_seen_cursors, source_id, seen_list)
                     except asyncio.CancelledError:
                         raise
                     except Exception as exc:
@@ -321,7 +508,7 @@ class IngestManager:
                     try:
                         size = path.stat().st_size
                         if size < offset:
-                            offset = 0  # file rotated/truncated
+                            offset = 0
                         if size > offset:
                             with path.open("r", encoding="utf-8", errors="replace") as fh:
                                 fh.seek(offset)

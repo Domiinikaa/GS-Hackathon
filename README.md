@@ -61,12 +61,14 @@ Designed around a **declarative Connector Registry** (`CONNECTOR_REGISTRY`) so n
   - Export any source specification with masked secrets via `GET /api/sources/{id}/export`.
 - **Unseen Schema Playground & Rule Dry-Run:**
   - Paste any unseen JSON payload or raw log line into `POST /api/sources/dry-run` (or the UI playground) to inspect parsed output, discovered fields, and matching active rules **without persisting events or alerts**.
+  - Supports **arbitrarily nested / recursive `and`, `or`, and `not` condition trees** as well as leaf `{field, op, value}` conditions.
 - **Built-in Simulator & Connection Tester:**
   - Simulate 1–50 realistic events for any source (`POST /api/sources/{id}/simulate`) using Appendix A presets or custom payloads, and probe live connectivity via `POST /api/sources/{id}/test-connection`.
 - **Live Event Inspector:**
   - Real-time event viewer (`GET /api/events`) with source filtering, payload search, and auto-refresh.
 
 ### 2. Rules, Alerts, Runbooks & Delivery Pipeline
+- **Normalized Event Contract for Rules:** Every ingested record (regardless of transport or raw log format) is parsed, unwrapped (`root_path`), and aliased (`field_aliases`) before being stored in `Event.payload` as a structured JSON object. Rule evaluators (`services/rules_engine.py`) can query nested fields via dot-notation (e.g. `payload.notional`, `error.code`) and build recursive `and`/`or`/`not` condition trees, while rule editors can consume `detected_fields` from `GET /api/sources` or `GET /api/sources/{id}/fields` for field autocomplete.
 - **Event Pipeline (`services/pipeline.py`):** Evaluates incoming events against enabled rules, deduplicates/groups alerts, resolves on-call recipients and channel preferences, and enqueues deliveries.
 - **Security & Access Control:**
   - JWT authentication (`HS256`), single-use invite-code registration (`GS-XXXX-XXXX`), and dynamic company departments.
@@ -122,9 +124,23 @@ npm run dev
 The included multi-stage `Dockerfile` compiles the React + TypeScript bundle with Node 20 and serves both the FastAPI backend and static SPA from Python 3.11 on a single port.
 
 Required/recommended environment variables for production:
-- `DATABASE_URL` — PostgreSQL connection string (defaults to local SQLite `app.db` if unset)
+- `DATABASE_URL` — PostgreSQL connection string (required for multi-replica deployments; defaults to local SQLite `app.db` if unset)
+- `SECRET_KEY` — shared JWT signing key across all replicas
 - `ADMIN_UNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` — automatic bootstrap for the first administrator account
 - `PORT` — HTTP port (defaults to `8000`)
+
+### Production Horizontal Scaling (N Replicas / Kubernetes)
+All application instances are stateless and coordinate exclusively through the shared PostgreSQL database:
+1. **Shared Database:** Point every replica to the same PostgreSQL instance via `DATABASE_URL` (use **PgBouncer** in transaction/session pooling mode when running many pods).
+2. **Automatic Worker Coordination:**
+   - **Singleton Pull/Stream Workers (`polled_api`, `sse`, `logfile`, `simulate=True`):** Coordinated automatically via PostgreSQL session advisory locks (`pg_try_advisory_lock`) and a 5-second DB reconciler loop so only one replica polls each source, with automatic failover if a pod terminates.
+   - **Broker Streams (`kafka`, `rabbitmq`):** Run across all replicas simultaneously using Kafka consumer groups (`group_id`) and RabbitMQ competing consumers.
+   - **Atomic Counters & Cursor Persistence:** `Source.events_count` uses atomic SQL increments (`coalesce(events_count, 0) + N`), and `polled_api` deduplication cursors are persisted in PostgreSQL (`_seen_cursors`).
+3. **Kubernetes / HPA Readiness:**
+   - Configure `livenessProbe` and `readinessProbe` on `GET /health`.
+   - Scale the `Deployment` with a `HorizontalPodAutoscaler` (CPU/RPS) behind a standard Kubernetes `Service` / Ingress.
+   - For high-volume container logs in Kubernetes, run **Fluent Bit** or **Vector** as a DaemonSet forwarding logs to `POST /api/ingest/{key}` (or Kafka) rather than tailing local pod files.
+4. **High-Throughput Next Steps (10k+ msg/s):** Decouple `POST /api/ingest/{key}` into a `202 Accepted` queue producer (Kafka/RabbitMQ) with dedicated worker pods scaled via KEDA, and apply time-based partitioning to the `events` table.
 
 ---
 

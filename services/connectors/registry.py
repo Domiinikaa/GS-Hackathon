@@ -262,7 +262,7 @@ CONNECTOR_REGISTRY: dict[str, ConnectorTypeSpec] = {
                 placeholder="2",
                 description="How frequently to check the file for newly appended lines.",
             ),
-            *_simulation_fields(default_simulate=True, default_preset="pricing_log"),
+            *_simulation_fields(default_simulate=False, default_preset="pricing_log"),
         ],
     ),
     "kafka": ConnectorTypeSpec(
@@ -324,7 +324,7 @@ CONNECTOR_REGISTRY: dict[str, ConnectorTypeSpec] = {
                 default="latest",
                 options=["latest", "earliest"],
             ),
-            *_simulation_fields(default_simulate=True, default_preset="trade_rejected"),
+            *_simulation_fields(default_simulate=False, default_preset="trade_rejected"),
         ],
     ),
     "rabbitmq": ConnectorTypeSpec(
@@ -364,7 +364,7 @@ CONNECTOR_REGISTRY: dict[str, ConnectorTypeSpec] = {
                 default="#",
                 placeholder="workflow.*",
             ),
-            *_simulation_fields(default_simulate=True, default_preset="workflow_failure"),
+            *_simulation_fields(default_simulate=False, default_preset="workflow_failure"),
         ],
     ),
     "custom": ConnectorTypeSpec(
@@ -413,10 +413,10 @@ def _secret_field_names(kind: str) -> set[str]:
 
 
 def mask_source_config(kind: str, config: Optional[dict[str, Any]]) -> dict[str, Any]:
-    """Return a copy of config with secret fields masked for API responses."""
+    """Return a copy of config with secret fields masked and internal keys hidden."""
     if not isinstance(config, dict):
         return {}
-    masked = dict(config)
+    masked = {k: v for k, v in config.items() if not str(k).startswith("_")}
     for key in _secret_field_names(kind):
         val = masked.get(key)
         if isinstance(val, str) and val.strip():
@@ -429,12 +429,15 @@ def merge_secret_fields(
     existing_config: Optional[dict[str, Any]],
     incoming_config: Optional[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Preserve existing secrets when the UI sends back the masked placeholder."""
+    """Preserve existing secrets and internal state keys when the UI sends updates."""
     merged = dict(incoming_config or {})
     old = existing_config or {}
     for key in _secret_field_names(kind):
         if merged.get(key) == SECRET_MASK and key in old:
             merged[key] = old[key]
+    for key, val in old.items():
+        if str(key).startswith("_") and key not in merged:
+            merged[key] = val
     return merged
 
 
