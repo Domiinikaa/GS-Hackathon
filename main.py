@@ -14,6 +14,7 @@ import models  # Registers all models with Base
 from services.security import hash_password
 from services.connectors import ingest_manager
 from services.delivery import ensure_delivery_columns, start_worker
+from services import runbook_runner
 from routers import api, auth, admin, alerts, rules, people, sources, deliveries, runbooks
 from seed import seed_all
 from services.alert_service import ensure_open_dedup_index
@@ -182,6 +183,7 @@ with startup_lock():
     startup_db = SessionLocal()
     try:
         seed_all(startup_db)
+        runbook_runner.upgrade_runbook_steps(startup_db)   # stare runbooki -> rodzaje kroków i warunki
     finally:
         startup_db.close()
 
@@ -189,10 +191,12 @@ with startup_lock():
 async def lifespan(_app: FastAPI):
     ensure_delivery_columns(engine)
     start_worker()
+    runbook_runner.start_worker()          # Osoba 4: wykonywanie kroków runbooka (jeden worker na kopię)
     await ingest_manager.start()
     try:
         yield
     finally:
+        runbook_runner.stop_worker()
         await ingest_manager.stop()
 
 

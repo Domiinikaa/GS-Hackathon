@@ -1,6 +1,6 @@
 // OSOBA 4 – wywołania backendu dla runbooków i testu silnika (routers/runbooks.py).
 import { api } from '../shared/api';
-import type { Runbook, RunbookStep } from '../shared/types';
+import type { Alert, Runbook, RunbookStep, StepKind } from '../shared/types';
 
 export type RunbookFormat = 'auto' | 'yaml' | 'json' | 'html' | 'markdown' | 'text' | 'link';
 
@@ -43,21 +43,56 @@ export interface EngineResult {
   not_matched: string[];
 }
 
+// symulator systemów docelowych (services/simulator.py)
+export interface SimService {
+  name: string;
+  healthy: boolean;
+  workflows_ok: boolean;          // czy ponowienie procesu się uda (settlement)
+  restarting: boolean;
+  restarting_until: string | null;
+}
+
+export interface SimCall {
+  id: number;
+  service: string | null;
+  action: string;
+  detail: string | null;
+  ok: boolean;
+  alert_id: number | null;
+  at: string;
+}
+
+// rodzaj każdego kroku: wybrany ręcznie albo null = wykryj automatycznie
+export type StepKinds = (StepKind | null)[];
+
 const json = (body: unknown) => ({ body: JSON.stringify(body) });
 
 export const runbookApi = {
   list: () => api<Runbook[]>('/runbooks'),
   parse: (raw: string, format: RunbookFormat) =>
     api<ParseResult>('/runbooks/parse', { method: 'POST', ...json({ raw, format }) }),
-  create: (name: string, raw: string, format: RunbookFormat) =>
-    api<Runbook>('/runbooks', { method: 'POST', ...json({ name, raw, format }) }),
-  update: (id: number, name: string, raw: string, format: RunbookFormat) =>
-    api<Runbook>(`/runbooks/${id}`, { method: 'PUT', ...json({ name, raw, format }) }),
+  create: (name: string, raw: string, format: RunbookFormat, kinds?: StepKinds) =>
+    api<Runbook>('/runbooks', { method: 'POST', ...json({ name, raw, format, kinds }) }),
+  update: (id: number, name: string, raw: string, format: RunbookFormat, kinds?: StepKinds) =>
+    api<Runbook>(`/runbooks/${id}`, { method: 'PUT', ...json({ name, raw, format, kinds }) }),
   remove: (id: number) => api<{ deleted: number }>(`/runbooks/${id}`, { method: 'DELETE' }),
   attach: (id: number, ruleId: string) => api(`/runbooks/${id}/attach/${ruleId}`, { method: 'POST' }),
   detach: (id: number, ruleId: string) => api(`/runbooks/${id}/attach/${ruleId}`, { method: 'DELETE' }),
   rules: () => api<RuleRef[]>('/rules'),
   testEngine: (event: unknown) => api<EngineResult>('/engine/test', { method: 'POST', ...json({ event }) }),
+
+  // kroki runbooka w alercie – decyzje dotyczące całej procedury (pojedynczy Approve / Mark done są w alertach)
+  // stepIndex liczony od 0
+  approveUntil: (alertId: number, stepIndex: number) =>
+    api<Alert>(`/alerts/${alertId}/steps/${stepIndex}/approve-until`, { method: 'POST' }),
+  retryStep: (alertId: number, stepIndex: number) =>
+    api<Alert>(`/alerts/${alertId}/steps/${stepIndex}/retry`, { method: 'POST' }),
+  abortRunbook: (alertId: number) => api<Alert>(`/alerts/${alertId}/runbook/abort`, { method: 'POST' }),
+
+  simServices: () => api<SimService[]>('/sim/services'),
+  setSimService: (name: string, patch: Partial<Pick<SimService, 'healthy' | 'workflows_ok'>>) =>
+    api<SimService>(`/sim/services/${name}`, { method: 'PUT', ...json(patch) }),
+  simCalls: (limit = 20) => api<SimCall[]>(`/sim/calls?limit=${limit}`),
 };
 
 // {"and": [{field: "type", op: "eq", value: "WORKFLOW_FAILED"}]} -> 'type = WORKFLOW_FAILED'

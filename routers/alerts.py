@@ -169,6 +169,21 @@ def _check_approve_permission(db: Session, alert: Alert, user: Optional[User]) -
 
 def _update_step(db, alert_id, step_index, user, action):
     """
+    Osoba 4: zmiana kroku pod blokadą alertu (dwa kliknięcia naraz, także z różnych kopii serwera, się nie nadpiszą),
+    a potem runbook idzie dalej (np. zatwierdzony krok trafia do wykonania).
+    """
+    from services import runbook_runner
+
+    with runbook_runner.alert_guard():
+        runbook_runner.lock_alert(db, alert_id)   # Postgres: SELECT … FOR UPDATE do commit
+        alert = _update_step_unlocked(db, alert_id, step_index, user, action)
+    runbook_runner.advance_alert(alert_id)
+    db.refresh(alert)
+    return alert
+
+
+def _update_step_unlocked(db, alert_id, step_index, user, action):
+    """
     Wspólne dla approve i done: zmień jeden krok runbooka i dopisz do historii kto i kiedy.
     Ryzykowny krok (approval == "required") trzeba najpierw zatwierdzić, dopiero potem oznaczyć jako zrobiony.
     """
