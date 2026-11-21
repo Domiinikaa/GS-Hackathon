@@ -7,7 +7,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Alert, Event, Rule, Source
+from models import Alert, Event, Person, Rule, Source
+from routers.people import team_name
 
 router = APIRouter(prefix="/api/rules", tags=["Rules"])
 
@@ -180,9 +181,21 @@ def get_rule(rule_id: str, db: Session = Depends(get_db)):
     return to_dict(_get_or_404(db, rule_id))
 
 
+def _require_target(db: Session, name: str) -> str:
+    """A rule goes to a team (department from Admin & Invites) or to one person by name."""
+    team = team_name(db, name)
+    if team:
+        return team
+    person = db.query(Person).filter(Person.name == name.strip()).first()
+    if person:
+        return person.name
+    raise HTTPException(422, f"'{name}' is neither a team (Admin & Invites department) nor a person on the People page.")
+
+
 @router.post("", status_code=201)
 def create_rule(payload: RuleIn, db: Session = Depends(get_db)):
     data = payload.model_dump()
+    data["team"] = _require_target(db, data["team"])
     wanted = _slug(data.pop("id") or data["name"])
     rule = Rule(id=_unique_id(db, wanted), **data)
     db.add(rule)
@@ -196,6 +209,7 @@ def update_rule(rule_id: str, payload: RuleIn, db: Session = Depends(get_db)):
     rule = _get_or_404(db, rule_id)
     data = payload.model_dump()
     data.pop("id", None)  # the id never changes because alerts reference it
+    data["team"] = _require_target(db, data["team"])
     for key, value in data.items():
         setattr(rule, key, value)
     db.commit()

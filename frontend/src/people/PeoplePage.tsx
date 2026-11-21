@@ -81,7 +81,12 @@ export default function PeoplePage() {
     }
   }
 
+  // Teams used on this page (for the filter) and all departments from Admin & Invites (for the form)
   const teams = useMemo(() => [...new Set(people.map((p) => p.team))].sort(), [people]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  useEffect(() => {
+    peopleApi.teams().then((t) => setDepartments(t.teams)).catch(() => {});
+  }, []);
 
   // People grouped by team (after applying the team filter)
   const grouped = useMemo(() => {
@@ -124,7 +129,7 @@ export default function PeoplePage() {
         <PersonForm
           key={editing === 'new' ? 'new' : editing.id}
           initial={editing === 'new' ? undefined : editing}
-          teams={teams}
+          teams={departments}
           onSave={savePerson}
           onCancel={() => setEditing(null)}
         />

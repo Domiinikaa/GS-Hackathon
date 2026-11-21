@@ -5,10 +5,11 @@ from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Delivery, Person, Rule
+from models import Delivery, Department, Person
 from services.people_service import plan_recipients
 
 router = APIRouter(prefix="/api/people", tags=["People"])
@@ -16,6 +17,19 @@ router = APIRouter(prefix="/api/people", tags=["People"])
 Channel = Literal["email", "sms", "phone", "ui"]
 Severity = Literal["info", "warning", "critical"]
 HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def team_name(db: Session, name: str) -> Optional[str]:
+    """Teams are the departments managed in Admin & Invites. Returns the exact department name, or None."""
+    dept = db.query(Department).filter(func.lower(Department.name) == name.strip().lower()).first()
+    return dept.name if dept else None
+
+
+def _require_team(db: Session, name: str) -> str:
+    found = team_name(db, name)
+    if found is None:
+        raise HTTPException(422, f"Team '{name}' does not exist. Pick one of the departments from Admin & Invites.")
+    return found
 
 
 class QuietWindow(BaseModel):
@@ -102,10 +116,9 @@ def list_people(team: Optional[str] = None, db: Session = Depends(get_db)):
 
 @router.get("/teams")
 def list_teams(db: Session = Depends(get_db)):
-    """All teams and people a rule can target (suggestions for the "Who gets notified" field)."""
-    teams = {t for (t,) in db.query(Person.team).distinct()} | {t for (t,) in db.query(Rule.team).distinct()}
+    """Teams (= departments from Admin & Invites) and people a rule can target."""
     return {
-        "teams": sorted(t for t in teams if t),
+        "teams": [d.name for d in db.query(Department).order_by(Department.name).all()],
         "people": sorted({n for (n,) in db.query(Person.name).distinct()}),
     }
 
@@ -135,7 +148,9 @@ def get_person(person_id: int, db: Session = Depends(get_db)):
 
 @router.post("", status_code=201)
 def create_person(payload: PersonIn, db: Session = Depends(get_db)):
-    person = Person(**payload.to_columns())
+    data = payload.to_columns()
+    data["team"] = _require_team(db, data["team"])
+    person = Person(**data)
     db.add(person)
     db.commit()
     db.refresh(person)
@@ -145,7 +160,9 @@ def create_person(payload: PersonIn, db: Session = Depends(get_db)):
 @router.put("/{person_id}")
 def update_person(person_id: int, payload: PersonIn, db: Session = Depends(get_db)):
     person = _get_or_404(db, person_id)
-    for key, value in payload.to_columns().items():
+    data = payload.to_columns()
+    data["team"] = _require_team(db, data["team"])
+    for key, value in data.items():
         setattr(person, key, value)
     db.commit()
     db.refresh(person)

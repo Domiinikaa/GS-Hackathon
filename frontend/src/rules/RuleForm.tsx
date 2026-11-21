@@ -60,13 +60,13 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
   const [saving, setSaving] = useState(false);
   // Rules with nested groups (created via the API) keep their conditions unchanged in this form
   const nested = initial ? !isFlat(initial.condition) : false;
-  const [targets, setTargets] = useState<string[]>([]);
+  const [targets, setTargets] = useState<{ teams: string[]; people: string[] }>({ teams: [], people: [] });
   const [fieldHints, setFieldHints] = useState<FieldHint[]>([]);
   const [recipients, setRecipients] = useState<PlannedRecipient[] | null>(null);
 
   // Suggestions: teams/people and field names from real events
   useEffect(() => {
-    rulesApi.teams().then((t) => setTargets([...t.teams, ...t.people])).catch(() => {});
+    rulesApi.teams().then(setTargets).catch(() => {});
     rulesApi.fields().then(setFieldHints).catch(() => {});
   }, []);
 
@@ -151,11 +151,18 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
                   </div>
         <div>
           <label className={labelClass}>Send alerts to</label>
-          <input className={inputClass} value={team} onChange={(e) => setTeam(e.target.value)}
-            placeholder="e.g. Rates" list="rule-targets" />
-          <datalist id="rule-targets">
-            {targets.map((t) => <option key={t} value={t} />)}
-          </datalist>
+          <select className={inputClass} value={team} onChange={(e) => setTeam(e.target.value)}>
+            <option value="">Choose a team or person…</option>
+            {team && !targets.teams.includes(team) && !targets.people.includes(team) && (
+              <option value={team}>{team} (not found)</option>
+            )}
+            <optgroup label="Teams (Admin & Invites)">
+              {targets.teams.map((t) => <option key={`t-${t}`} value={t}>{t}</option>)}
+            </optgroup>
+            <optgroup label="One person">
+              {targets.people.map((p) => <option key={`p-${p}`} value={p}>{p}</option>)}
+            </optgroup>
+          </select>
           <p className={hintClass}>Team or person</p>
         </div>
       </div>

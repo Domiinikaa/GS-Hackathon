@@ -24,7 +24,7 @@ const DEFAULT_PREFS: Person['channel_prefs'] = {
 
 interface Props {
   initial?: Person;          // missing = new person
-  teams: string[];           // suggestions for the team field
+  teams: string[];           // departments from Admin & Invites
   onSave: (person: PersonInput) => Promise<string | null>; // returns an error message or null
   onCancel: () => void;
 }
@@ -123,11 +123,13 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
         </div>
         <div>
           <label className={labelClass}>Team</label>
-          <input className={inputClass} value={team} onChange={(e) => setTeam(e.target.value)}
-            placeholder="e.g. Payments" list="person-teams" />
-          <datalist id="person-teams">
-            {teams.map((t) => <option key={t} value={t} />)}
-          </datalist>
+          <select className={inputClass} value={team} onChange={(e) => setTeam(e.target.value)}>
+            <option value="">Choose a team…</option>
+            {/* keep an old value visible if the department was renamed or removed */}
+            {team && !teams.includes(team) && <option value={team}>{team} (not in Admin & Invites)</option>}
+            {teams.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <p className="text-xs text-slate-500 mt-1">Teams are managed in Admin & Invites</p>
         </div>
         <div>
           <label className={labelClass}>E-mail</label>
