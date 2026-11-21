@@ -1,6 +1,6 @@
 // Rules page.
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { BookOpen, Copy, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { CHANNELS, COLOR_DOT, Rule } from './ruleTypes';
 import RuleConditions from './RuleConditions';
 import { RunbookSummary, errorMessage, rulesApi } from './rulesApi';
@@ -42,10 +42,19 @@ export default function RulesPage() {
     window.setTimeout(() => setNotice(''), 3000);
   }
 
+  function duplicateRule(rule: Rule) {
+    const copy: Rule = {
+      ...rule,
+      id: '',
+      name: `${rule.name} (Copy)`,
+    };
+    setEditing(copy);
+  }
+
   // Returns an error message to show in the form, or null on success
   async function saveRule(rule: Rule): Promise<string | null> {
     try {
-      const isNew = editing === 'new';
+      const isNew = editing === 'new' || !rule.id;
       const saved = isNew ? await rulesApi.create(rule) : await rulesApi.update(rule);
       setRules((prev) => (isNew ? [...prev, saved] : prev.map((r) => (r.id === saved.id ? saved : r))));
       setEditing(null);
@@ -179,6 +188,9 @@ export default function RulesPage() {
                 }`}>
                 {rule.enabled ? 'Enabled' : 'Disabled'}
               </button>
+              <button onClick={() => duplicateRule(rule)} className="text-slate-400 hover:text-amber-400 transition" title="Duplicate rule (create copy)">
+                <Copy className="w-4 h-4" />
+              </button>
               <button onClick={() => setEditing(rule)} className="text-slate-400 hover:text-white" title="Edit">
                 <Pencil className="w-4 h-4" />
               </button>
@@ -189,7 +201,20 @@ export default function RulesPage() {
           </div>
         ))}
         {!loading && rules.length === 0 && !error && (
-          <p className="text-center text-slate-500 py-8">No rules yet. Create the first one!</p>
+          <div className="text-center py-12 px-4 rounded-2xl border border-dashed border-slate-800 bg-slate-900/40">
+            <SlidersHorizontal className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+            <h3 className="text-base font-semibold text-slate-300">No alert rules configured</h3>
+            <p className="text-sm text-slate-500 max-w-md mx-auto mt-1 mb-4">
+              Rules evaluate events from your sources in real time and route notifications to the right team leads or engineers.
+            </p>
+            <button
+              onClick={() => setEditing('new')}
+              className="inline-flex items-center space-x-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm transition"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create first rule</span>
+            </button>
+          </div>
         )}
         {!loading && rules.length > 0 && visible.length === 0 && (
           <p className="text-center text-slate-500 py-8">No rules match “{filter}”.</p>

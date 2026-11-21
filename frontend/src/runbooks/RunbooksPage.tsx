@@ -1,6 +1,6 @@
 // OSOBA 4 – runbooki: wklej YAML / Markdown / tekst, zobacz kroki na żywo, zapisz, podepnij do reguły.
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, BookOpen, Check, Link2, Plus, Save, Trash2, Unlink, X } from 'lucide-react';
+import { AlertTriangle, BookOpen, Check, Copy, Link2, Plus, Save, Trash2, Unlink, X } from 'lucide-react';
 import type { Runbook, RunbookStep, StepKind } from '../shared/types';
 import { MatchGroup, RuleRef, RunbookFormat, describeMatches, errorText, runbookApi } from './runbookApi';
 import StepList from './StepList';
@@ -82,6 +82,15 @@ export default function RunbooksPage() {
   const [editing, setEditing] = useState<Editing>(null);
   const [notice, setNotice] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);  // id runbooka czekającego na "Yes"
+
+  function duplicateRunbook(rb: Runbook) {
+    const copy: Runbook = {
+      ...rb,
+      id: 0,
+      name: `${rb.name}-copy`,
+    };
+    setEditing(copy);
+  }
 
   // krótki komunikat po akcji (np. "Saved"), znika sam po 4 s
   useEffect(() => {
@@ -216,16 +225,38 @@ export default function RunbooksPage() {
                   <button onClick={() => setConfirmDelete(null)} className="px-2 py-1 rounded text-slate-400 hover:text-white">No</button>
                 </div>
               ) : (
-                <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(rb.id); }}
-                  className="text-slate-400 hover:text-red-400 self-start" title="Delete">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="self-start flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => duplicateRunbook(rb)}
+                    className="text-slate-400 hover:text-amber-400 transition"
+                    title="Duplicate runbook (create copy)"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setConfirmDelete(rb.id)}
+                    className="text-slate-400 hover:text-red-400" title="Delete">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               )}
             </div>
           );
         })}
         {runbooks.length === 0 && !loadError && (
-          <p className="text-center text-slate-500 py-8">No runbooks yet. Create the first one!</p>
+          <div className="text-center py-12 px-4 rounded-2xl border border-dashed border-slate-800 bg-slate-900/40">
+            <BookOpen className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+            <h3 className="text-base font-semibold text-slate-300">No remediation runbooks yet</h3>
+            <p className="text-sm text-slate-500 max-w-md mx-auto mt-1 mb-4">
+              Runbooks define automated verification, escalation, and remediation steps attached to alert rules.
+            </p>
+            <button
+              onClick={() => setEditing('new')}
+              className="inline-flex items-center space-x-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm transition"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create first runbook</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -298,7 +329,7 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
     setSaving(true);
     setSaveError('');
     try {
-      if (initial) {
+      if (initial && initial.id > 0) {
         onSaved(await runbookApi.update(initial.id, name.trim(), raw, format, kinds()), false);
         return;
       }
@@ -344,7 +375,9 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
   return (
     <section className="bg-slate-900 border border-amber-500/30 rounded-xl p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-bold text-white">{initial ? `Edit runbook #${initial.id}` : 'New runbook'}</h2>
+        <h2 className="font-bold text-white">
+          {initial && initial.id > 0 ? `Edit "${initial.name}"` : initial ? `Duplicate "${name}"` : 'New runbook'}
+        </h2>
         <button onClick={onClose} className="text-slate-400 hover:text-white" title="Close"><X className="w-4 h-4" /></button>
       </div>
 

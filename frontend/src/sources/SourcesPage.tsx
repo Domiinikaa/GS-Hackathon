@@ -486,6 +486,24 @@ export default function SourcesPage() {
                       <button
                         type="button"
                         onClick={() => {
+                          const copy: Source = {
+                            ...src,
+                            id: 0,
+                            name: `${src.name} (Copy)`,
+                            key: `${src.key}-copy`,
+                          };
+                          setEditingSource(copy);
+                          setShowSpecModal(true);
+                        }}
+                        title="Duplicate source (create copy)"
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-amber-400 transition"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
                           setEditingSource(src);
                           setShowSpecModal(true);
                         }}
