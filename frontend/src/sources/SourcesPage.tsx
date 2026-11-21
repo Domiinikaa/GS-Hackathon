@@ -19,7 +19,6 @@ import {
   Mail,
   Sliders,
   AlertTriangle,
-  CheckCircle2,
   Terminal,
   Search,
   ChevronDown,
@@ -35,7 +34,6 @@ import type {
   ExportSpecResult,
   SimulatorPreset,
   SourceTypesResponse,
-  TestConnectionResult,
 } from './sourceTypes';
 import SourceSpecModal from './SourceSpecModal';
 import SimulateModal from './SimulateModal';
@@ -85,8 +83,6 @@ export default function SourcesPage() {
   // Per-card UI state
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [openCurlId, setOpenCurlId] = useState<number | null>(null);
-  const [testResults, setTestResults] = useState<Record<number, TestConnectionResult>>({});
-  const [testingId, setTestingId] = useState<number | null>(null);
 
   // Event Inspector filters
   const [eventSourceFilter, setEventSourceFilter] = useState<string>('all');
@@ -172,27 +168,6 @@ export default function SourcesPage() {
       await loadSourcesAndMeta();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete source');
-    }
-  };
-
-  const handleTestConnection = async (src: Source) => {
-    setTestingId(src.id);
-    try {
-      const res = await api<TestConnectionResult>(`/sources/${src.id}/test-connection`, {
-        method: 'POST',
-      });
-      setTestResults((prev) => ({ ...prev, [src.id]: res }));
-    } catch (err) {
-      setTestResults((prev) => ({
-        ...prev,
-        [src.id]: {
-          ok: false,
-          mode: src.kind,
-          message: err instanceof Error ? err.message : 'Connection test failed',
-        },
-      }));
-    } finally {
-      setTestingId(null);
     }
   };
 
@@ -355,7 +330,6 @@ export default function SourcesPage() {
                 src.sample_event || { type: 'TEST_EVENT', service: src.name, severity: 'warning' }
               );
               const curlCmd = `curl -X POST "${fullIngestUrl}" \\\n  -H "Content-Type: application/json" \\\n  -d '${sampleJson}'`;
-              const testRes = testResults[src.id];
 
               return (
                 <article key={src.id} className={`ios-group transition-opacity ${src.enabled ? '' : 'opacity-60'}`}>
@@ -386,18 +360,6 @@ export default function SourcesPage() {
                     <div className="ios-row items-start text-[15px] text-ios-red">
                       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                       <span className="flex-1">{src.last_error}</span>
-                    </div>
-                  )}
-
-                  {testRes && (
-                    <div className={`ios-row text-[15px] ${testRes.ok ? 'text-ios-green' : 'text-ios-red'}`}>
-                      {testRes.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
-                      <span className="flex-1">{testRes.message}</span>
-                      <button type="button" aria-label="Dismiss test result"
-                        onClick={() => setTestResults((prev) => { const next = { ...prev }; delete next[src.id]; return next; })}
-                        className="text-ink-faint hover:text-white">
-                        <X className="w-4 h-4" />
-                      </button>
                     </div>
                   )}
 
@@ -448,10 +410,6 @@ export default function SourcesPage() {
                   {/* actions */}
                   <div className="ios-row flex-wrap gap-x-5 gap-y-2 text-[15px]">
                     <button type="button" onClick={() => setSimulatingSource(src)} className="text-ios-blue hover:opacity-70">Simulate</button>
-                    <button type="button" disabled={testingId === src.id} onClick={() => handleTestConnection(src)}
-                      className="text-ios-blue hover:opacity-70 disabled:opacity-40">
-                      {testingId === src.id ? 'Testing' : 'Test connection'}
-                    </button>
                     <button type="button" onClick={() => handleExport(src, 'yaml')} className="text-ios-blue hover:opacity-70">Export</button>
                     <button type="button" onClick={() => { setEditingSource(src); setShowSpecModal(true); }}
                       className="text-ios-blue hover:opacity-70">Edit</button>
