@@ -1,201 +1,191 @@
-# 🚀 GS QuantFlow | Fullstack Quantitative & Enterprise Platform
+# GS Alerting & Orchestration Engine
 
-An enterprise-grade fullstack web application engineered for the **Goldman Sachs Hackathon** for a **4-person cross-functional team**.
+**Flexible Alerting & Notification Service** built for the Goldman Sachs Software Engineering Hackathon.
 
-Architected from the ground up to be **Flexible, Scalable, and Intuitive**.
+The platform ingests heterogeneous events and logs from arbitrary sources, evaluates dynamic filtering rules at runtime, deduplicates and groups alerts, attaches actionable runbooks, and delivers notifications through each responder's preferred channels.
 
 ---
 
-## 🏛️ System Architecture
+## System Architecture
 
 ```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                        CLIENT BROWSER (SPA)                            │
-│           React 18 • TypeScript • Tailwind CSS • Lucide Icons          │
-│     (Dynamic Workspace • Admin Panel • Registration with Invites)      │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ HTTP / JSON API (Bearer JWT)
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                        FASTAPI BACKEND ENGINE                          │
-│                                                                        │
-│   ┌────────────────────┐  ┌──────────────────┐  ┌──────────────────┐   │
-│   │   Auth & Security  │  │ Admin & Invites  │  │ User Workspace   │   │
-│   │   JWT + Bcrypt     │  │ Dynamic Taxonomy │  │ Scoped Holdings  │   │
-│   └─────────┬──────────┘  └────────┬─────────┘  └────────┬─────────┘   │
-│             │                      │                     │             │
-│             └──────────────────────┼─────────────────────┘             │
-│                                    ▼                                   │
-│                        SQLAlchemy 2.0 ORM Engine                       │
-└────────────────────────────────────┬───────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         CLIENT SPA (React 18 + TS)                       │
+│   Alerts • Rules • People • Universal Sources • Runbooks • Outbox • Admin│
+└────────────────────────────────────┬─────────────────────────────────────┘
+                                     │ HTTP / JSON (Bearer JWT)
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                       FASTAPI BACKEND ENGINE                             │
+│                                                                          │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │ Universal Ingestion & Connector Manager                            │  │
+│  │ • Push: HTTP Webhook, Custom Spec (/api/ingest/{key})              │  │
+│  │ • Pull / Stream: Polled REST API, SSE, Tailed Log File, Kafka, AMQP│  │
+│  │ • Schema-less Parser (JSON, NDJSON, Key=Value, Regex)              │  │
+│  │ • Envelope Unwrapping (root_path) & Field Aliases                  │  │
+│  │ • Built-in Per-Source Event Simulator                              │  │
+│  └─────────────────────────────────┬──────────────────────────────────┘  │
+│                                    ▼                                     │
+│     Pipeline: Event ─► Rules Engine ─► Alert Dedup ─► People ─► Outbox   │
+│                                                                          │
+│                        SQLAlchemy 2.0 ORM                                │
+└────────────────────────────────────┬─────────────────────────────────────┘
                                      │
                                      ▼
-                      ┌─────────────────────────────┐
-                      │    PostgreSQL (Railway)     │
-                      │    or SQLite (Local Dev)    │
-                      └─────────────────────────────┘
+                     PostgreSQL (Production) / SQLite (Dev)
 ```
 
 ---
 
-## 🔑 Core Features & Security Model
+## Key Capabilities
 
-### 1. Zero Default Credentials & Clean Production
-- **No hardcoded demo users:** The database initializes clean.
-- **Environment Bootstrap:** The first Administrator is provisioned securely through platform environment variables (`ADMIN_UNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`) or via the `create_admin.py` CLI script.
+### 1. Universal Log & Event Sources (`services/connectors/`, `routers/sources.py`)
+Designed around a **declarative Connector Registry** (`CONNECTOR_REGISTRY`) so new source types can be added without modifying frontend forms. The UI dynamically renders configuration fields from `GET /api/sources/types`.
 
-### 2. Single-Use Invite Code Registration & Role Delegation
-- Registration is strictly gated. New employees cannot register without an active, single-use invite code generated by an Administrator.
-- **Admin Delegation:** Administrators can issue invite codes designated specifically for Standard Users or for fellow Administrators (`is_admin=True`).
-- **Role Promotion & Elevation:** Administrators can promote existing registered employees to Administrator status or revoke permissions (`PATCH /api/admin/users/{user_id}/role`).
-- Format: `GS-XXXX-XXXX` (cryptographically random).
-- Codes expire immediately upon successful registration and are permanently linked to the registered user.
+- **7 Supported Source Types (all with built-in Simulation Mode):**
+  - **HTTP Webhook (`webhook`):** Push endpoint `POST /api/ingest/{key}` supporting JSON objects, JSON arrays, NDJSON, and plain-text logs, with optional `api_key`, `bearer`, or `hmac_sha256` verification.
+  - **Polled REST API (`polled_api`):** Background `httpx` poller with configurable HTTP method, headers, `interval_s`, `records_path` extraction, and `cursor_field` deduplication.
+  - **SSE Event Stream (`sse`):** Live `text/event-stream` subscriber with configurable rate limiting (`max_events_per_min`).
+  - **Tailed Log File (`logfile`):** Continuous file tailer supporting log rotation; in Simulation Mode, appends realistic log lines directly to disk.
+  - **Apache Kafka (`kafka`):** Consumes from a Kafka topic (via `aiokafka` when available) or runs an in-process broker simulation with `_kafka` metadata.
+  - **RabbitMQ / AMQP (`rabbitmq`):** Consumes from an AMQP queue (via `aio-pika` when available) or runs an in-process simulation with `_amqp` metadata.
+  - **Custom / Universal Spec (`custom`):** Arbitrary JSON/YAML integration specification with push ingest or simulation.
+- **Schema-Less Parsing & Normalization:**
+  - Supports `auto`, `json`, `ndjson`, `key_value`, and `regex` (named capture groups) modes.
+  - **Envelope Unwrapping (`root_path`):** Extracts nested event bodies (e.g. `payload` or `envelope.body`) while retaining outer metadata under `_envelope`.
+  - **Field Aliases (`field_aliases`):** Maps arbitrary incoming dot-paths to normalized field names.
+  - **Automatic Field Discovery:** Recursively extracts dot-notation paths and data types from sample or live events.
+- **Config-as-Code (YAML / JSON):**
+  - Create sources via `POST /api/sources/import` or the UI's **Form View ↔ Raw YAML / JSON** toggle.
+  - Export any source specification with masked secrets via `GET /api/sources/{id}/export`.
+- **Unseen Schema Playground & Rule Dry-Run:**
+  - Paste any unseen JSON payload or raw log line into `POST /api/sources/dry-run` (or the UI playground) to inspect parsed output, discovered fields, and matching active rules **without persisting events or alerts**.
+  - Supports **arbitrarily nested / recursive `and`, `or`, and `not` condition trees** as well as leaf `{field, op, value}` conditions.
+- **Built-in Simulator & Connection Tester:**
+  - Simulate 1–50 realistic events for any source (`POST /api/sources/{id}/simulate`) using Appendix A presets or custom payloads, and probe live connectivity via `POST /api/sources/{id}/test-connection`.
+- **Live Event Inspector:**
+  - Real-time event viewer (`GET /api/events`) with source filtering, payload search, and auto-refresh.
 
-### 3. Dynamic Company Departments
-- Department taxonomy is **not** hardcoded in an Enum.
-- Administrators can add, edit, or delete departments on the fly (*e.g., Risk Management, Quantitative Research, Trading, ESG, Compliance*).
-- The registration form dynamically fetches the active department directory (`GET /api/departments`).
-
-### 4. Isolated Multi-Tenant User Workspaces
-- Each user authenticates via JSON Web Tokens (JWT, HS256, 24-hour validity).
-- User data, holdings, and portfolio calculations are strictly isolated per `user_id`.
+### 2. Rules, Alerts, Runbooks & Delivery Pipeline
+- **Normalized Event Contract for Rules:** Every ingested record (regardless of transport or raw log format) is parsed, unwrapped (`root_path`), and aliased (`field_aliases`) before being stored in `Event.payload` as a structured JSON object. Rule evaluators (`services/rules_engine.py`) can query nested fields via dot-notation (e.g. `payload.notional`, `error.code`) and build recursive `and`/`or`/`not` condition trees, while rule editors can consume `detected_fields` from `GET /api/sources` or `GET /api/sources/{id}/fields` for field autocomplete.
+- **Event Pipeline (`services/pipeline.py`):** Evaluates incoming events against enabled rules, deduplicates/groups alerts, resolves on-call recipients and channel preferences, and enqueues deliveries.
+- **Security & Access Control:**
+  - JWT authentication (`HS256`), single-use invite-code registration (`GS-XXXX-XXXX`), and dynamic company departments.
+  - Clean database initialization with environment-based or CLI admin provisioning (`ADMIN_UNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` or `create_admin.py`).
+  - Source management endpoints use a centralized `require_source_manager` dependency in `routers/sources.py` (currently open to authenticated/local testing; set `REQUIRE_ADMIN_FOR_SOURCES = True` to restrict source mutations to administrators).
 
 ---
 
-## 👥 4-Person Team Role Distribution
-
-Designed so that all 4 engineers can commit code concurrently without merge conflicts:
-
-| Engineer | Focus Area | Primary Files | Responsibilities |
-|---|---|---|---|
-| **Dev 1 (Lead / Architecture)** | **Auth, Admin & Platform** | `main.py`, `routers/auth.py`, `routers/admin.py`, `models.py` | JWT security, invite codes, department taxonomy, deployment |
-| **Dev 2 (Frontend Specialist)** | **UI/UX & User Workspace** | `frontend/src/App.tsx`, `frontend/src/components/` | Responsive React UI, Tailwind design system, client state |
-| **Dev 3 (Quantitative / Logic)** | **Financial Engines & Analytics** | `services/logic.py`, `routers/api.py`, `schemas.py` | VaR, Sharpe ratio, portfolio math, risk matrices, Monte Carlo |
-| **Dev 4 (Integrations & Pitch)** | **External Feeds & Pitch Deck** | `services/external.py`, Demo Data | Yahoo Finance / market API integrations, presentation, pitch |
-
----
-
-## ⚡ Local Development Quickstart
+## Local Development Quickstart
 
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+ & npm
 
-### One-Command Startup (Recommended)
-Run the entire platform (Backend + Frontend with hot-reloading) using the unified startup script:
+### One-Command Startup
 ```bash
 ./start.sh
 ```
-Or build and run in unified production mode on a single port:
+Or build the frontend and run in unified production mode on a single port:
 ```bash
 ./start.sh --prod
 ```
 
----
+### Manual Multi-Terminal Startup
 
-### Manual Multi-Terminal Startup (Optional)
-
-#### Terminal 1 — Backend (FastAPI)
+#### Backend (FastAPI)
 ```bash
-# 1. Create and activate virtual environment
 python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# 2. Install dependencies
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. (Optional) Bootstrap an admin locally
+# Optional: create an initial administrator
 python create_admin.py --uname admin --email admin@goldmansachs.com --password AdminSecret123!
 
-# 4. Start the development server
 uvicorn main:app --reload
 ```
 - API Base: `http://localhost:8000`
-- Interactive Swagger Documentation: `http://localhost:8000/docs`
-- Health Endpoint: `http://localhost:8000/health`
+- Swagger UI: `http://localhost:8000/docs`
+- Health Check: `http://localhost:8000/health`
 
-### Terminal 2 — Frontend (React + Vite)
+#### Frontend (React + Vite)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-- Development Web Server: `http://localhost:5173`
-- *Pre-configured Vite reverse proxy seamlessly routes all `/api` traffic to `http://localhost:8000` without CORS overhead.*
+- Dev Server: `http://localhost:5173` (proxies `/api` requests to `http://localhost:8000`).
 
 ---
 
-## ☁️ Cloud Deployment (Railway)
+## Cloud Deployment (Docker / Railway)
 
-The repository features an automated multi-stage `Dockerfile`:
-- **Stage 1 (Node 20):** Compiles the React + TypeScript frontend into optimized static bundles.
-- **Stage 2 (Python 3.11):** Runs FastAPI, serving both the REST API and the React SPA under a single unified domain and port.
+The included multi-stage `Dockerfile` compiles the React + TypeScript bundle with Node 20 and serves both the FastAPI backend and static SPA from Python 3.11 on a single port.
 
-### 1-Click PostgreSQL Setup on Railway:
-1. In your Railway project, click **`+ Create`** ➔ **`Database`** ➔ **`Add PostgreSQL`**.
-2. Railway automatically provisions PostgreSQL and injects the `DATABASE_URL` environment variable.
-3. In your service **Variables**, add:
-   - `ADMIN_UNAME` = `admin`
-   - `ADMIN_EMAIL` = `admin@company.com`
-   - `ADMIN_PASSWORD` = `YourSecureAdminPassword123!`
-4. Deploy the service:
-   ```bash
-   railway up
-   ```
+Required/recommended environment variables for production:
+- `DATABASE_URL` — PostgreSQL connection string (required for multi-replica deployments; defaults to local SQLite `app.db` if unset)
+- `SECRET_KEY` — shared JWT signing key across all replicas
+- `ADMIN_UNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` — automatic bootstrap for the first administrator account
+- `PORT` — HTTP port (defaults to `8000`)
+
+### Production Horizontal Scaling (N Replicas / Kubernetes)
+All application instances are stateless and coordinate exclusively through the shared PostgreSQL database:
+1. **Shared Database:** Point every replica to the same PostgreSQL instance via `DATABASE_URL` (use **PgBouncer** in transaction/session pooling mode when running many pods).
+2. **Automatic Worker Coordination:**
+   - **Singleton Pull/Stream Workers (`polled_api`, `sse`, `logfile`, `simulate=True`):** Coordinated automatically via PostgreSQL session advisory locks (`pg_try_advisory_lock`) and a 5-second DB reconciler loop so only one replica polls each source, with automatic failover if a pod terminates.
+   - **Broker Streams (`kafka`, `rabbitmq`):** Run across all replicas simultaneously using Kafka consumer groups (`group_id`) and RabbitMQ competing consumers.
+   - **Atomic Counters & Cursor Persistence:** `Source.events_count` uses atomic SQL increments (`coalesce(events_count, 0) + N`), and `polled_api` deduplication cursors are persisted in PostgreSQL (`_seen_cursors`).
+3. **Kubernetes / HPA Readiness:**
+   - Configure `livenessProbe` and `readinessProbe` on `GET /health`.
+   - Scale the `Deployment` with a `HorizontalPodAutoscaler` (CPU/RPS) behind a standard Kubernetes `Service` / Ingress.
+   - For high-volume container logs in Kubernetes, run **Fluent Bit** or **Vector** as a DaemonSet forwarding logs to `POST /api/ingest/{key}` (or Kafka) rather than tailing local pod files.
+4. **High-Throughput Next Steps (10k+ msg/s):** Decouple `POST /api/ingest/{key}` into a `202 Accepted` queue producer (Kafka/RabbitMQ) with dedicated worker pods scaled via KEDA, and apply time-based partitioning to the `events` table.
 
 ---
 
-## 📡 REST API Reference
+## REST API Reference
 
-### Authentication (`/api/auth`)
+### Sources & Ingestion (`/api`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/sources/types` | List registered connector schemas, simulator presets, and capabilities |
+| `GET` | `/api/sources` | List configured sources with masked secrets, status, and event counts |
+| `POST` | `/api/sources` | Create a new source and start its background worker if enabled |
+| `PUT` | `/api/sources/{id}` | Update source specification and hot-reload its worker |
+| `PATCH` | `/api/sources/{id}/toggle` | Enable or pause a source at runtime |
+| `DELETE` | `/api/sources/{id}` | Delete a source and stop its worker (preserves event history) |
+| `POST` | `/api/sources/import` | Create a source from a raw YAML or JSON specification |
+| `GET` | `/api/sources/{id}/export` | Export a source specification as YAML or JSON (secrets masked) |
+| `POST` | `/api/sources/dry-run` | Parse a sample payload, discover fields, and preview matching rules |
+| `POST` | `/api/sources/{id}/simulate` | Emit 1–50 synthetic events for any source kind |
+| `POST` | `/api/sources/{id}/test-connection` | Probe live connectivity for the configured source |
+| `GET` | `/api/sources/{id}/fields` | Return discovered dot-notation fields from the source's sample event |
+| `POST` | `/api/ingest/{source_key}` | Universal push endpoint (JSON object/array, NDJSON, or raw log text) |
+| `GET` | `/api/events` | List recent ingested events (supports `limit` and `source_id` filters) |
+
+### Authentication & Administration (`/api/auth`, `/api/admin`)
 | Method | Endpoint | Description | Access |
 |---|---|---|---|
-| `POST` | `/api/auth/register` | Register new user using a single-use invite code | Public |
+| `POST` | `/api/auth/register` | Register using a single-use invite code | Public |
 | `POST` | `/api/auth/login` | Authenticate with username/email and password | Public |
 | `GET` | `/api/auth/me` | Fetch authenticated user profile | Bearer JWT |
 | `PUT` | `/api/auth/me` | Update phone number or department | Bearer JWT |
+| `GET` | `/api/departments` | List active company departments | Public |
+| `POST` | `/api/admin/invites` | Generate a single-use invite code | Admin Only |
+| `GET` | `/api/admin/invites` | List generated invite codes | Admin Only |
+| `GET` | `/api/admin/users` | List registered users | Admin Only |
+| `PATCH` | `/api/admin/users/{id}/role` | Promote or demote administrator privileges | Admin Only |
+| `POST` | `/api/admin/departments` | Create a company department | Admin Only |
+| `PUT` | `/api/admin/departments/{id}` | Update a department | Admin Only |
+| `DELETE` | `/api/admin/departments/{id}` | Delete a department | Admin Only |
 
-### Administrator Control (`/api/admin`)
-| Method | Endpoint | Description | Access |
-|---|---|---|---|
-| `POST` | `/api/admin/invites` | Generate a single-use registration invite code | Admin Only |
-| `GET` | `/api/admin/invites` | List all generated invite codes and claim status | Admin Only |
-| `GET` | `/api/admin/users` | List company employee roster | Admin Only |
-| `POST` | `/api/admin/departments` | Create a new company department | Admin Only |
-| `PUT` | `/api/admin/departments/{id}` | Update department details | Admin Only |
-| `DELETE` | `/api/admin/departments/{id}` | Delete a company department | Admin Only |
-
-### Public Directory
-| Method | Endpoint | Description | Access |
-|---|---|---|---|
-| `GET` | `/api/departments` | Active company department directory | Public |
-
-### Private User Workspace (`/api`)
-| Method | Endpoint | Description | Access |
-|---|---|---|---|
-| `GET` | `/api/items` | Retrieve authenticated user's portfolio items | Bearer JWT |
-| `POST` | `/api/items` | Create new position owned by the authenticated user | Bearer JWT |
-| `DELETE` | `/api/items/{id}` | Delete a position owned by the authenticated user | Bearer JWT |
-| `GET` | `/api/stats` | Aggregated quantitative statistics for user holdings | Bearer JWT |
-| `GET` | `/health` | System uptime & health status | Public |
-
----
-
-## 🎯 Goldman Sachs Hackathon Extension Roadmap
-
-To maximize scoring during judging, consider implementing the following high-impact extensions in `services/logic.py` and `services/external.py`:
-
-1. **Quantitative Risk Engine (Dev 3)**:
-   - Add Value at Risk (95% & 99% Parametric / Historical VaR).
-   - Compute Sharpe Ratio, Sortino Ratio, and Maximum Drawdown across positions.
-   - Run a Monte Carlo simulation (30-day projection paths).
-
-2. **Live Financial Data Feeds (Dev 4)**:
-   - Connect `services/external.py` to Yahoo Finance (`yfinance`) or Alpha Vantage for real-time tickers (`GS`, `JPM`, `AAPL`, `MSFT`, `SPY`).
-   - Implement real-time market value re-pricing for user holdings.
-
-3. **Data Visualization (Dev 2)**:
-   - Integrate `recharts` for asset allocation pie charts and portfolio historical performance curves.
-
-4. **AI-Driven Investment Thesis Summarizer (Dev 3 & 4)**:
-   - Add an LLM endpoint (Gemini / OpenAI API) in `services/external.py` that analyzes a user's holdings and provides an institutional-grade executive summary.
+### Alerting Pipeline (`/api`)
+| Resource | Prefix | Description |
+|---|---|---|
+| Alerts | `/api/alerts` | Live alerts feed, acknowledge, and resolve actions |
+| Rules | `/api/rules` | Runtime rule management (conditions, templates, routing, grouping) |
+| People | `/api/people` | On-call responders, channel preferences, and quiet hours |
+| Runbooks | `/api/runbooks` | Remediation steps (YAML, Markdown, text, or link) |
+| Deliveries | `/api/deliveries` | Notification outbox and delivery retry status |
+| Health | `/health` | Service uptime check |

@@ -45,14 +45,31 @@ export interface Person {
   quiet_hours: Partial<Record<Channel, { from: string; to: string; else: Channel }>>;
 }
 
+export type SourceKind =
+  | 'webhook'
+  | 'polled_api'
+  | 'sse'
+  | 'logfile'
+  | 'kafka'
+  | 'rabbitmq'
+  | 'custom';
+
 export interface Source {
   id: number;
-  key: string;                    // adres: /api/ingest/{key}
+  key: string;                    // ingest URL: /api/ingest/{key}
+  ingest_url?: string;
   name: string;
   team: string;
-  kind: 'webhook' | 'kafka' | 'rabbitmq' | 'logfile';
+  kind: SourceKind;
   config: Record<string, unknown>;
   sample_event: unknown | null;
+  detected_fields?: { path: string; type: string; example: unknown }[];
+  enabled: boolean;
+  status: 'active' | 'paused' | 'error' | 'simulating';
+  last_error: string | null;
+  last_event_at: string | null;
+  events_count: number;
+  worker_running?: boolean;
   created_at: string;
 }
 

@@ -10,8 +10,70 @@ from models import Person, Rule, Runbook, Source
 def seed_sources(db: Session) -> None:  # Osoba 3
     if db.query(Source).count() == 0:
         db.add_all([
-            Source(key="demo", name="demo-webhook", team="All", kind="webhook"),
-            Source(key="trade-gateway", name="trade-gateway", team="Rates", kind="webhook"),
+            Source(
+                key="trade-gateway",
+                name="trade-gateway",
+                team="Rates",
+                kind="webhook",
+                enabled=True,
+                status="active",
+                config={"auth_mode": "none", "parser": "auto", "sim_preset": "trade_rejected"},
+                sample_event={
+                    "meta": {"schema": "trade.rejected.v2", "producer": "trade-gateway", "ts": 1792833245000},
+                    "payload": {"tradeId": "T-998877", "desk": "rates", "notional": 25000000, "currency": "EUR", "reason": "LIMIT_BREACH"},
+                },
+            ),
+            Source(
+                key="settlement-kafka",
+                name="settlement-kafka",
+                team="Settlements",
+                kind="kafka",
+                enabled=False,
+                status="paused",
+                config={
+                    "bootstrap_servers": "localhost:9092",
+                    "topic": "settlement.workflows",
+                    "group_id": "gs-alerting-consumer",
+                    "simulate": True,
+                    "sim_preset": "workflow_failure",
+                    "sim_interval_s": 10,
+                    "parser": "auto",
+                },
+                sample_event={
+                    "type": "WORKFLOW_FAILED",
+                    "workflowId": "WF-20261121-00042",
+                    "workflowName": "order-settlement",
+                    "step": "validate-counterparty",
+                    "severity": "ERROR",
+                    "environment": "prod",
+                    "error": {"code": "TIMEOUT", "message": "Counterparty service did not respond in 5000 ms"},
+                },
+            ),
+            Source(
+                key="pricing-engine-logs",
+                name="pricing-engine-logs",
+                team="Pricing",
+                kind="logfile",
+                enabled=False,
+                status="paused",
+                config={
+                    "file_path": "/tmp/gs-pricing-engine.log",
+                    "from_beginning": False,
+                    "poll_interval_s": 2,
+                    "simulate": True,
+                    "sim_preset": "pricing_log",
+                    "sim_interval_s": 10,
+                    "parser": "key_value",
+                },
+                sample_event={
+                    "timestamp": "2026-11-21T00:15:00Z",
+                    "level": "WARN",
+                    "service": "pricing-engine-eu1",
+                    "instrument": "EURUSD",
+                    "latency_ms": 1420,
+                    "message": "Cache latency exceeded 1000ms threshold",
+                },
+            ),
         ])
 
 

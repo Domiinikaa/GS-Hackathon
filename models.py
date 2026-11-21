@@ -84,16 +84,21 @@ class Item(Base):
 # --- Alerting & Incident Response Models (from feature/rules-ui) ---
 
 class Source(Base):
-    """Programs and services streaming events to the ingest endpoint."""
+    """Programs, brokers, APIs, and log files streaming events to the ingest pipeline."""
     __tablename__ = "sources"
 
     id = Column(Integer, primary_key=True)
     key = Column(String(64), unique=True, nullable=False)   # /api/ingest/{key}
     name = Column(String(100), nullable=False)             # e.g. "trade-gateway"
     team = Column(String(100), nullable=False)             # e.g. "Rates"
-    kind = Column(String(20), default="webhook")           # webhook | kafka | rabbitmq | logfile
-    config = Column(JSON, default=dict)                    # broker connection options
-    sample_event = Column(JSON, nullable=True)             # sample payload for rule hints
+    kind = Column(String(32), default="webhook")           # webhook | polled_api | sse | logfile | kafka | rabbitmq | custom
+    config = Column(JSON, default=dict)                    # connector & parser specification
+    sample_event = Column(JSON, nullable=True)             # sample payload for rule hints & schema discovery
+    enabled = Column(Boolean, default=True, nullable=False)
+    status = Column(String(20), default="active", nullable=False)  # active | paused | error | simulating
+    last_error = Column(Text, nullable=True)
+    last_event_at = Column(DateTime, nullable=True)
+    events_count = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
