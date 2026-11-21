@@ -1,6 +1,7 @@
 // OSOBA 1 – lista alertów z filtrami, aktualizowana na żywo (SSE z /api/alerts/stream).
 import { useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, BellOff } from 'lucide-react';
+import { EmptyState, Notice } from '../shared/ui';
 import { api } from '../shared/api';
 import { errorMessage } from '../rules/rulesApi';
 import type { Alert, AlertStatus } from '../shared/types';
@@ -134,13 +135,13 @@ export default function AlertsPage({ currentUser }: { currentUser?: User | null 
   const userTeam = currentUser?.team ?? currentUser?.dzial;
 
   const selectClass =
-    'bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500';
+    'field h-9 px-3 text-sm !rounded-full';
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+          <h1 className="text-3xl font-semibold tracking-tight text-white flex items-center gap-3">
             Alerts
             <span className={`flex items-center gap-1.5 text-xs font-medium ${live ? 'text-emerald-400' : 'text-slate-500'}`}
               title={live ? `Live updates on (${liveMode})` : 'Live updates disconnected – use Refresh'}>
@@ -148,7 +149,7 @@ export default function AlertsPage({ currentUser }: { currentUser?: User | null 
               {live ? 'Live' : 'Offline'}
             </span>
           </h1>
-          <p className="text-sm text-slate-400">What needs attention right now.</p>
+          <p className="mt-1.5 text-sm text-ink-muted">What needs attention right now.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -156,10 +157,10 @@ export default function AlertsPage({ currentUser }: { currentUser?: User | null 
             <button
               type="button"
               onClick={() => setTeam(team === userTeam ? 'all' : userTeam)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${
+              className={`text-sm font-medium px-4 h-9 rounded-full border transition-colors ${
                 team === userTeam
-                  ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'
+                  ? 'bg-gs-gold/15 border-gs-gold/50 text-gs-gold'
+                  : 'glass-pill text-slate-200 hover:bg-white/10'
               }`}
             >
               My team ({userTeam})
@@ -176,7 +177,7 @@ export default function AlertsPage({ currentUser }: { currentUser?: User | null 
             <option value="all">All statuses</option>
           </select>
           <button onClick={load}
-            className="flex items-center gap-1.5 text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700">
+            className="glass-pill h-9 px-4 text-sm font-medium text-slate-200 hover:bg-white/10 transition-colors">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
@@ -184,9 +185,7 @@ export default function AlertsPage({ currentUser }: { currentUser?: User | null 
       </div>
 
       {error && (
-        <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
-          {error}
-        </div>
+        <Notice tone="error">{error}</Notice>
       )}
 
       <div className="space-y-3">
@@ -196,12 +195,8 @@ export default function AlertsPage({ currentUser }: { currentUser?: User | null 
         ))}
 
         {!loading && !error && visible.length === 0 && (
-          <div className="text-center py-12 border border-dashed border-slate-800 rounded-xl">
-            <p className="text-slate-400">No alerts here.</p>
-            <p className="text-xs text-slate-600 mt-1">
-              Tip: create a test alert with <code className="text-amber-400">POST /api/alerts/test</code> in <a href="/docs" target="_blank" rel="noreferrer" className="underline">/docs</a>.
-            </p>
-          </div>
+          <EmptyState icon={BellOff} title="Nothing needs attention"
+            text={<>No alerts match these filters. To try it out, send a test alert with <code className="font-mono text-gs-gold">POST /api/alerts/test</code> in <a href="/docs" target="_blank" rel="noreferrer" className="underline hover:text-white">API docs</a>.</>} />
         )}
       </div>
     </div>

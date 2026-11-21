@@ -22,7 +22,7 @@ interface Props {
 }
 
 const inputClass =
-  'w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500';
+  'field w-full px-3 py-2 text-sm';
 
 function kindOf(hint: FieldHint | undefined): FieldKind | null {
   if (!hint) return null;
@@ -57,10 +57,10 @@ function ChipsInput({ value, onChange, placeholder }: { value: string; onChange:
   return (
     <div className={`${inputClass} flex flex-wrap items-center gap-1 py-1.5`}>
       {chips.map((chip) => (
-        <span key={chip} className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-xs font-mono">
+        <span key={chip} className="flex items-center gap-1 bg-white/[0.06] border border-white/10 rounded px-2 py-0.5 text-xs font-mono">
           {chip}
           <button type="button" aria-label={`Remove ${chip}`} onClick={() => onChange(chips.filter((c) => c !== chip).join(', '))}
-            className="text-slate-400 hover:text-white">
+            className="text-ink-muted hover:text-white">
             <X className="w-3 h-3" />
           </button>
         </span>
@@ -102,9 +102,9 @@ export default function ConditionEditor({ mode, onModeChange, rows, onRowsChange
           return (
             <div key={i} className="grid grid-cols-12 gap-2 items-start">
               {/* "When" for the first row, clickable AND / OR for the next ones */}
-              <div className="col-span-1 pt-2 text-xs font-bold">
+              <div className="col-span-1 pt-2 text-xs font-semibold">
                 {i === 0 ? (
-                  <span className="text-slate-400">When</span>
+                  <span className="text-ink-muted">When</span>
                 ) : (
                   <button type="button" onClick={() => onModeChange(mode === 'and' ? 'or' : 'and')}
                     title="Click to switch between AND and OR"
@@ -115,13 +115,13 @@ export default function ConditionEditor({ mode, onModeChange, rows, onRowsChange
               </div>
 
               <div className="col-span-4">
-                <input className={`${inputClass} font-mono`} value={row.field} list="rule-fields"
+                <input className={`${inputClass} field font-mono`} value={row.field} list="rule-fields"
                   onChange={(e) => update(i, { field: e.target.value })}
                   placeholder="choose a field" aria-label="Event field" />
                 <p className="text-xs text-slate-500 mt-1 h-4 truncate">{hint ? exampleText(hint) : ''}</p>
               </div>
 
-              <select className={`${inputClass} col-span-3`} value={row.op} aria-label="Operator"
+              <select className={`${inputClass} field col-span-3`} value={row.op} aria-label="Operator"
                 onChange={(e) => update(i, { op: e.target.value as Operator })}>
                 {opList.map((o) => <option key={o.value} value={o.value}>{o.phrase}</option>)}
               </select>
@@ -130,7 +130,7 @@ export default function ConditionEditor({ mode, onModeChange, rows, onRowsChange
                 {row.op === 'in' ? (
                   <ChipsInput value={row.value} onChange={(v) => update(i, { value: v })} placeholder={placeholder} />
                 ) : (
-                  <input className={`${inputClass} font-mono`} value={row.value} aria-label="Value"
+                  <input className={`${inputClass} field font-mono`} value={row.value} aria-label="Value"
                     inputMode={kindOf(hint) === 'number' ? 'decimal' : undefined}
                     onChange={(e) => update(i, { value: e.target.value })}
                     placeholder={row.op === 'wildcard' ? 'e.g. pricing-engine-*' : placeholder} />

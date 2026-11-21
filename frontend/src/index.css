@@ -124,6 +124,28 @@ h1, h2, h3 {
   animation: glow-breathe 6s ease-in-out infinite;
 }
 
+.backdrop__blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+}
+
+.backdrop__blob--indigo {
+  width: 46vw;
+  height: 46vw;
+  left: -10vw;
+  top: 18vh;
+  background: rgba(79, 70, 229, 0.22);
+}
+
+.backdrop__blob--amber {
+  width: 34vw;
+  height: 34vw;
+  right: -6vw;
+  top: -8vw;
+  background: rgba(201, 164, 92, 0.12);
+}
+
 html[data-mood='clear'] .backdrop__glow--clear,
 html[data-mood='warning'] .backdrop__glow--warning,
 html[data-mood='critical'] .backdrop__glow--critical {
@@ -150,15 +172,45 @@ html[data-mood='critical'] .backdrop__glow--critical {
     backdrop-filter: blur(14px) saturate(140%);
   }
 
-  /* Filled content surface (Apple's "regular" material): opaque enough to read
-     dense data on, but still lit by the backdrop through its rim. */
+  /* Frosted glass card (brief + Liquid Glass skill): translucent slate, specular top
+     edge, mirror gradient and a deep soft drop shadow. */
+  .glass-card,
   .surface {
-    border-radius: var(--glass-radius-lg);
-    border: 1px solid var(--glass-border);
-    background: linear-gradient(180deg, rgba(25, 38, 62, 0.92), rgba(17, 27, 46, 0.92));
-    box-shadow: var(--glass-rim), 0 12px 32px rgba(0, 0, 0, 0.28);
-    -webkit-backdrop-filter: blur(24px) saturate(150%);
-    backdrop-filter: blur(24px) saturate(150%);
+    position: relative;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    background-color: rgba(15, 23, 42, 0.4);
+    background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.05), transparent 45%);
+    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.14), 0 8px 32px 0 rgba(0, 0, 0, 0.36);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    backdrop-filter: blur(40px) saturate(180%);
+    transition: border-color 300ms var(--glass-ease), background-color 300ms var(--glass-ease),
+      box-shadow 300ms var(--glass-ease);
+  }
+
+  .glass-card:hover,
+  .surface:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(15, 23, 42, 0.5);
+    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.14), 0 12px 40px 0 rgba(0, 0, 0, 0.45);
+  }
+
+  /* Static variant for big containers (forms, editors) that should not react to hover */
+  .glass-card--static:hover {
+    border-color: rgba(255, 255, 255, 0.09);
+    background-color: rgba(15, 23, 42, 0.4);
+    box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.14), 0 8px 32px 0 rgba(0, 0, 0, 0.36);
+  }
+
+  /* Small glass capsule for chips, channel pills and condition tokens */
+  .glass-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   /* Recessed well inside a surface, for secondary detail */
@@ -293,11 +345,11 @@ html[data-mood='critical'] .backdrop__glow--critical {
 @media (prefers-reduced-motion: reduce) {
   .backdrop__glow { transition: none; }
   .backdrop__glow--critical { animation: none; }
-  .glass-chip, .btn-primary, .switch, .switch::after, .disclosure, .field { transition-duration: 0.01ms; }
+  .glass-chip, .btn-primary, .switch, .switch::after, .disclosure, .field, .glass-card, .surface { transition-duration: 0.01ms; }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .glass, .glass-chip, .glass-menu, .surface {
+  .glass, .glass-chip, .glass-menu, .surface, .glass-card {
     background: #16223a;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;

@@ -1,6 +1,7 @@
 // Rules page.
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Search } from 'lucide-react';
+import { Plus, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
+import { EmptyState, Notice, PageHeader, ghostButton, iconButton } from '../shared/ui';
 import { Rule } from './ruleTypes';
 import RuleCard from './RuleCard';
 import { RunbookSummary, errorMessage, rulesApi } from './rulesApi';
@@ -108,25 +109,16 @@ export default function RulesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-semibold text-ink">Alert rules</h1>
-          <p className="mt-1 text-sm text-ink-muted">
-            Decide which events reach which people, and on which channels.
-            {rules.length > 0 && ` ${enabledCount} of ${rules.length} rules are on.`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Alert rules"
+        description={<>Decide which events reach which people, and on which channels.{rules.length > 0 && ` ${enabledCount} of ${rules.length} rules are on.`}</>}
+        actions={<>
           {visible.length > 0 && (
-            <button
-              onClick={() => setOpenIds(allOpen ? new Set() : new Set(visible.map((r) => r.id)))}
-              className="text-sm font-medium text-ink-muted hover:text-ink px-3 py-2 rounded-full hover:bg-white/5"
-            >
+            <button onClick={() => setOpenIds(allOpen ? new Set() : new Set(visible.map((r) => r.id)))} className={ghostButton}>
               {allOpen ? 'Collapse all' : 'Expand all'}
             </button>
           )}
-          <button onClick={load} title="Reload rules" aria-label="Reload rules"
-            className="w-10 h-10 rounded-full flex items-center justify-center text-ink-muted hover:text-ink hover:bg-white/5">
+          <button onClick={load} title="Reload rules" aria-label="Reload rules" className={iconButton}>
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           {editing === null && (
@@ -134,15 +126,11 @@ export default function RulesPage() {
               <Plus className="w-4 h-4" />New rule
             </button>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
-      {error && (
-        <p role="alert" className="text-sm text-signal-critical bg-signal-critical/10 rounded-xl px-4 py-2.5">{error}</p>
-      )}
-      {notice && (
-        <p role="status" className="text-sm text-signal-clear bg-signal-clear/10 rounded-xl px-4 py-2.5">{notice}</p>
-      )}
+      {error && <Notice tone="error">{error}</Notice>}
+      {notice && <Notice tone="success">{notice}</Notice>}
 
       {editing !== null && (
         <RuleForm
@@ -176,10 +164,9 @@ export default function RulesPage() {
           />
         ))}
         {!loading && rules.length === 0 && !error && (
-          <div className="surface p-10 text-center">
-            <p className="text-ink font-medium">No rules yet</p>
-            <p className="mt-1 text-sm text-ink-muted">Create a rule to start turning events into alerts.</p>
-          </div>
+          <EmptyState icon={SlidersHorizontal} title="No rules yet"
+            text="Create a rule to start turning events into alerts."
+            action={<button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-2 px-4 h-10 text-sm"><Plus className="w-4 h-4" />New rule</button>} />
         )}
         {!loading && rules.length > 0 && visible.length === 0 && (
           <p className="text-center text-ink-muted py-8">No rules match “{filter}”.</p>

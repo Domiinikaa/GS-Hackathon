@@ -1,27 +1,11 @@
-// One rule in the list: a one-line summary, with conditions and templates behind "Show details".
-import { useId } from 'react';
-import { BookOpen, ChevronDown, Pencil, Trash2 } from 'lucide-react';
-import type { Channel, Rule, Severity } from './ruleTypes';
-import RuleConditions, { countConditions } from './RuleConditions';
+// One rule in the list: a plain-words summary on top, condition chips behind "Show conditions".
+import { Fragment, useId } from 'react';
+import { ArrowRight, BookOpen, ChevronDown, Pencil, Trash2 } from 'lucide-react';
+import type { Rule } from './ruleTypes';
+import RuleConditions, { InlineCondition, countConditions } from './RuleConditions';
+import { ChannelPill, SeverityBadge, Toggle, cn, iconButton } from '../shared/ui';
 
-const CHANNEL_WORD: Record<Channel, string> = {
-  email: 'email',
-  sms: 'SMS',
-  phone: 'phone call',
-  ui: 'in-app',
-};
-
-const SEVERITY_STYLE: Record<Severity, { dot: string; pill: string; label: string }> = {
-  critical: { dot: 'bg-signal-critical', pill: 'bg-signal-critical/15 text-signal-critical', label: 'Critical' },
-  warning: { dot: 'bg-signal-warning', pill: 'bg-signal-warning/15 text-signal-warning', label: 'Warning' },
-  info: { dot: 'bg-signal-info', pill: 'bg-signal-info/15 text-signal-info', label: 'Info' },
-};
-
-// "email, SMS and phone call"
-function listWords(words: string[]): string {
-  if (words.length <= 1) return words[0] ?? 'no channel';
-  return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
-}
+const SUMMARY_LIMIT = 3;
 
 interface Props {
   rule: Rule;
@@ -35,55 +19,60 @@ interface Props {
 
 export default function RuleCard({ rule, runbookName, open, onToggleOpen, onToggleEnabled, onEdit, onDelete }: Props) {
   const detailsId = useId();
-  const sev = SEVERITY_STYLE[rule.severity] ?? SEVERITY_STYLE.info;
-  const items = 'and' in rule.condition ? rule.condition.and : rule.condition.or;
-  const count = countConditions(items);
-  const matchWord = 'and' in rule.condition ? 'all' : 'any';
+  const isAnd = 'and' in rule.condition;
+  const nodes = 'and' in rule.condition ? rule.condition.and : rule.condition.or;
+  const shown = nodes.slice(0, SUMMARY_LIMIT);
+  const hidden = nodes.length - shown.length;
+  const total = countConditions(nodes);
 
   return (
-    <article className={`surface transition-opacity ${rule.enabled ? '' : 'opacity-60'}`}>
-      <div className="flex items-start gap-4 p-5">
-        <span className={`mt-2 w-2.5 h-2.5 rounded-full shrink-0 ${sev.dot}`} aria-hidden="true" />
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+    <article className={cn('glass-card', !rule.enabled && 'opacity-60')}>
+      <div className="p-6">
+        {/* title row */}
+        <div className="flex items-start gap-4">
+          <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
             <h3 className="text-[17px] font-semibold leading-snug text-white">{rule.name}</h3>
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${sev.pill}`}>{sev.label}</span>
+            <SeverityBadge severity={rule.severity} />
             {rule.runbook_id && (
-              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-white/5 text-ink-muted">
-                <BookOpen className="w-3 h-3" />
-                {runbookName ?? `Runbook #${rule.runbook_id}`}
+              <span className="glass-pill px-2.5 py-0.5 text-xs font-medium text-ink">
+                <BookOpen className="w-3.5 h-3.5 text-sky-300" aria-hidden="true" />
+                Runbook: {runbookName ?? `#${rule.runbook_id}`}
               </span>
             )}
           </div>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-ink-muted">
-            Sends to {rule.team} by{' '}
-            {listWords(rule.channels.map((c) => CHANNEL_WORD[c] ?? c))}
-            {count > 0
-              ? ` when ${count === 1 ? 'its condition matches' : `${matchWord} of ${count} conditions match`}.`
-              : ' for every event.'}
-          </p>
+          <div className="flex items-center gap-1 shrink-0">
+            <Toggle checked={rule.enabled} onChange={onToggleEnabled}
+              label={rule.enabled ? `Turn off ${rule.name}` : `Turn on ${rule.name}`} className="mr-2" />
+            <button type="button" onClick={onEdit} title="Edit rule" aria-label={`Edit ${rule.name}`} className={iconButton}>
+              <Pencil className="w-4 h-4" />
+            </button>
+            <button type="button" onClick={onDelete} title="Delete rule" aria-label={`Delete ${rule.name}`}
+              className={cn(iconButton, 'hover:text-rose-300 hover:bg-rose-500/10')}>
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={rule.enabled}
-            aria-label={rule.enabled ? `Disable ${rule.name}` : `Enable ${rule.name}`}
-            title={rule.enabled ? 'Enabled' : 'Disabled'}
-            onClick={onToggleEnabled}
-            className="switch mr-2"
-          />
-          <button type="button" onClick={onEdit} title="Edit rule" aria-label={`Edit ${rule.name}`}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-ink-muted hover:text-ink hover:bg-white/5">
-            <Pencil className="w-4 h-4" />
-          </button>
-          <button type="button" onClick={onDelete} title="Delete rule" aria-label={`Delete ${rule.name}`}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-ink-muted hover:text-signal-critical hover:bg-signal-critical/10">
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
+        {/* in plain words */}
+        <p className="mt-3 text-[15px] leading-8 text-ink-muted">
+          When an event has{' '}
+          {shown.length === 0 && <span className="text-ink">anything at all</span>}
+          {shown.map((node, i) => (
+            <Fragment key={i}>
+              {i > 0 && <span className="font-semibold text-ink"> {isAnd ? 'and' : 'or'} </span>}
+              <InlineCondition node={node} />
+            </Fragment>
+          ))}
+          {hidden > 0 && <span> {isAnd ? 'and' : 'or'} {hidden} more</span>}
+          <ArrowRight className="inline w-4 h-4 mx-1.5 -mt-0.5 text-ink-muted" aria-label="then" />
+          send via{' '}
+          <span className="inline-flex flex-wrap gap-1 align-middle">
+            {rule.channels.length > 0
+              ? rule.channels.map((c) => <ChannelPill key={c} channel={c} />)
+              : <span className="text-ink">no channel</span>}
+          </span>{' '}
+          to <span className="font-semibold text-white">{rule.team}</span>
+        </p>
       </div>
 
       <button
@@ -91,17 +80,20 @@ export default function RuleCard({ rule, runbookName, open, onToggleOpen, onTogg
         onClick={onToggleOpen}
         aria-expanded={open}
         aria-controls={detailsId}
-        className="w-full flex items-center justify-between px-5 py-2.5 border-t border-white/[0.06] text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-white/[0.03] rounded-b-[20px]"
+        className="w-full flex items-center justify-between px-6 py-3 border-t border-white/[0.06] text-[13px] font-medium text-ink-muted hover:text-white hover:bg-white/[0.03] rounded-b-2xl transition-colors"
       >
-        {open ? 'Hide details' : 'Show details'}
-        <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+        {open ? 'Hide conditions' : `Show conditions (${total})`}
+        <ChevronDown className={cn('w-4 h-4 transition-transform duration-300', open && 'rotate-180')} />
       </button>
 
       <div id={detailsId} className="disclosure" data-open={open}>
         <div>
-          <div className="px-5 pb-5 grid gap-3 md:grid-cols-[3fr_2fr]"
+          <div className="px-6 pb-6 grid gap-3 lg:grid-cols-[3fr_2fr]"
             {...(open ? {} : ({ inert: '' } as Record<string, string>))}>
             <div className="surface-well p-4">
+              <p className="text-[13px] font-medium text-ink-muted mb-3">
+                Matches when {isAnd ? 'all' : 'any'} of these are true
+              </p>
               <RuleConditions condition={rule.condition} />
             </div>
             <dl className="surface-well p-4 space-y-3 text-sm">

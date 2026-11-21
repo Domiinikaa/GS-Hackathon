@@ -50,7 +50,7 @@ export default function EngineTester() {
   }
 
   return (
-    <section className="surface p-6 space-y-5">
+    <section className="glass-card glass-card--static p-6 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-lg font-semibold text-white">Try the rule engine</h2>

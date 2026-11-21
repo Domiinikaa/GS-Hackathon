@@ -1,9 +1,10 @@
 // OSOBA 4 – runbooki: wklej YAML / Markdown / tekst, zobacz kroki na żywo, zapisz, podepnij do reguły.
 import { useEffect, useId, useMemo, useState } from 'react';
-import { AlertTriangle, Check, ChevronDown, Info, Link2, Pencil, Plus, Save, Trash2, Unlink, X } from 'lucide-react';
+import { AlertTriangle, BookOpen, Check, ChevronDown, Info, Link2, Pencil, Plus, Save, Trash2, Unlink, X } from 'lucide-react';
 import type { Runbook, RunbookStep } from '../shared/types';
 import { MatchGroup, RuleRef, RunbookFormat, describeMatches, errorText, runbookApi } from './runbookApi';
 import StepList from './StepList';
+import { EmptyState } from '../shared/ui';
 import EngineTester from './EngineTester';
 
 const FORMATS: { value: RunbookFormat; label: string }[] = [
@@ -163,10 +164,8 @@ export default function RunbooksPage() {
           />
         ))}
         {runbooks.length === 0 && !loadError && (
-          <div className="surface p-10 text-center">
-            <p className="text-ink font-medium">No runbooks yet</p>
-            <p className="mt-1 text-sm text-ink-muted">Add one so responders see clear next steps on every alert.</p>
-          </div>
+          <EmptyState icon={BookOpen} title="No runbooks yet"
+            text="Add one so responders see clear next steps on every alert." />
         )}
       </div>
 
@@ -193,7 +192,7 @@ function RunbookCard({ runbook: rb, attached, editing, open, onToggleOpen, onEdi
   const matches = (rb as Runbook & { matches?: MatchGroup | null }).matches;
 
   return (
-    <article className={`surface ${editing ? 'ring-1 ring-gs-gold/50' : ''}`}>
+    <article className={`glass-card ${editing ? 'ring-1 ring-gs-gold/50' : ''}`}>
       <div className="flex items-start gap-4 p-5">
         {/* Step count with one dot per step; amber dots need approval */}
         <div className="w-14 shrink-0 flex flex-col items-center pt-0.5" aria-hidden="true">
@@ -252,7 +251,7 @@ function RunbookCard({ runbook: rb, attached, editing, open, onToggleOpen, onEdi
         onClick={onToggleOpen}
         aria-expanded={open}
         aria-controls={stepsId}
-        className="w-full flex items-center justify-between px-5 py-2.5 border-t border-white/[0.06] text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-white/[0.03] rounded-b-[20px]"
+        className="w-full flex items-center justify-between px-5 py-2.5 border-t border-white/[0.06] text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-white/[0.03] rounded-b-2xl"
       >
         {open ? 'Hide steps' : `Show steps`}
         <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
@@ -369,7 +368,7 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
   }
 
   return (
-    <section className="surface ring-1 ring-gs-gold/30 p-6 space-y-5">
+    <section className="glass-card glass-card--static ring-1 ring-gs-gold/30 p-6 space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-ink">{initial ? `Edit ${initial.name}` : 'New runbook'}</h2>
         <button onClick={onClose} title="Close editor" aria-label="Close editor"

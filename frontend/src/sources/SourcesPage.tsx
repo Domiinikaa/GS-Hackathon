@@ -26,6 +26,7 @@ import {
   ChevronRight,
   X,
 } from 'lucide-react';
+import { PageHeader } from '../shared/ui';
 import { api } from '../shared/api';
 import type { Source, SourceKind } from '../shared/types';
 import type {
@@ -61,7 +62,7 @@ function SourceKindBadge({ kind, label }: { kind: SourceKind; label?: string }) 
   })();
 
   return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-xs font-medium text-slate-200">
+    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/10 text-xs font-medium text-slate-200">
       <span className="text-amber-400">{icon}</span>
       {label || kind}
     </span>
@@ -79,7 +80,7 @@ function StatusPill({ status, workerRunning }: { status: Source['status']; worke
   }
   if (status === 'paused') {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/[0.06] text-ink-muted border border-white/10">
         <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
         Paused
       </span>
@@ -264,58 +265,50 @@ export default function SourcesPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
-            <Plug className="w-6 h-6 text-amber-400" />
-            Universal Log &amp; Event Sources
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Connect any webhook, polled REST API, SSE stream, tailed log file, Kafka topic, RabbitMQ queue, or custom spec — and simulate any source on demand.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Sources"
+        description="Connect webhooks, polled APIs, SSE streams, log files, Kafka topics, RabbitMQ queues or a custom spec, and simulate any of them on demand."
+        actions={
           <button
             type="button"
             onClick={() => {
               setEditingSource(null);
               setShowSpecModal(true);
             }}
-            className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5 shadow transition"
+            className="btn-primary px-4 h-10 text-sm flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            Add Source
+            Add source
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* KPI Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
-          <div className="text-xs text-slate-400">Configured Sources</div>
-          <div className="text-2xl font-bold text-white mt-1">{sources.length}</div>
+        <div className="glass-card glass-card--static p-5">
+          <div className="text-[13px] text-ink-muted">Configured sources</div>
+          <div className="text-3xl font-semibold tracking-tight tabular-nums text-white mt-1">{sources.length}</div>
         </div>
-        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
-          <div className="text-xs text-slate-400">Enabled / Active</div>
-          <div className="text-2xl font-bold text-emerald-400 mt-1">{activeCount}</div>
+        <div className="glass-card glass-card--static p-5">
+          <div className="text-[13px] text-ink-muted">Turned on</div>
+          <div className="text-3xl font-semibold tracking-tight tabular-nums text-emerald-300 mt-1">{activeCount}</div>
         </div>
-        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
-          <div className="text-xs text-slate-400">Total Events Ingested</div>
-          <div className="text-2xl font-bold text-amber-400 mt-1">{totalEventsCount}</div>
+        <div className="glass-card glass-card--static p-5">
+          <div className="text-[13px] text-ink-muted">Events received</div>
+          <div className="text-3xl font-semibold tracking-tight tabular-nums text-gs-gold mt-1">{totalEventsCount}</div>
         </div>
       </div>
 
       {/* Sub-navigation Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="glass-pill p-1 gap-1">
           <button
             type="button"
             onClick={() => setActiveSubTab('sources')}
-            className={`px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition ${
+            className={`px-3.5 h-8 rounded-full text-sm font-medium flex items-center gap-1.5 border transition-all duration-300 ${
               activeSubTab === 'sources'
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-white/[0.12] border-white/20 text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.14)]'
+                : 'border-transparent text-ink-muted hover:text-white'
             }`}
           >
             <Plug className="w-4 h-4" />
@@ -324,10 +317,10 @@ export default function SourcesPage() {
           <button
             type="button"
             onClick={() => setActiveSubTab('events')}
-            className={`px-3.5 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition ${
+            className={`px-3.5 h-8 rounded-full text-sm font-medium flex items-center gap-1.5 border transition-all duration-300 ${
               activeSubTab === 'events'
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-white/[0.12] border-white/20 text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.14)]'
+                : 'border-transparent text-ink-muted hover:text-white'
             }`}
           >
             <Activity className="w-4 h-4" />
@@ -336,12 +329,12 @@ export default function SourcesPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
+          <label className="flex items-center gap-1.5 text-xs text-ink-muted cursor-pointer">
             <input
               type="checkbox"
               checked={autoRefresh}
               onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded border-slate-700 bg-slate-900 text-amber-500"
+              className="rounded accent-amber-500"
             />
             Auto-refresh (4s)
           </label>
@@ -351,7 +344,7 @@ export default function SourcesPage() {
               loadSourcesAndMeta();
               loadEvents();
             }}
-            className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-400 hover:text-white transition"
+            className="glass-pill w-9 h-9 justify-center text-ink-muted hover:text-white hover:bg-white/10 transition-colors"
             title="Refresh now"
           >
             <RefreshCw className="w-4 h-4" />
@@ -369,12 +362,12 @@ export default function SourcesPage() {
       {/* TAB 1: Configured Sources */}
       {activeSubTab === 'sources' && (
         loading ? (
-          <div className="py-12 text-center text-slate-400 text-sm">Loading sources...</div>
+          <div className="py-12 text-center text-ink-muted text-sm">Loading sources...</div>
         ) : sources.length === 0 ? (
-          <div className="p-12 rounded-2xl border border-dashed border-slate-700 text-center space-y-3">
+          <div className="p-12 rounded-2xl border border-dashed border-white/10 text-center space-y-3">
             <Plug className="w-8 h-8 text-slate-500 mx-auto" />
             <div className="text-white font-semibold">No sources configured yet</div>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
+            <p className="text-xs text-ink-muted max-w-md mx-auto">
               Add a webhook, polled REST API, SSE stream, log file tailer, Kafka topic, or RabbitMQ queue to begin ingesting events.
             </p>
             <button
@@ -383,7 +376,7 @@ export default function SourcesPage() {
                 setEditingSource(null);
                 setShowSpecModal(true);
               }}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950"
+              className="btn-primary px-4 py-2 text-sm"
             >
               Add First Source
             </button>
@@ -402,23 +395,23 @@ export default function SourcesPage() {
               return (
                 <div
                   key={src.id}
-                  className="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition space-y-4"
+                  className="glass-card p-6 space-y-4"
                 >
                   {/* Top Row */}
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-1.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-bold text-white">{src.name}</h3>
-                        <span className="text-xs text-slate-300 bg-slate-800 px-2 py-0.5 rounded">{src.team}</span>
+                        <h3 className="text-base font-semibold text-white">{src.name}</h3>
+                        <span className="glass-pill text-xs text-slate-200 px-2.5 py-0.5">{src.team}</span>
                         <SourceKindBadge kind={src.kind} label={spec?.label} />
                         {spec && (
-                          <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-400">
+                          <span className="surface-well text-[10px] uppercase font-mono px-1.5 py-0.5 rounded text-ink-muted">
                             {spec.mode}
                           </span>
                         )}
                         <StatusPill status={src.status} workerRunning={src.worker_running} />
                       </div>
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted">
                         <span>
                           Events: <strong className="text-amber-300">{src.events_count || 0}</strong>
                         </span>
@@ -456,7 +449,7 @@ export default function SourcesPage() {
                         type="button"
                         disabled={testingId === src.id}
                         onClick={() => handleTestConnection(src)}
-                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/[0.06] hover:bg-white/[0.12] text-slate-200 border border-white/10 transition"
                       >
                         {testingId === src.id ? 'Testing...' : 'Test'}
                       </button>
@@ -468,7 +461,7 @@ export default function SourcesPage() {
                         className={`p-1.5 rounded-lg border transition ${
                           src.enabled
                             ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                            : 'bg-white/[0.06] border-white/10 text-ink-muted hover:text-white'
                         }`}
                       >
                         <Power className="w-4 h-4" />
@@ -478,7 +471,7 @@ export default function SourcesPage() {
                         type="button"
                         onClick={() => handleExport(src, 'yaml')}
                         title="Export YAML Spec"
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition"
+                        className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-slate-300 transition"
                       >
                         <Download className="w-4 h-4" />
                       </button>
@@ -490,7 +483,7 @@ export default function SourcesPage() {
                           setShowSpecModal(true);
                         }}
                         title="Edit specification"
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition"
+                        className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-slate-300 transition"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
@@ -499,7 +492,7 @@ export default function SourcesPage() {
                         type="button"
                         onClick={() => handleDelete(src)}
                         title="Delete source"
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 border border-slate-700 text-slate-400 hover:text-rose-400 transition"
+                        className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-rose-500/20 border border-white/10 text-ink-muted hover:text-rose-400 transition"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -540,7 +533,7 @@ export default function SourcesPage() {
                             return next;
                           })
                         }
-                        className="text-slate-400 hover:text-white"
+                        className="text-ink-muted hover:text-white"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -548,9 +541,9 @@ export default function SourcesPage() {
                   )}
 
                   {/* Push Ingest Endpoint + Curl */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2">
+                  <div className="surface-well flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">
+                      <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">
                         POST
                       </span>
                       <code className="text-xs font-mono text-slate-200 truncate">
@@ -561,7 +554,7 @@ export default function SourcesPage() {
                       <button
                         type="button"
                         onClick={() => copyText(`url-${src.id}`, fullIngestUrl)}
-                        className="px-2 py-1 rounded-md bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-300 flex items-center gap-1"
+                        className="glass-pill px-2.5 py-1 hover:bg-white/10 text-[11px] text-slate-200 transition-colors"
                       >
                         {copiedId === `url-${src.id}` ? (
                           <>
@@ -578,7 +571,7 @@ export default function SourcesPage() {
                       <button
                         type="button"
                         onClick={() => setOpenCurlId(openCurlId === src.id ? null : src.id)}
-                        className="px-2 py-1 rounded-md bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-300 flex items-center gap-1"
+                        className="glass-pill px-2.5 py-1 hover:bg-white/10 text-[11px] text-slate-200 transition-colors"
                       >
                         <Terminal className="w-3 h-3" />
                         cURL
@@ -588,13 +581,13 @@ export default function SourcesPage() {
 
                   {openCurlId === src.id && (
                     <div className="relative">
-                      <pre className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-[11px] font-mono text-emerald-300 overflow-x-auto">
+                      <pre className="surface-well p-3 text-[11px] font-mono text-emerald-300 overflow-x-auto">
                         {curlCmd}
                       </pre>
                       <button
                         type="button"
                         onClick={() => copyText(`curl-${src.id}`, curlCmd)}
-                        className="absolute top-2 right-2 px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-200"
+                        className="absolute top-2 right-2 px-2 py-1 rounded bg-white/[0.06] hover:bg-white/[0.12] text-[11px] text-slate-200"
                       >
                         {copiedId === `curl-${src.id}` ? 'Copied!' : 'Copy'}
                       </button>
@@ -608,7 +601,7 @@ export default function SourcesPage() {
                       {src.detected_fields.slice(0, 10).map((f) => (
                         <span
                           key={f.path}
-                          className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300"
+                          className="surface-well text-[11px] font-mono px-2 py-0.5 rounded text-slate-300"
                         >
                           <span className="text-amber-400">{f.path}</span>
                           <span className="text-slate-500 ml-1">:{f.type}</span>
@@ -635,7 +628,7 @@ export default function SourcesPage() {
             <select
               value={eventSourceFilter}
               onChange={(e) => setEventSourceFilter(e.target.value)}
-              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+              className="field px-3 py-2 text-sm"
             >
               <option value="all">All Sources</option>
               {sources.map((s) => (
@@ -652,13 +645,13 @@ export default function SourcesPage() {
                 value={eventSearch}
                 onChange={(e) => setEventSearch(e.target.value)}
                 placeholder="Filter events by payload text, field, or source..."
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+                className="field w-full pl-9 pr-3 py-2 text-sm"
               />
             </div>
           </div>
 
           {filteredEvents.length === 0 ? (
-            <div className="p-10 rounded-2xl border border-dashed border-slate-800 text-center text-sm text-slate-400">
+            <div className="p-10 rounded-2xl border border-dashed border-white/[0.08] text-center text-sm text-ink-muted">
               No events ingested yet. Click <strong className="text-amber-400">Simulate</strong> on any source or POST to <code className="text-slate-200">/api/ingest/&#123;key&#125;</code>.
             </div>
           ) : (
@@ -669,7 +662,7 @@ export default function SourcesPage() {
                 return (
                   <div
                     key={ev.id}
-                    className="rounded-xl bg-slate-900 border border-slate-800 overflow-hidden"
+                    className="glass-card glass-card--static overflow-hidden"
                   >
                     <button
                       type="button"
@@ -680,15 +673,15 @@ export default function SourcesPage() {
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         {expanded ? (
-                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                          <ChevronDown className="w-4 h-4 text-ink-muted shrink-0" />
                         ) : (
-                          <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                          <ChevronRight className="w-4 h-4 text-ink-muted shrink-0" />
                         )}
                         <span className="text-xs font-mono text-slate-500 shrink-0">
                           #{ev.id}
                         </span>
                         {ev.source && (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-amber-300 shrink-0">
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white/[0.06] text-amber-300 shrink-0">
                             {ev.source.name}
                           </span>
                         )}
@@ -705,7 +698,7 @@ export default function SourcesPage() {
 
                     {expanded && (
                       <div className="px-4 pb-4 pt-1 border-t border-slate-800/70">
-                        <pre className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-emerald-300 overflow-x-auto">
+                        <pre className="surface-well p-3 text-xs font-mono text-emerald-300 overflow-x-auto">
                           {JSON.stringify(ev.payload, null, 2)}
                         </pre>
                       </div>
@@ -745,35 +738,35 @@ export default function SourcesPage() {
       )}
 
       {exportModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="glass-scrim fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="glass-card glass-card--static w-full max-w-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-white">
+                <h3 className="text-base font-semibold text-white">
                   Export Source Specification — {exportModal.filename}
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-ink-muted">
                   Config-as-Code export (secrets are masked).
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setExportModal(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                className="p-1.5 rounded-lg text-ink-muted hover:text-white hover:bg-white/[0.08]"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="p-6">
-              <pre className="bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-emerald-300 overflow-x-auto max-h-96">
+              <pre className="surface-well p-4 text-xs font-mono text-emerald-300 overflow-x-auto max-h-96">
                 {exportModal.content}
               </pre>
             </div>
-            <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-end gap-2">
+            <div className="px-6 py-4 border-t border-white/[0.08] flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => copyText('export-spec', exportModal.content)}
-                className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1.5"
+                className="btn-primary px-4 py-2 text-sm flex items-center gap-1.5"
               >
                 {copiedId === 'export-spec' ? (
                   <>

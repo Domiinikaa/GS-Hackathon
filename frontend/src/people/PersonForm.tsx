@@ -30,7 +30,7 @@ interface Props {
 }
 
 const inputClass =
-  'w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500';
+  'field w-full px-3 py-2 text-sm';
 const labelClass = 'block text-xs font-semibold text-slate-300 mb-1';
 
 export default function PersonForm({ initial, teams, onSave, onCancel }: Props) {
@@ -109,10 +109,10 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-6">
+    <form onSubmit={handleSubmit} className="glass-card glass-card--static p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-white">{initial ? `Edit ${initial.name}` : 'Add person'}</h2>
-        <button type="button" onClick={onCancel} className="text-slate-400 hover:text-white">
+        <h2 className="text-lg font-semibold text-white">{initial ? `Edit ${initial.name}` : 'Add person'}</h2>
+        <button type="button" onClick={onCancel} className="text-ink-muted hover:text-white">
           <X className="w-5 h-5" />
         </button>
       </div>
@@ -167,14 +167,14 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-slate-400 text-xs">
+              <tr className="text-ink-muted text-xs">
                 <th className="text-left font-semibold py-2 pr-4">Severity</th>
                 {CHANNELS.map((c) => <th key={c.value} className="font-semibold py-2 px-3">{c.label}</th>)}
               </tr>
             </thead>
             <tbody>
               {SEVERITY_ORDER.map((sev) => (
-                <tr key={sev} className="border-t border-slate-800">
+                <tr key={sev} className="border-t border-white/[0.08]">
                   <td className="py-2 pr-4">
                     <span className={`text-xs border px-2 py-0.5 rounded ${SEVERITY_STYLE[sev]}`}>{SEVERITY_LABEL[sev]}</span>
                   </td>
@@ -225,15 +225,15 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <p className="text-sm text-rose-300">{error}</p>}
 
       <div className="flex justify-end gap-3">
         <button type="button" onClick={onCancel}
-          className="px-4 py-2 rounded-lg text-sm text-slate-300 border border-slate-700 hover:bg-slate-800">
+          className="px-4 py-2 rounded-lg text-sm text-slate-300 border border-white/10 hover:bg-white/[0.08]">
           Cancel
         </button>
         <button type="submit" disabled={saving}
-          className="px-4 py-2 rounded-lg text-sm font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-60">
+          className="btn-primary px-4 py-2 text-sm disabled:opacity-60">
           {saving ? 'Saving…' : 'Save person'}
         </button>
       </div>
