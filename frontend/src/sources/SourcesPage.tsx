@@ -26,7 +26,7 @@ import {
   ChevronRight,
   X,
 } from 'lucide-react';
-import { PageHeader } from '../shared/ui';
+import { PageHeader, Row, Toggle } from '../shared/ui';
 import { api } from '../shared/api';
 import type { Source, SourceKind } from '../shared/types';
 import type {
@@ -40,66 +40,31 @@ import type {
 import SourceSpecModal from './SourceSpecModal';
 import SimulateModal from './SimulateModal';
 
-function SourceKindBadge({ kind, label }: { kind: SourceKind; label?: string }) {
-  const iconProps = 'w-3.5 h-3.5';
-  const icon = (() => {
+// Neutral gray rounded-square icon per source type (same quiet style as People avatars)
+function SourceKindIcon({ kind }: { kind: SourceKind }) {
+  const Icon = (() => {
     switch (kind) {
-      case 'webhook':
-        return <Webhook className={iconProps} />;
-      case 'polled_api':
-        return <Globe className={iconProps} />;
-      case 'sse':
-        return <Radio className={iconProps} />;
-      case 'logfile':
-        return <FileText className={iconProps} />;
-      case 'kafka':
-        return <Layers className={iconProps} />;
-      case 'rabbitmq':
-        return <Mail className={iconProps} />;
-      default:
-        return <Sliders className={iconProps} />;
+      case 'webhook': return Webhook;
+      case 'polled_api': return Globe;
+      case 'sse': return Radio;
+      case 'logfile': return FileText;
+      case 'kafka': return Layers;
+      case 'rabbitmq': return Mail;
+      default: return Sliders;
     }
   })();
-
   return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/10 text-xs font-medium text-slate-200">
-      <span className="text-amber-400">{icon}</span>
-      {label || kind}
+    <span className="w-10 h-10 rounded-[10px] bg-gradient-to-b from-[#8e8e93] to-[#636366] flex items-center justify-center shrink-0" aria-hidden="true">
+      <Icon className="w-5 h-5 text-white" strokeWidth={2} />
     </span>
   );
 }
 
-function StatusPill({ status, workerRunning }: { status: Source['status']; workerRunning?: boolean }) {
-  if (status === 'error') {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">
-        <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-        Error
-      </span>
-    );
-  }
-  if (status === 'paused') {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/[0.06] text-ink-muted border border-white/10">
-        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-        Paused
-      </span>
-    );
-  }
-  if (status === 'simulating') {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-        Simulating{workerRunning ? ' (live)' : ''}
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-      Active
-    </span>
-  );
+function StatusText({ status, workerRunning }: { status: Source['status']; workerRunning?: boolean }) {
+  if (status === 'error') return <span className="text-ios-red">error</span>;
+  if (status === 'paused') return <span>paused</span>;
+  if (status === 'simulating') return <span className="text-ios-orange">simulating{workerRunning ? ', live' : ''}</span>;
+  return <span className="text-ios-green">active</span>;
 }
 
 export default function SourcesPage() {
@@ -382,7 +347,7 @@ export default function SourcesPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid gap-5 lg:grid-cols-2 items-start">
             {sources.map((src) => {
               const spec = typeMap[src.kind];
               const fullIngestUrl = `${origin}/api/ingest/${src.key}`;
@@ -393,228 +358,106 @@ export default function SourcesPage() {
               const testRes = testResults[src.id];
 
               return (
-                <div
-                  key={src.id}
-                  className="glass-card p-6 space-y-4"
-                >
-                  {/* Top Row */}
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base font-semibold text-white">{src.name}</h3>
-                        <span className="glass-pill text-xs text-slate-200 px-2.5 py-0.5">{src.team}</span>
-                        <SourceKindBadge kind={src.kind} label={spec?.label} />
-                        {spec && (
-                          <span className="surface-well text-[10px] uppercase font-mono px-1.5 py-0.5 rounded text-ink-muted">
-                            {spec.mode}
-                          </span>
-                        )}
-                        <StatusPill status={src.status} workerRunning={src.worker_running} />
-                      </div>
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted">
-                        <span>
-                          Events: <strong className="text-amber-300">{src.events_count || 0}</strong>
-                        </span>
-                        {src.last_event_at && (
-                          <>
-                            <span>•</span>
-                            <span>
-                              Last event: {new Date(src.last_event_at + 'Z').toLocaleTimeString()}
-                            </span>
-                          </>
-                        )}
-                        {Boolean(src.config?.root_path) && (
-                          <>
-                            <span>•</span>
-                            <span className="font-mono text-[11px] text-slate-300">
-                              unwrap: {String(src.config.root_path)}
-                            </span>
-                          </>
-                        )}
-                      </div>
+                <article key={src.id} className={`ios-group transition-opacity ${src.enabled ? '' : 'opacity-60'}`}>
+                  {/* header: type icon, name, status, on/off switch */}
+                  <div className="ios-row py-3.5">
+                    <SourceKindIcon kind={src.kind} />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[17px] font-semibold text-white leading-snug truncate">{src.name}</h3>
+                      <p className="text-[13px] text-ink-muted truncate">
+                        {spec?.label ?? src.kind}, <StatusText status={src.status} workerRunning={src.worker_running} />
+                      </p>
                     </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setSimulatingSource(src)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 transition"
-                      >
-                        <Play className="w-3.5 h-3.5" />
-                        Simulate
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={testingId === src.id}
-                        onClick={() => handleTestConnection(src)}
-                        className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/[0.06] hover:bg-white/[0.12] text-slate-200 border border-white/10 transition"
-                      >
-                        {testingId === src.id ? 'Testing...' : 'Test'}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleToggle(src)}
-                        title={src.enabled ? 'Pause source' : 'Enable source'}
-                        className={`p-1.5 rounded-lg border transition ${
-                          src.enabled
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                            : 'bg-white/[0.06] border-white/10 text-ink-muted hover:text-white'
-                        }`}
-                      >
-                        <Power className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleExport(src, 'yaml')}
-                        title="Export YAML Spec"
-                        className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-slate-300 transition"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingSource(src);
-                          setShowSpecModal(true);
-                        }}
-                        title="Edit specification"
-                        className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-slate-300 transition"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(src)}
-                        title="Delete source"
-                        className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-rose-500/20 border border-white/10 text-ink-muted hover:text-rose-400 transition"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <Toggle checked={src.enabled} onChange={() => handleToggle(src)}
+                      label={src.enabled ? `Pause ${src.name}` : `Turn on ${src.name}`} />
                   </div>
 
-                  {/* Error Banner */}
+                  <Row label="Team" value={<span className="text-white">{src.team}</span>} />
+                  <Row label="Events received" value={<span className="tabular-nums">{src.events_count || 0}</span>} />
+                  {src.last_event_at && (
+                    <Row label="Last event" value={new Date(src.last_event_at + 'Z').toLocaleTimeString()} />
+                  )}
+                  {spec && <Row label="Delivery" value={spec.mode === 'push' ? 'Pushed to us' : spec.mode === 'pull' ? 'We fetch it' : spec.mode} />}
+                  {Boolean(src.config?.root_path) && (
+                    <Row label="Unwraps" value={<code className="font-mono text-[13px]">{String(src.config.root_path)}</code>} />
+                  )}
+
                   {src.last_error && (
-                    <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
+                    <div className="ios-row items-start text-[15px] text-ios-red">
                       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>{src.last_error}</span>
+                      <span className="flex-1">{src.last_error}</span>
                     </div>
                   )}
 
-                  {/* Connection Test Result */}
                   {testRes && (
-                    <div
-                      className={`p-2.5 rounded-lg border text-xs flex items-center justify-between gap-2 ${
-                        testRes.ok
-                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                          : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {testRes.ok ? (
-                          <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        ) : (
-                          <AlertTriangle className="w-4 h-4 shrink-0" />
-                        )}
-                        <span>{testRes.message}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setTestResults((prev) => {
-                            const next = { ...prev };
-                            delete next[src.id];
-                            return next;
-                          })
-                        }
-                        className="text-ink-muted hover:text-white"
-                      >
-                        <X className="w-3.5 h-3.5" />
+                    <div className={`ios-row text-[15px] ${testRes.ok ? 'text-ios-green' : 'text-ios-red'}`}>
+                      {testRes.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                      <span className="flex-1">{testRes.message}</span>
+                      <button type="button" aria-label="Dismiss test result"
+                        onClick={() => setTestResults((prev) => { const next = { ...prev }; delete next[src.id]; return next; })}
+                        className="text-ink-faint hover:text-white">
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
                   )}
 
-                  {/* Push Ingest Endpoint + Curl */}
-                  <div className="surface-well flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">
-                        POST
-                      </span>
-                      <code className="text-xs font-mono text-slate-200 truncate">
-                        {fullIngestUrl}
-                      </code>
+                  {/* push endpoint */}
+                  <div className="ios-row flex-col items-stretch gap-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[15px] text-white">Send events to</span>
+                      <div className="flex items-center gap-3 text-[15px]">
+                        <button type="button" onClick={() => copyText(`url-${src.id}`, fullIngestUrl)}
+                          className="text-ios-blue hover:opacity-70 inline-flex items-center gap-1">
+                          {copiedId === `url-${src.id}` ? <><Check className="w-4 h-4" />Copied</> : 'Copy URL'}
+                        </button>
+                        <button type="button" onClick={() => setOpenCurlId(openCurlId === src.id ? null : src.id)}
+                          className="text-ios-blue hover:opacity-70">
+                          {openCurlId === src.id ? 'Hide cURL' : 'cURL'}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => copyText(`url-${src.id}`, fullIngestUrl)}
-                        className="glass-pill px-2.5 py-1 hover:bg-white/10 text-[11px] text-slate-200 transition-colors"
-                      >
-                        {copiedId === `url-${src.id}` ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-400" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            Copy URL
-                          </>
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setOpenCurlId(openCurlId === src.id ? null : src.id)}
-                        className="glass-pill px-2.5 py-1 hover:bg-white/10 text-[11px] text-slate-200 transition-colors"
-                      >
-                        <Terminal className="w-3 h-3" />
-                        cURL
-                      </button>
-                    </div>
+                    <code className="block text-[13px] font-mono text-ink-muted truncate">POST {fullIngestUrl}</code>
+                    {openCurlId === src.id && (
+                      <div className="relative">
+                        <pre className="surface-well p-3 pr-16 text-[12px] font-mono text-white overflow-x-auto">{curlCmd}</pre>
+                        <button type="button" onClick={() => copyText(`curl-${src.id}`, curlCmd)}
+                          className="absolute top-2 right-3 text-[13px] text-ios-blue hover:opacity-70">
+                          {copiedId === `curl-${src.id}` ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  {openCurlId === src.id && (
-                    <div className="relative">
-                      <pre className="surface-well p-3 text-[11px] font-mono text-emerald-300 overflow-x-auto">
-                        {curlCmd}
-                      </pre>
-                      <button
-                        type="button"
-                        onClick={() => copyText(`curl-${src.id}`, curlCmd)}
-                        className="absolute top-2 right-2 px-2 py-1 rounded bg-white/[0.06] hover:bg-white/[0.12] text-[11px] text-slate-200"
-                      >
-                        {copiedId === `curl-${src.id}` ? 'Copied!' : 'Copy'}
-                      </button>
+                  {/* detected fields */}
+                  {src.detected_fields && src.detected_fields.length > 0 && (
+                    <div className="ios-row flex-col items-stretch gap-2">
+                      <span className="text-[15px] text-white">Fields found in events</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {src.detected_fields.slice(0, 10).map((f) => (
+                          <span key={f.path} className="glass-pill px-2.5 py-0.5 text-[12px] font-mono text-white">
+                            {f.path}<span className="text-ink-muted">{f.type}</span>
+                          </span>
+                        ))}
+                        {src.detected_fields.length > 10 && (
+                          <span className="text-[13px] text-ink-muted self-center">+{src.detected_fields.length - 10} more</span>
+                        )}
+                      </div>
                     </div>
                   )}
 
-                  {/* Detected Schema Fields Preview */}
-                  {src.detected_fields && src.detected_fields.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] text-slate-500 mr-1">Detected fields:</span>
-                      {src.detected_fields.slice(0, 10).map((f) => (
-                        <span
-                          key={f.path}
-                          className="surface-well text-[11px] font-mono px-2 py-0.5 rounded text-slate-300"
-                        >
-                          <span className="text-amber-400">{f.path}</span>
-                          <span className="text-slate-500 ml-1">:{f.type}</span>
-                        </span>
-                      ))}
-                      {src.detected_fields.length > 10 && (
-                        <span className="text-[11px] text-slate-500">
-                          +{src.detected_fields.length - 10} more
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
+                  {/* actions */}
+                  <div className="ios-row flex-wrap gap-x-5 gap-y-2 text-[15px]">
+                    <button type="button" onClick={() => setSimulatingSource(src)} className="text-ios-blue hover:opacity-70">Simulate</button>
+                    <button type="button" disabled={testingId === src.id} onClick={() => handleTestConnection(src)}
+                      className="text-ios-blue hover:opacity-70 disabled:opacity-40">
+                      {testingId === src.id ? 'Testing' : 'Test connection'}
+                    </button>
+                    <button type="button" onClick={() => handleExport(src, 'yaml')} className="text-ios-blue hover:opacity-70">Export</button>
+                    <button type="button" onClick={() => { setEditingSource(src); setShowSpecModal(true); }}
+                      className="text-ios-blue hover:opacity-70">Edit</button>
+                    <button type="button" onClick={() => handleDelete(src)} className="ml-auto text-ios-red hover:opacity-70">Delete</button>
+                  </div>
+                </article>
               );
             })}
           </div>
