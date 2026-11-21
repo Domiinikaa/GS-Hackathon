@@ -1,7 +1,7 @@
 // People page.
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Plus, RefreshCw, Users } from 'lucide-react';
-import { ChannelList, EmptyState, Notice, PageHeader, Row, SEVERITY_DOT, Section, Segmented, type SeverityLevel, Toggle, cn, iconButton } from '../shared/ui';
+import { ChevronRight, Users } from 'lucide-react';
+import { ChannelList, EmptyState, Notice, PageHeader, Row, SEVERITY_DOT, Section, Segmented, type SeverityLevel, Toggle, cn } from '../shared/ui';
 import type { Person } from '../shared/types';
 import type { User } from '../types';
 import { errorMessage } from '../rules/rulesApi';
@@ -26,8 +26,8 @@ export default function PeoplePage({ currentUser }: { currentUser?: User | null 
   const [notice, setNotice] = useState('');
   const [openId, setOpenId] = useState<number | null>(null);
   const [teamFilter, setTeamFilter] = useState<string>('all');
-  // null = form closed, 'new' = new person, Person = editing that person
-  const [editing, setEditing] = useState<Person | 'new' | null>(null);
+  // null = form closed, Person = editing that person
+  const [editing, setEditing] = useState<Person | null>(null);
 
   async function load() {
     setLoading(true);
@@ -52,11 +52,7 @@ export default function PeoplePage({ currentUser }: { currentUser?: User | null 
 
   async function savePerson(input: PersonInput): Promise<string | null> {
     try {
-      if (editing === 'new') {
-        const saved = await peopleApi.create(input);
-        setPeople((prev) => [...prev, saved]);
-        flash(`${saved.name} added to ${saved.team}.`);
-      } else if (editing) {
+      if (editing) {
         const saved = await peopleApi.update(editing.id, input);
         setPeople((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
         flash(`${saved.name} saved.`);
@@ -112,16 +108,6 @@ export default function PeoplePage({ currentUser }: { currentUser?: User | null 
       <PageHeader
         title="People"
         description={<>Team members, who is on call, and how each person wants to be reached.{!isAdmin && ' You can edit your own profile.'}</>}
-        actions={<>
-          <button onClick={load} title="Reload people" aria-label="Reload people" className={iconButton}>
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          {isAdmin && editing === null && (
-            <button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]">
-              <Plus className="w-4 h-4" />Add person
-            </button>
-          )}
-        </>}
       />
 
       {error && <Notice tone="error">{error}</Notice>}
@@ -129,8 +115,8 @@ export default function PeoplePage({ currentUser }: { currentUser?: User | null 
 
       {editing !== null && (
         <PersonForm
-          key={editing === 'new' ? 'new' : editing.id}
-          initial={editing === 'new' ? undefined : editing}
+          key={editing.id}
+          initial={editing}
           teams={availableTeams}
           onSave={savePerson}
           onCancel={() => setEditing(null)}

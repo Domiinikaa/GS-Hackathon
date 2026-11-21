@@ -1,7 +1,7 @@
 // OSOBA 1 – lista alertów z filtrami, aktualizowana na żywo (SSE z /api/alerts/stream).
 import { useEffect, useState } from 'react';
-import { RefreshCw, BellOff } from 'lucide-react';
-import { EmptyState, Notice, PageHeader, Section, Segmented, iconButton } from '../shared/ui';
+import { BellOff } from 'lucide-react';
+import { EmptyState, Notice, PageHeader, Section, Segmented } from '../shared/ui';
 
 const SEVERITY_SECTIONS = [
   { key: 'critical', title: 'Critical' },
@@ -148,15 +148,10 @@ export default function AlertsPage({ currentUser }: { currentUser?: User | null 
       <PageHeader
         title="Alerts"
         description={
-          <span className="inline-flex items-center gap-1.5" title={live ? `Live updates on (${liveMode})` : 'Live updates disconnected, use Refresh'}>
+          <span className="inline-flex items-center gap-1.5" title={live ? `Live updates on (${liveMode})` : 'Live updates disconnected'}>
             <span className={`w-2 h-2 rounded-full ${live ? 'bg-ios-green' : 'bg-ink-faint'}`} />
-            {live ? 'Live, updates as they happen' : 'Offline, tap refresh to update'}
+            {live ? 'Live, updates as they happen' : 'Offline, reconnecting...'}
           </span>
-        }
-        actions={
-          <button onClick={load} title="Refresh alerts" aria-label="Refresh alerts" className={iconButton}>
-            <RefreshCw className={`w-[18px] h-[18px] ${loading ? 'animate-spin' : ''}`} />
-          </button>
         }
       />
 

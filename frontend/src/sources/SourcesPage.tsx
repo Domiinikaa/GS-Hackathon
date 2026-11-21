@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Plus,
   Download,
-  RefreshCw,
   Copy,
   Check,
   Play,
@@ -278,17 +277,6 @@ export default function SourcesPage() {
             />
             Auto-refresh (4s)
           </label>
-          <button
-            type="button"
-            onClick={() => {
-              loadSourcesAndMeta();
-              loadEvents();
-            }}
-            className="glass-pill w-9 h-9 justify-center text-ink-muted hover:text-white hover:bg-white/10 transition-colors"
-            title="Refresh now"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
