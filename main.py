@@ -37,6 +37,9 @@ def ensure_sqlite_columns():
         except Exception:
             pass
 
+from services.alert_service import ensure_open_dedup_index  # noqa: E402  (Osoba 1: ochrona przed duplikatami alertów)
+ensure_open_dedup_index(engine)
+
 
 def purge_demo_user():
     """Removes any obsolete demo accounts from previous iterations."""
