@@ -7,6 +7,7 @@ import StepList from './StepList';
 import { EmptyState, PageHeader, Row, ghostButton } from '../shared/ui';
 import EngineTester from './EngineTester';
 import SimulatorPanel from './SimulatorPanel';
+import ActionsPanel from './ActionsPanel';
 import { withKind } from './stepKind';
 
 const FORMATS: { value: RunbookFormat; label: string }[] = [
@@ -224,6 +225,8 @@ export default function RunbooksPage() {
             text="Add one so responders see clear next steps on every alert." /></div>
         )}
       </div>
+
+      <ActionsPanel onChanged={reload} />
 
       <SimulatorPanel />
 

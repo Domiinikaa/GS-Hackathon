@@ -17,6 +17,7 @@ export interface RunbookStep {
   // Osoba 4 – wykonywanie kroków (services/runbook_runner.py)
   condition?: string | null;      // "retry fails twice" – krok wykona się tylko, gdy warunek jest spełniony
   kind?: StepKind | null;         // ręcznie wybrany rodzaj; null = wykryty automatycznie
+  custom?: boolean;               // własna akcja zespołu (Runbooks → Actions), np. "clear_cache"
   status?: StepStatus | null;
   result?: string | null;         // co się stało, np. "settlement responded 200 OK"
   run_no?: number;                // 2, 3… po kliknięciu "Retry"
