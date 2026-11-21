@@ -1,14 +1,16 @@
 // OSOBA 4 – runbooki: wklej YAML / Markdown / tekst, zobacz kroki na żywo, zapisz, podepnij do reguły.
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Check, Link2, Plus, Save, Trash2, Unlink, X } from 'lucide-react';
+import { AlertTriangle, BookOpen, Check, Link2, Plus, Save, Trash2, Unlink, X } from 'lucide-react';
 import type { Runbook, RunbookStep } from '../shared/types';
-import { RuleRef, RunbookFormat, errorText, runbookApi } from './runbookApi';
+import { MatchGroup, RuleRef, RunbookFormat, describeMatches, errorText, runbookApi } from './runbookApi';
 import StepList from './StepList';
 import EngineTester from './EngineTester';
 
 const FORMATS: { value: RunbookFormat; label: string }[] = [
   { value: 'auto', label: 'Auto-detect' },
   { value: 'yaml', label: 'YAML' },
+  { value: 'json', label: 'JSON' },
+  { value: 'html', label: 'HTML (copied from a wiki)' },
   { value: 'markdown', label: 'Markdown' },
   { value: 'text', label: 'Free text' },
   { value: 'link', label: 'Link' },
@@ -53,12 +55,18 @@ export default function RunbooksPage() {
 
   useEffect(() => { reload(); }, []);
 
-  async function handleSaved(rb: Runbook, isNew: boolean) {
+  async function handleSaved(rb: Runbook, isNew: boolean, attachedTo?: string, attachError?: string) {
     await reload();
     setEditing(null);
-    setNotice(isNew
-      ? `Saved "${rb.name}". To attach it to a rule, click its card in the list and choose a rule.`
-      : `Saved "${rb.name}".`);
+    if (attachError) {
+      setNotice(`Saved "${rb.name}", but could not attach it to the rule: ${attachError}. Click its card to try again.`);
+    } else if (attachedTo) {
+      setNotice(`Saved "${rb.name}" and attached it to "${attachedTo}". New alerts from this rule will show these steps.`);
+    } else if (isNew) {
+      setNotice(`Saved "${rb.name}". It is not attached to any rule yet: click its card to attach one.`);
+    } else {
+      setNotice(`Saved "${rb.name}".`);
+    }
   }
 
   async function handleRulesChanged(message: string) {
@@ -134,6 +142,11 @@ export default function RunbooksPage() {
                 </div>
                 <p className="text-sm text-slate-400 truncate">{rb.steps.map((s) => s.text).join(' → ')}</p>
                 <div className="flex gap-2 flex-wrap">
+                  {(rb as Runbook & { matches?: MatchGroup | null }).matches && (
+                    <span className="text-xs bg-sky-500/10 border border-sky-500/30 text-sky-300 px-2 py-0.5 rounded font-mono">
+                      for events: {describeMatches((rb as Runbook & { matches?: MatchGroup | null }).matches)}
+                    </span>
+                  )}
                   {attached.length === 0
                     ? <span className="text-xs text-slate-500">Not attached to any rule</span>
                     : attached.map((r) => (
@@ -165,7 +178,7 @@ export default function RunbooksPage() {
 interface EditorProps {
   initial?: Runbook;
   rules: RuleRef[];
-  onSaved: (rb: Runbook, isNew: boolean) => void;
+  onSaved: (rb: Runbook, isNew: boolean, attachedTo?: string, attachError?: string) => void;
   onRulesChanged: (message: string) => void;
   onClose: () => void;
 }
@@ -180,18 +193,26 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
   const [ruleToAttach, setRuleToAttach] = useState('');
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [matches, setMatches] = useState<MatchGroup | null>(null);
 
   // podgląd na żywo: pytamy backend 300 ms po ostatnim naciśnięciu klawisza
   useEffect(() => {
-    if (!raw.trim()) { setPreview([]); setDetected(''); setParseError(''); return; }
+    if (!raw.trim()) { setPreview([]); setDetected(''); setParseError(''); setWarnings([]); setMatches(null); return; }
     const timer = setTimeout(async () => {
       try {
         const res = await runbookApi.parse(raw, format);
         setPreview(res.steps);
         setDetected(res.format);
+        setWarnings(res.warnings ?? []);
+        setMatches(res.matches ?? null);
         setParseError('');
+        // nowy runbook bez nazwy: weź nazwę z treści ("runbook: settlement-timeout")
+        if (!initial && res.name) setName((n) => (n.trim() ? n : res.name ?? n));
       } catch (e) {
         setDetected('');  // nie pokazuj formatu z poprzedniego, udanego odczytu
+        setWarnings([]);
+        setMatches(null);
         setParseError(errorText(e));
       }
     }, 300);
@@ -206,10 +227,20 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
     setSaving(true);
     setSaveError('');
     try {
-      const rb = initial
-        ? await runbookApi.update(initial.id, name.trim(), raw, format)
-        : await runbookApi.create(name.trim(), raw, format);
-      onSaved(rb, !initial);
+      if (initial) {
+        onSaved(await runbookApi.update(initial.id, name.trim(), raw, format), false);
+        return;
+      }
+      const rb = await runbookApi.create(name.trim(), raw, format);
+      // nowy runbook: od razu podpinamy do wybranej reguły (jeśli wybrano)
+      if (!ruleToAttach) { onSaved(rb, true); return; }
+      const rule = rules.find((r) => r.id === ruleToAttach);
+      try {
+        await runbookApi.attach(rb.id, ruleToAttach);
+        onSaved(rb, true, rule?.name ?? ruleToAttach);
+      } catch (e) {
+        onSaved(rb, true, undefined, errorText(e));
+      }
     } catch (e) {
       setSaveError(errorText(e));
     } finally {
@@ -276,8 +307,35 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
           {parseError
             ? <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 whitespace-pre-wrap">{parseError}</p>
             : <StepList steps={preview} empty="Start typing to see steps." />}
+          {!parseError && warnings.length > 0 && (
+            <div role="status" className="mt-3 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/40 rounded-lg px-3 py-2 space-y-1">
+              {warnings.map((w) => (
+                <p key={w} className="flex gap-2"><AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span>{w}</span></p>
+              ))}
+            </div>
+          )}
+          {!parseError && matches && (
+            <p className="mt-3 text-xs text-sky-300 bg-sky-500/10 border border-sky-500/30 rounded-lg px-3 py-2">
+              This runbook says which events it is for: <span className="font-mono">{describeMatches(matches)}</span>.
+              Rules without their own runbook will use it for these events automatically.
+            </p>
+          )}
         </div>
       </div>
+
+      {!initial && (
+        <div className="border-t border-slate-800 pt-4 space-y-1">
+          <label htmlFor="new-runbook-rule" className={labelClass}>Attach to rule (optional)</label>
+          <select id="new-runbook-rule" value={ruleToAttach} onChange={(e) => setRuleToAttach(e.target.value)}
+            className={`${inputClass} sm:max-w-md`}>
+            <option value="">Don't attach yet</option>
+            {rules.map((r) => (
+              <option key={r.id} value={r.id}>{r.name} ({r.team}){r.runbook_id ? ' – replaces its runbook' : ''}</option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-500">Alerts from this rule will show these steps. You can change it later.</p>
+        </div>
+      )}
 
       {initial && (
         <div className="border-t border-slate-800 pt-4 space-y-2">

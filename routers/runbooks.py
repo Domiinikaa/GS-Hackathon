@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Event, Rule, Runbook
 from services.rules_engine import evaluate
-from services.runbook_parser import parse_runbook_with_format
+from services.runbook_parser import ParseResult, normalize_matches, parse_runbook_full
 
 router = APIRouter(prefix="/api", tags=["Runbooks & engine (Osoba 4)"])
 
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api", tags=["Runbooks & engine (Osoba 4)"])
 
 class ParseRequest(BaseModel):
     raw: str
-    format: str = "auto"  # auto | yaml | markdown | text | link
+    format: str = "auto"  # auto | yaml | json | html | markdown | text | link
 
 
 def _clean_name(v: Optional[str]) -> Optional[str]:
@@ -55,10 +55,10 @@ class EngineTestRequest(BaseModel):
     rule: Optional[Dict[str, Any]] = None     # albo reguła z formularza, jeszcze niezapisana
 
 
-def _parse_or_422(raw: str, fmt: str) -> tuple:
-    """(format, którego naprawdę użyto, kroki). Błąd tylko przy ręcznie wybranym, niepoprawnym YAML-u."""
+def _parse_or_422(raw: str, fmt: str) -> ParseResult:
+    """Format, kroki, ostrzeżenia, nazwa, matches. Błąd tylko przy ręcznie wybranym, niepoprawnym YAML / JSON."""
     try:
-        return parse_runbook_with_format(raw, fmt)
+        return parse_runbook_full(raw, fmt)
     except ValueError as e:
         raise HTTPException(422, str(e))
 
@@ -79,9 +79,9 @@ def list_runbooks(db: Session = Depends(get_db)):
 
 @router.post("/runbooks/parse")
 def preview_parse(req: ParseRequest):
-    """UI wkleja tekst i od razu widzi, jakie kroki z niego wyszły."""
-    fmt, steps = _parse_or_422(req.raw, req.format)
-    return {"format": fmt, "steps": steps}
+    """UI wkleja tekst i od razu widzi kroki, ostrzeżenia oraz (z YAML / JSON) nazwę i matches."""
+    r = _parse_or_422(req.raw, req.format)
+    return {"format": r.format, "steps": r.steps, "warnings": r.warnings, "name": r.name, "matches": r.matches}
 
 
 @router.get("/runbooks/{runbook_id}")
@@ -94,8 +94,10 @@ def get_runbook(runbook_id: int, db: Session = Depends(get_db)):
 
 @router.post("/runbooks")
 def create_runbook(payload: RunbookIn, db: Session = Depends(get_db)):
-    fmt, steps = _parse_or_422(payload.raw, payload.format)
-    rb = Runbook(name=payload.name, format=fmt, raw=payload.raw, steps=steps, matches=payload.matches)
+    r = _parse_or_422(payload.raw, payload.format)
+    # matches podane wprost wygrywają; inaczej bierzemy je z treści runbooka (YAML: "matches:")
+    matches = normalize_matches(payload.matches) if payload.matches else r.matches
+    rb = Runbook(name=payload.name, format=r.format, raw=payload.raw, steps=r.steps, matches=matches)
     db.add(rb)
     db.commit()
     db.refresh(rb)
@@ -107,12 +109,14 @@ def update_runbook(runbook_id: int, payload: RunbookPatch, db: Session = Depends
     rb = _get_or_404(db, runbook_id)
     if payload.name is not None:
         rb.name = payload.name
-    if payload.matches is not None:
-        rb.matches = payload.matches or None  # {} = wyłącz automatyczne podpinanie
     if payload.raw is not None or payload.format is not None:
         raw = payload.raw if payload.raw is not None else rb.raw
-        rb.format, rb.steps = _parse_or_422(raw, payload.format or rb.format)
-        rb.raw = raw
+        r = _parse_or_422(raw, payload.format or rb.format)
+        rb.format, rb.steps, rb.raw = r.format, r.steps, raw
+        if r.format in ("yaml", "json"):
+            rb.matches = r.matches              # treść runbooka mówi, do czego pasuje (albo już nie)
+    if payload.matches is not None:
+        rb.matches = normalize_matches(payload.matches)  # {} = wyłącz automatyczne podpinanie
     db.commit()
     db.refresh(rb)
     return rb

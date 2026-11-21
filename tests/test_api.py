@@ -134,6 +134,31 @@ def test_runbook_errors():
     ok(client.delete("/api/runbooks/1/attach/rates-big-rejections"), 404)             # nie był podpięty
 
 
+def test_parse_preview_returns_warnings_name_and_matches():
+    r = ok(client.post("/api/runbooks/parse", json={"raw": "1. A\n2. B\nzrob cos znowu"}))
+    assert [s["text"] for s in r["steps"]] == ["A", "B"] and "zrob cos znowu" in r["warnings"][0]
+    r = ok(client.post("/api/runbooks/parse", json={"raw": "runbook: x\nmatches:\n  type: T\nsteps:\n  - A"}))
+    assert r["name"] == "x" and r["matches"] == {"and": [{"field": "type", "op": "eq", "value": "T"}]}
+
+
+def test_appendix_b_yaml_runbook_attaches_itself_by_matches():
+    yaml_rb = ("runbook: settlement-timeout-b\nmatches:\n  type: WORKFLOW_FAILED\n  \"error.code\": TIMEOUT\n"
+               "steps:\n  - action: retry_workflow\n    workflowId: \"{{workflowId}}\"\n")
+    rb = ok(client.post("/api/runbooks", json={"name": "settlement-timeout-b", "raw": yaml_rb}))
+    assert rb["matches"]["and"][1] == {"field": "error.code", "op": "eq", "value": "TIMEOUT"}
+
+    seed_rb = rules_by_id()["settlements-prod"]["runbook_id"]
+    ok(client.delete(f"/api/runbooks/{seed_rb}/attach/settlements-prod"))   # reguła bez własnego runbooka
+    try:
+        [m] = engine(SETTLEMENT)["matched"]                                   # error.code = TIMEOUT
+        assert [s["text"] for s in m["steps"]] == ["Retry workflow (workflowId: WF-1)"]
+        other = {**SETTLEMENT, "error": {"code": "DB_DOWN", "message": "x"}}
+        assert engine(other)["matched"][0]["steps"] == []                     # matches nie pasuje
+    finally:
+        ok(client.post(f"/api/runbooks/{seed_rb}/attach/settlements-prod"))
+        ok(client.delete(f"/api/runbooks/{rb['id']}"))
+
+
 # ---------------------------------------------------------------- test silnika
 
 def test_engine_test_each_sample_hits_its_rule():

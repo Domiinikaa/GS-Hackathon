@@ -11,7 +11,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import Event, Rule  # noqa: E402
 from services.rules_engine import check_group, evaluate, get_field, render_template, _MISSING  # noqa: E402
-from services.runbook_parser import detect_format, fill_steps, parse_runbook, parse_runbook_with_format  # noqa: E402
+from services.runbook_parser import (detect_format, fill_steps, parse_runbook, parse_runbook_full,  # noqa: E402
+                                     parse_runbook_with_format)
 
 # te same reguły co seed.py
 RULES = [
@@ -241,6 +242,134 @@ def test_fill_steps():
     filled = fill_steps(steps, {"workflowId": "WF-1", "step": "book-cash"})
     assert filled[1]["text"] == "Retry workflow WF-1 from step book-cash" and filled[1]["done"] is False
     assert steps[1]["text"].startswith("Retry workflow {{")  # oryginał nietknięty
+
+
+# ---------------------------------------------------------------- Appendix B (kartka zadania), słowo w słowo
+
+APPENDIX_YAML = """runbook: settlement-timeout
+matches:
+  type: WORKFLOW_FAILED
+  "error.code": TIMEOUT
+steps:
+  - check: "Is counterparty-service healthy?"
+    action: http_get
+    url: "http://counterparty-service/health"
+  - action: retry_workflow
+    workflowId: "{{workflowId}}"
+    approval: none
+  - if: "retry fails twice"
+    action: escalate
+    team: counterparty-support
+    approval: required
+"""
+
+APPENDIX_MD = """# HighErrorRate on payments-api
+1. Open the payments dashboard and check if errors are in one region only.
+2. If one region: fail traffic over to the other region (needs approval from the team lead).
+3. If all regions: check the last deployment and roll it back.
+4. Post an update in the #payments-incidents channel every 15 minutes.
+"""
+
+APPENDIX_TEXT = ("When pricing latency goes over a second, it's usually the cache. Restart the pricing-engine "
+                 "instance named in the alert, wait 2 minutes, and if latency is still high, call the pricing "
+                 "on-call person.")
+
+
+def test_appendix_b_yaml():
+    r = parse_runbook_full(APPENDIX_YAML, "auto")
+    assert r.format == "yaml" and r.name == "settlement-timeout" and not r.warnings
+    assert texts(r.steps) == [
+        "Check: Is counterparty-service healthy? (action: http_get; url: http://counterparty-service/health)",
+        "Retry workflow (workflowId: {{workflowId}})",
+        "If retry fails twice: Escalate (team: counterparty-support) (requires approval)",
+    ]
+    assert r.matches == {"and": [{"field": "type", "op": "eq", "value": "WORKFLOW_FAILED"},
+                                 {"field": "error.code", "op": "eq", "value": "TIMEOUT"}]}
+    assert fill_steps(r.steps, {"workflowId": "WF-7"})[1]["text"] == "Retry workflow (workflowId: WF-7)"
+
+
+def test_appendix_b_markdown():
+    r = parse_runbook_full(APPENDIX_MD, "auto")
+    assert r.format == "markdown" and not r.warnings
+    assert len(r.steps) == 4
+    assert r.steps[1]["text"] == ("If one region: fail traffic over to the other region "
+                                  "(needs approval from the team lead).")
+
+
+def test_appendix_b_free_text():
+    r = parse_runbook_full(APPENDIX_TEXT, "auto")
+    assert r.format == "text" and not r.warnings
+    assert texts(r.steps) == [
+        "When pricing latency goes over a second, it's usually the cache",
+        "Restart the pricing-engine instance named in the alert",
+        "Wait 2 minutes",
+        "If latency is still high, call the pricing on-call person",
+    ]
+
+
+def test_runbook_matches_work_in_engine():
+    m = parse_runbook_full(APPENDIX_YAML).matches
+    assert check_group({"type": "WORKFLOW_FAILED", "error": {"code": "TIMEOUT"}}, m)
+    assert not check_group({"type": "WORKFLOW_FAILED", "error": {"code": "DB_DOWN"}}, m)
+    # prosty zapis bez normalizacji też działa
+    assert check_group({"type": "WORKFLOW_FAILED", "error": {"code": "TIMEOUT"}},
+                       {"type": "WORKFLOW_FAILED", "error.code": "TIMEOUT"})
+
+
+# ---------------------------------------------------------------- inne kształty, których jury może użyć
+
+def test_other_yaml_and_json_shapes():
+    assert texts(parse_runbook("steps:\n  - name: Check health\n    run: curl https://x/health", "auto")) == [
+        "Check health (run: curl https://x/health)"]
+    assert texts(parse_runbook("runbook:\n  remediation:\n    steps:\n      - title: Check DB\n"
+                               "        substeps: [Check replicas]\n      - Restart app", "auto")) == [
+        "Check DB", "Check replicas", "Restart app"]
+    assert texts(parse_runbook('{"steps": [{"name": "Check", "command": "curl /h"}, "Retry"]}', "auto")) == [
+        "Check (command: curl /h)", "Retry"]
+    assert texts(parse_runbook('["Check logs", "Call on-call"]', "auto")) == ["Check logs", "Call on-call"]
+    assert detect_format('{"steps": []}') == "json"
+
+
+def test_html_from_wiki():
+    r = parse_runbook_full("<h2>Title</h2><ol><li>Check <b>health</b></li><li>Retry &amp; wait</li></ol>", "auto")
+    assert r.format == "html" and texts(r.steps) == ["Check health", "Retry & wait"]
+    table = ("<table><tr><th>#</th><th>Step</th></tr><tr><td>1</td><td>Check logs</td></tr>"
+             "<tr><td>2</td><td>Call desk</td></tr></table>")
+    assert texts(parse_runbook(table, "auto")) == ["Check logs", "Call desk"]
+    assert texts(parse_runbook("<p>Check logs.</p><p>Then call the desk.</p>", "auto")) == ["Check logs", "Call the desk"]
+
+
+def test_markdown_code_blocks_and_tables():
+    md = ("1. Check health\n   ```\n   curl https://x/health\n   ```\n2. **Retry** now\n\n"
+          "| # | Step |\n|---|------|\n| 3 | Escalate |\n")
+    assert texts(parse_runbook(md, "auto")) == ["Check health (curl https://x/health)", "Retry now", "Escalate"]
+
+
+def test_text_variants():
+    assert texts(parse_runbook("Step 1: Check logs\nStep 2 - Restart service", "auto")) == ["Check logs", "Restart service"]
+    assert texts(parse_runbook("a) Check logs\nb) Restart\n• Call desk", "auto")) == ["Check logs", "Restart", "Call desk"]
+    assert texts(parse_runbook("Check health -> retry workflow → escalate", "auto")) == [
+        "Check health", "Retry workflow", "Escalate"]
+    assert texts(parse_runbook("First, check the logs. Then, restart it. Finally, tell the desk.", "auto")) == [
+        "Check the logs", "Restart it", "Tell the desk"]
+
+
+# ---------------------------------------------------------------- ostrzeżenia
+
+def test_warning_for_line_outside_the_list():
+    r = parse_runbook_full("1. Check the trade {{payload.tradeId}}\n2. Call the Rates desk\nzrob cos znowu", "auto")
+    assert texts(r.steps) == ["Check the trade {{payload.tradeId}}", "Call the Rates desk"]
+    assert len(r.warnings) == 1 and '"zrob cos znowu"' in r.warnings[0]
+
+
+def test_warning_for_bad_placeholders():
+    r = parse_runbook_full("1. Retry {workflowId}\n2. Check {{x", "auto")
+    assert any("single braces" in w for w in r.warnings) and any("unclosed" in w for w in r.warnings)
+
+
+def test_warning_when_structure_is_broken():
+    r = parse_runbook_full("Check logs\nsteps:\n- A", "auto")
+    assert r.steps and any("each line was used as a step" in w for w in r.warnings)
 
 
 if __name__ == "__main__":

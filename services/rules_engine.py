@@ -28,7 +28,7 @@ from sqlalchemy.orm import object_session
 
 from models import Event, Rule, Runbook
 from services.contracts import Match
-from services.runbook_parser import fill_steps
+from services.runbook_parser import fill_steps, normalize_matches
 
 log = logging.getLogger(__name__)
 
@@ -153,8 +153,10 @@ def check_group(data: Any, group: dict[str, Any] | None) -> bool:
     if "or" in group:
         items = group["or"] or []
         return not items or any(check_condition(data, c) for c in items)
-    # pojedynczy warunek bez grupy też akceptujemy
-    return check_condition(data, group)
+    if "field" in group:  # pojedynczy warunek bez grupy też akceptujemy
+        return check_condition(data, group)
+    # prosty zapis z runbooka (Appendix B): {"type": "WORKFLOW_FAILED", "error.code": "TIMEOUT"}
+    return check_group(data, normalize_matches(group))
 
 
 # ---------------------------------------------------------------- szablony
