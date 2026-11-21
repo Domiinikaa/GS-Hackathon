@@ -250,10 +250,63 @@ def seed_runbooks(db: Session) -> None:  # Osoba 4
             rule.runbook_id = rb.id
 
 
-def seed_all(db: Session) -> None:
-    seed_sources(db)
-    seed_rules(db)
-    # People are NOT seeded: only users who register (routers/auth.py) appear in People.
-    db.flush()
-    seed_runbooks(db)
+MOCK_SOURCE_KEYS = {"demo", "trade-gateway", "payments-webhook", "settlement-kafka", "pricing-engine-logs"}
+MOCK_RULE_IDS = {"settlements-prod", "pricing-warnings", "rates-big-rejections", "anna-payments-critical"}
+MOCK_RUNBOOK_NAMES = {"settlement-timeout", "payments-high-error-rate", "pricing-warnings"}
+MOCK_PEOPLE_EMAILS = {
+    "anna@example.com", "tom@example.com", "kasia@example.com",
+    "ewa@example.com", "marek@example.com", "piotr@example.com", "zofia@example.com",
+}
+
+
+def purge_mock_data(db: Session) -> None:
+    """Cleans up all hackathon mock/demo data from the database.
+    Ensures that on startup, only user-entered data and registered users exist.
+    """
+    from models import Alert, Delivery, Event, Person, Rule, Runbook, Source, User
+
+    # 1. Deliveries referencing mock alerts or mock people
+    mock_alerts = db.query(Alert).filter(Alert.rule_id.in_(MOCK_RULE_IDS)).all()
+    mock_alert_ids = [a.id for a in mock_alerts]
+    if mock_alert_ids:
+        db.query(Delivery).filter(Delivery.alert_id.in_(mock_alert_ids)).delete(synchronize_session=False)
+
+    db.query(Delivery).filter(
+        (Delivery.to.in_(MOCK_PEOPLE_EMAILS)) | (Delivery.to.like("%@example.com"))
+    ).delete(synchronize_session=False)
+
+    # 2. Mock alerts
+    if mock_alert_ids:
+        db.query(Alert).filter(Alert.id.in_(mock_alert_ids)).delete(synchronize_session=False)
+
+    # 3. Mock events
+    mock_source_ids = [s.id for s in db.query(Source).filter(Source.key.in_(MOCK_SOURCE_KEYS)).all()]
+    if mock_source_ids:
+        db.query(Event).filter(Event.source_id.in_(mock_source_ids)).delete(synchronize_session=False)
+
+    # 4. Mock rules
+    db.query(Rule).filter(Rule.id.in_(MOCK_RULE_IDS)).delete(synchronize_session=False)
+
+    # 5. Mock runbooks
+    db.query(Runbook).filter(Runbook.name.in_(MOCK_RUNBOOK_NAMES)).delete(synchronize_session=False)
+
+    # 6. Mock sources
+    db.query(Source).filter(Source.key.in_(MOCK_SOURCE_KEYS)).delete(synchronize_session=False)
+
+    # 7. Mock people (only delete if not registered in users table)
+    registered_emails = {u.email.lower() for u in db.query(User.email).all()}
+    mock_people = db.query(Person).filter(
+        (Person.email.in_(MOCK_PEOPLE_EMAILS)) | (Person.email.like("%@example.com"))
+    ).all()
+    for p in mock_people:
+        if (p.email or "").lower() not in registered_emails:
+            db.delete(p)
+
     db.commit()
+
+
+def seed_all(db: Session) -> None:
+    """Production mode: no mock data is seeded.
+    Purges any residual hackathon mock data on every server start.
+    """
+    purge_mock_data(db)

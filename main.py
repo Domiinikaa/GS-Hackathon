@@ -15,7 +15,7 @@ from services.connectors import ingest_manager
 from services.delivery import ensure_delivery_columns, start_worker
 from services import runbook_runner
 from routers import api, auth, admin, alerts, rules, people, sources, deliveries, runbooks
-from seed import seed_all
+from seed import seed_all, purge_mock_data
 from services.alert_service import ensure_open_dedup_index
 from services.people_service import ensure_people_role_column, migrate_admins_to_leads
 from sqlalchemy import inspect, text
@@ -191,6 +191,7 @@ with startup_lock():
 
     startup_db = SessionLocal()
     try:
+        purge_mock_data(startup_db)
         seed_all(startup_db)
         migrate_admins_to_leads(startup_db)
         runbook_runner.upgrade_runbook_steps(startup_db)   # stare runbooki -> rodzaje kroków i warunki

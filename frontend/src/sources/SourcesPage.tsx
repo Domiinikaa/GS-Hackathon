@@ -411,6 +411,16 @@ export default function SourcesPage() {
                   <div className="ios-row flex-wrap gap-x-5 gap-y-2 text-[15px]">
                     <button type="button" onClick={() => setSimulatingSource(src)} className="text-ios-blue hover:opacity-70">Simulate</button>
                     <button type="button" onClick={() => handleExport(src, 'yaml')} className="text-ios-blue hover:opacity-70">Export</button>
+                    <button type="button" onClick={() => {
+                      const copy = {
+                        ...src,
+                        id: 0,
+                        name: `${src.name} (Copy)`,
+                        key: `${src.key}-copy`,
+                      };
+                      setEditingSource(copy);
+                      setShowSpecModal(true);
+                    }} className="text-amber-400 hover:opacity-70">Duplicate</button>
                     <button type="button" onClick={() => { setEditingSource(src); setShowSpecModal(true); }}
                       className="text-ios-blue hover:opacity-70">Edit</button>
                     <button type="button" onClick={() => handleDelete(src)} className="ml-auto text-ios-red hover:opacity-70">Delete</button>
