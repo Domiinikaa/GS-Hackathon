@@ -1,19 +1,13 @@
 // Add / edit rule form.
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Users, X } from 'lucide-react';
+import { Users, X } from 'lucide-react';
 import {
-  CHANNELS, COLOR_DOT, Channel, Condition, Operator, OPERATORS,
+  CHANNELS, COLOR_DOT, Channel, Condition, Operator,
   Rule, SEVERITY_OPTIONS, Severity, colorForSeverity, groupItems, groupMode, isFlat, isLeaf,
 } from './ruleTypes';
 import { FieldHint, PlannedRecipient, errorMessage, rulesApi } from './rulesApi';
 import { describeNode } from './describeRule';
-
-// In the form a condition value is kept as text (exactly as the user types it)
-interface ConditionRow {
-  field: string;
-  op: Operator;
-  value: string;
-}
+import ConditionEditor, { ConditionRow, EMPTY_ROW } from './ConditionEditor';
 
 // Form text -> real value (number, list or text)
 function parseValue(op: Operator, raw: string): Condition['value'] {
@@ -46,7 +40,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
   const [rows, setRows] = useState<ConditionRow[]>(
     initial
       ? groupItems(initial.condition).filter(isLeaf).map((c) => ({ field: c.field, op: c.op, value: valueToText(c.value) }))
-      : [{ field: '', op: 'eq', value: '' }],
+      : [{ ...EMPTY_ROW }],
   );
   const [channels, setChannels] = useState<Channel[]>(initial?.channels ?? ['ui']);
   const [title, setTitle] = useState(initial?.title ?? '');
@@ -103,10 +97,6 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
       group_by: groupBy.trim() || undefined,
       group_window_s: groupBy.trim() && minutes > 0 ? minutes * 60 : undefined,
     };
-  }
-
-  function updateRow(index: number, change: Partial<ConditionRow>) {
-    setRows(rows.map((row, i) => (i === index ? { ...row, ...change } : row)));
   }
 
   function toggleChannel(ch: Channel) {
@@ -177,59 +167,7 @@ export default function RuleForm({ initial, onSave, onCancel }: Props) {
           <p className={hintClass}>Nested conditions – kept as they are; change them via the API</p>
         </div>
       ) : (
-      <div>
-        <div className="flex items-center justify-between mb-1 gap-3 flex-wrap">
-          <span className={labelClass}>Raise an alert when an incoming event matches</span>
-          <div className="flex text-xs rounded-lg overflow-hidden border border-slate-700">
-            <button type="button" onClick={() => setMode('and')}
-              className={`px-3 py-1 ${mode === 'and' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-300'}`}>
-              ALL of these
-            </button>
-            <button type="button" onClick={() => setMode('or')}
-              className={`px-3 py-1 ${mode === 'or' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-300'}`}>
-              ANY of these
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-12 gap-2 text-xs text-slate-500 mb-1">
-          <span className="col-span-4">Event field</span>
-          <span className="col-span-3">Check</span>
-          <span className="col-span-4">Value</span>
-        </div>
-        <div className="space-y-2">
-          {rows.map((row, i) => (
-            <div key={i} className="grid grid-cols-12 gap-2 items-center">
-              <input className={`${inputClass} col-span-4 font-mono`} value={row.field}
-                onChange={(e) => updateRow(i, { field: e.target.value })}
-                placeholder="e.g. payload.desk" list="rule-fields" aria-label="Event field" />
-              <select className={`${inputClass} col-span-3`} value={row.op} aria-label="Check"
-                onChange={(e) => updateRow(i, { op: e.target.value as Operator })}>
-                {OPERATORS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.symbol} {o.label}</option>
-                ))}
-              </select>
-              <input className={`${inputClass} col-span-4 font-mono`} value={row.value} aria-label="Value"
-                onChange={(e) => updateRow(i, { value: e.target.value })}
-                placeholder={row.op === 'in' ? 'A, B, C' : 'e.g. rates'} />
-              <button type="button" onClick={() => setRows(rows.filter((_, j) => j !== i))}
-                className="col-span-1 text-slate-500 hover:text-red-400 flex justify-center"
-                title="Remove condition">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
-        </div>
-        <datalist id="rule-fields">
-          {fieldHints.map((h) => (
-            <option key={h.path} value={h.path}>{`${h.type}, e.g. ${JSON.stringify(h.example)}`.slice(0, 60)}</option>
-          ))}
-        </datalist>
-        <button type="button" onClick={() => setRows([...rows, { field: '', op: 'eq', value: '' }])}
-          className="mt-2 text-xs text-amber-400 hover:text-amber-300 flex items-center space-x-1">
-          <Plus className="w-3.5 h-3.5" /><span>Add condition</span>
-        </button>
-      </div>
+        <ConditionEditor mode={mode} onModeChange={setMode} rows={rows} onRowsChange={setRows} fieldHints={fieldHints} />
       )}
 
       {/* 3. Urgency (also sets the alert colour) */}

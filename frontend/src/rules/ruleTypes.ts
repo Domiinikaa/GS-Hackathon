@@ -39,17 +39,25 @@ export interface Rule {
   updated_at?: string | null;
 }
 
-export const OPERATORS: { value: Operator; label: string; symbol: string }[] = [
-  { value: 'eq', label: 'equals', symbol: '=' },
-  { value: 'neq', label: 'not equals', symbol: '≠' },
-  { value: 'gt', label: 'greater than', symbol: '>' },
-  { value: 'gte', label: 'greater or equal', symbol: '≥' },
-  { value: 'lt', label: 'less than', symbol: '<' },
-  { value: 'lte', label: 'less or equal', symbol: '≤' },
-  { value: 'in', label: 'is one of (comma separated)', symbol: 'in' },
-  { value: 'contains', label: 'contains text', symbol: 'contains' },
-  { value: 'wildcard', label: 'matches pattern (use *)', symbol: 'matches' },
+// phrase = how the operator reads in the condition sentence; types = field types it makes sense for
+export const OPERATORS: { value: Operator; label: string; symbol: string; phrase: string; types: FieldKind[] }[] = [
+  { value: 'eq', label: 'equals', symbol: '=', phrase: 'is', types: ['text', 'number'] },
+  { value: 'neq', label: 'not equals', symbol: '≠', phrase: 'is not', types: ['text', 'number'] },
+  { value: 'gt', label: 'greater than', symbol: '>', phrase: 'is greater than', types: ['number'] },
+  { value: 'gte', label: 'greater or equal', symbol: '≥', phrase: 'is at least', types: ['number'] },
+  { value: 'lt', label: 'less than', symbol: '<', phrase: 'is less than', types: ['number'] },
+  { value: 'lte', label: 'less or equal', symbol: '≤', phrase: 'is at most', types: ['number'] },
+  { value: 'in', label: 'is one of', symbol: 'in', phrase: 'is one of', types: ['text', 'number'] },
+  { value: 'contains', label: 'contains text', symbol: 'contains', phrase: 'contains', types: ['text'] },
+  { value: 'wildcard', label: 'matches pattern', symbol: 'matches', phrase: 'matches pattern (*)', types: ['text'] },
 ];
+
+export type FieldKind = 'text' | 'number';
+
+// Operators that make sense for a field type; unknown fields get all of them
+export function operatorsFor(kind: FieldKind | null) {
+  return kind ? OPERATORS.filter((o) => o.types.includes(kind)) : OPERATORS;
+}
 
 export const CHANNELS: { value: Channel; label: string }[] = [
   { value: 'email', label: 'Email' },
