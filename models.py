@@ -66,6 +66,8 @@ class InviteCode(Base):
     code = Column(String(64), unique=True, index=True, nullable=False)
     is_used = Column(Boolean, default=False, nullable=False)
     is_admin_invite = Column(Boolean, default=False, nullable=False)
+    role = Column(String(20), default="member", server_default="member", nullable=False)
+    team = Column(String(100), nullable=True)
     created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     used_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

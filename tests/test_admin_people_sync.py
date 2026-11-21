@@ -7,7 +7,12 @@ import models  # noqa: F401
 from create_admin import create_or_promote_admin
 from database import Base
 from models import Person, User
-from services.people_service import ensure_person_for_user
+from services.people_service import (
+    ensure_person_for_user,
+    migrate_admins_to_leads,
+    sync_person_role_for_user,
+    sync_user_admin_for_person,
+)
 from services.security import hash_password
 
 
@@ -51,6 +56,7 @@ def test_create_or_promote_admin_creates_user_and_person(db):
     assert person.name == "boss"
     assert person.team == "Management"
     assert person.phone == "+48 600 111 222"
+    assert person.role == "lead"
 
 
 def test_create_or_promote_admin_existing_by_uname_or_email(db):
@@ -77,6 +83,7 @@ def test_create_or_promote_admin_existing_by_uname_or_email(db):
     person = db.query(Person).filter(Person.email == "jan@example.com").first()
     assert person is not None
     assert person.team == "Management"
+    assert person.role == "lead"
 
     # Match by email (case-insensitive) when already admin
     user2, status2 = create_or_promote_admin(
@@ -96,3 +103,55 @@ def test_create_or_promote_admin_conflict_between_two_users(db):
 
     with pytest.raises(ValueError, match="Conflict"):
         create_or_promote_admin(db, uname="alice", email="bob@example.com", password="Secret123!")
+
+
+def test_sync_and_migrate_admins_to_leads(db):
+    old_admin = User(
+        uname="old_admin",
+        email="old_admin@example.com",
+        hashed_password=hash_password("p1"),
+        dzial="Rates",
+        is_admin=True,
+    )
+    member_user = User(
+        uname="worker",
+        email="worker@example.com",
+        hashed_password=hash_password("p2"),
+        dzial="Payments",
+        is_admin=False,
+    )
+    db.add_all([old_admin, member_user])
+    db.add(Person(name="old_admin", team="Rates", email="old_admin@example.com", role="member"))
+    db.add(Person(name="worker", team="Payments", email="worker@example.com", role="member"))
+    db.commit()
+
+    # Startup migration promotes every existing admin to lead
+    assert migrate_admins_to_leads(db) == 1
+    assert migrate_admins_to_leads(db) == 0  # idempotent
+    old_person = db.query(Person).filter(Person.email == "old_admin@example.com").first()
+    assert old_person.role == "lead"
+
+    # Promoting/demoting User.is_admin syncs Person.role
+    member_user.is_admin = True
+    sync_person_role_for_user(db, member_user)
+    db.commit()
+    worker_person = db.query(Person).filter(Person.email == "worker@example.com").first()
+    assert worker_person.role == "lead"
+
+    member_user.is_admin = False
+    sync_person_role_for_user(db, member_user)
+    db.commit()
+    assert worker_person.role == "member"
+
+    # Promoting/demoting Person.role syncs User.is_admin
+    worker_person.role = "lead"
+    sync_user_admin_for_person(db, worker_person)
+    db.commit()
+    db.refresh(member_user)
+    assert member_user.is_admin is True
+
+    worker_person.role = "member"
+    sync_user_admin_for_person(db, worker_person)
+    db.commit()
+    db.refresh(member_user)
+    assert member_user.is_admin is False

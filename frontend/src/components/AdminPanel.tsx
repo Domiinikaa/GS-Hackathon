@@ -22,7 +22,8 @@ import {
 
 interface NewlyCreatedInvite {
   code: string;
-  is_admin: boolean;
+  role: 'member' | 'lead';
+  team?: string | null;
 }
 
 export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUser: initialUser }) => {
@@ -32,8 +33,9 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
   const [teams, setTeams] = useState<TeamItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Invite code generation (default: normal user invite)
-  const [inviteRole, setInviteRole] = useState<'user' | 'admin'>('user');
+  // Invite code generation (default: member, optional pre-selected team)
+  const [inviteRole, setInviteRole] = useState<'member' | 'lead'>('member');
+  const [inviteTeam, setInviteTeam] = useState<string>('');
   const [generating, setGenerating] = useState(false);
   const [newlyCreatedInvite, setNewlyCreatedInvite] = useState<NewlyCreatedInvite | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -84,9 +86,8 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
     try {
       setGenerating(true);
       setError(null);
-      const isAdmin = inviteRole === 'admin';
-      const res = await adminService.createInvite(isAdmin);
-      setNewlyCreatedInvite({ code: res.code, is_admin: isAdmin });
+      const res = await adminService.createInvite(inviteRole, inviteTeam || null);
+      setNewlyCreatedInvite({ code: res.code, role: inviteRole, team: res.team ?? (inviteTeam || null) });
       await loadData();
     } catch (err: any) {
       setError(err.message || 'Failed to generate invite code.');
@@ -98,7 +99,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
   const handleToggleUserRole = async (targetUser: User) => {
     const newAdminStatus = !targetUser.is_admin;
     const actionLabel = newAdminStatus ? 'promote' : 'demote';
-    const roleTitle = newAdminStatus ? 'Administrator' : 'Standard User';
+    const roleTitle = newAdminStatus ? 'Lead' : 'Standard User';
 
     if (!window.confirm(`Are you sure you want to ${actionLabel} @${targetUser.uname} to ${roleTitle}?`)) {
       return;
@@ -193,10 +194,10 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               <span className="p-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
                 <ShieldAlert className="w-4 h-4" />
               </span>
-              <h2 className="text-xl font-bold text-white">Administrator Command Center</h2>
+              <h2 className="text-xl font-bold text-white">Lead Command Center</h2>
             </div>
             <p className="text-xs text-slate-400">
-              Manage teams, issue single-use invite codes, and grant Administrator privileges.
+              Manage teams, issue single-use invite codes, and grant Lead privileges.
             </p>
           </div>
 
@@ -210,29 +211,45 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               <span>Refresh</span>
             </button>
 
+            {/* Team selector for invite code */}
+            <select
+              value={inviteTeam}
+              onChange={(e) => setInviteTeam(e.target.value)}
+              title="Assign team/department for the invited employee"
+              className="px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-amber-500"
+            >
+              <option value="">Team: User chooses</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.name}>
+                  Team: {t.name}
+                </option>
+              ))}
+            </select>
+
             {/* Role selector for invite code */}
             <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+              <span className="px-2 text-[11px] font-medium text-slate-500">Role:</span>
               <button
                 type="button"
-                onClick={() => setInviteRole('user')}
+                onClick={() => setInviteRole('member')}
                 className={`px-2.5 py-1 text-xs font-semibold rounded transition ${
-                  inviteRole === 'user'
+                  inviteRole === 'member'
                     ? 'bg-amber-500 text-slate-950 font-bold shadow'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Normal Invite
+                Member
               </button>
               <button
                 type="button"
-                onClick={() => setInviteRole('admin')}
+                onClick={() => setInviteRole('lead')}
                 className={`px-2.5 py-1 text-xs font-semibold rounded transition ${
-                  inviteRole === 'admin'
+                  inviteRole === 'lead'
                     ? 'bg-amber-500 text-slate-950 font-bold shadow'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Admin Invite
+                Lead
               </button>
             </div>
 
@@ -242,7 +259,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               className="px-4 py-2 text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg flex items-center space-x-1.5 transition shadow active:scale-95"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>{generating ? 'Generating...' : `Generate ${inviteRole === 'admin' ? 'Admin' : 'Normal'} Invite`}</span>
+              <span>{generating ? 'Generating...' : `Generate ${inviteRole === 'lead' ? 'Lead' : 'Member'} Invite`}</span>
             </button>
           </div>
         </div>
@@ -254,7 +271,8 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
               <div>
                 <span className="text-xs text-emerald-300 font-semibold block">
-                  New Single-Use {newlyCreatedInvite.is_admin ? 'ADMINISTRATOR' : 'STANDARD USER'} Invite Code Ready:
+                  New Single-Use {newlyCreatedInvite.role === 'lead' ? 'LEAD' : 'MEMBER'} Invite Code Ready
+                  {newlyCreatedInvite.team ? ` (${newlyCreatedInvite.team})` : ''}:
                 </span>
                 <span className="text-lg font-mono font-bold text-white tracking-wider">
                   {newlyCreatedInvite.code}
@@ -440,6 +458,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                 <tr>
                   <th className="px-5 py-3">Invite Code</th>
                   <th className="px-5 py-3">Role Granted</th>
+                  <th className="px-5 py-3">Team</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Claimed By</th>
                 </tr>
@@ -451,15 +470,24 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                       {inv.code}
                     </td>
                     <td className="px-5 py-3 font-sans">
-                      {inv.is_admin_invite ? (
+                      {inv.role === 'lead' || inv.is_admin_invite ? (
                         <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
                           <ShieldCheck className="w-3 h-3" />
-                          <span>ADMIN</span>
+                          <span>LEAD</span>
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
-                          USER
+                          MEMBER
                         </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3 font-sans text-slate-300">
+                      {inv.team ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-200 border border-slate-700">
+                          {inv.team}
+                        </span>
+                      ) : (
+                        <span className="text-slate-500">—</span>
                       )}
                     </td>
                     <td className="px-5 py-3 font-sans">
@@ -480,7 +508,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                 ))}
                 {invites.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-5 py-8 text-center text-slate-500 font-sans">
+                    <td colSpan={5} className="px-5 py-8 text-center text-slate-500 font-sans">
                       No invite codes generated yet. Click "Generate Invite" above to create one.
                     </td>
                   </tr>
@@ -490,12 +518,12 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
           </div>
         </div>
 
-        {/* Employees & Admins Roster */}
+        {/* Employees & Leads Roster */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden h-fit">
           <div className="p-5 border-b border-slate-800 flex items-center justify-between">
             <h3 className="text-base font-bold text-white flex items-center space-x-2">
               <Users className="w-4 h-4 text-amber-400" />
-              <span>Employees & Admins ({users.length})</span>
+              <span>Employees & Leads ({users.length})</span>
             </h3>
           </div>
 
@@ -514,7 +542,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                       </span>
                       {u.is_admin ? (
                         <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold">
-                          ADMIN
+                          LEAD
                         </span>
                       ) : (
                         <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700 font-mono">
@@ -540,20 +568,20 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                           onClick={() => handleToggleUserRole(u)}
                           disabled={isChanging}
                           className="px-2 py-1 text-[10px] font-sans bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded flex items-center space-x-1 transition"
-                          title="Revoke Administrator privileges from this user"
+                          title="Revoke Lead privileges from this user"
                         >
                           <UserX className="w-3 h-3" />
-                          <span>{isChanging ? 'Updating...' : 'Revoke Admin'}</span>
+                          <span>{isChanging ? 'Updating...' : 'Revoke Lead'}</span>
                         </button>
                       ) : (
                         <button
                           onClick={() => handleToggleUserRole(u)}
                           disabled={isChanging}
                           className="px-2 py-1 text-[10px] font-sans bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded flex items-center space-x-1 transition"
-                          title="Grant Administrator privileges to this user"
+                          title="Grant Lead privileges to this user"
                         >
                           <Shield className="w-3 h-3" />
-                          <span>{isChanging ? 'Updating...' : 'Make Admin'}</span>
+                          <span>{isChanging ? 'Updating...' : 'Make Lead'}</span>
                         </button>
                       )}
                     </div>

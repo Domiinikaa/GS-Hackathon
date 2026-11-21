@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Alert, InviteCode, Person, Rule, Source, Team, User
 from routers.deps import get_current_admin_user
+from routers.people import team_name
+from services.people_service import sync_person_role_for_user
 from schemas import (
     InviteCodeCreateRequest,
     InviteCodeCreateResponse,
@@ -168,23 +170,39 @@ def create_invite_code(
     admin: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
-    """Generates a new single-use registration invite code for a team member or administrator."""
-    is_admin = payload.is_admin if payload else False
+    """Generates a new single-use registration invite code with a chosen role and optional team."""
+    role = payload.resolved_role() if payload else "member"
+    is_lead = role == "lead"
+
+    raw_team = ((payload.team if payload.team is not None else payload.dzial) or "").strip() if payload else ""
+    resolved_team = None
+    if raw_team:
+        resolved_team = team_name(db, raw_team)
+        if resolved_team is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Team '{raw_team}' does not exist.",
+            )
+
     code_str = generate_unique_code(db)
     invite = InviteCode(
         code=code_str,
         is_used=False,
-        is_admin_invite=is_admin,
+        is_admin_invite=is_lead,
+        role=role,
+        team=resolved_team,
         created_by_id=admin.id
     )
     db.add(invite)
     db.commit()
     db.refresh(invite)
 
-    role_desc = "Administrator" if is_admin else "Standard User"
+    role_desc = "Lead" if is_lead else "Member"
     return {
         "code": invite.code,
         "is_admin_invite": invite.is_admin_invite,
+        "role": invite.role,
+        "team": invite.team,
         "message": f"Single-use invite code for {role_desc} generated successfully."
     }
 
@@ -198,11 +216,14 @@ def list_invite_codes(
     invites = db.query(InviteCode).order_by(InviteCode.created_at.desc()).all()
     results = []
     for inv in invites:
+        is_lead = getattr(inv, "role", None) == "lead" or bool(getattr(inv, "is_admin_invite", False))
         results.append({
             "id": inv.id,
             "code": inv.code,
             "is_used": inv.is_used,
-            "is_admin_invite": getattr(inv, "is_admin_invite", False),
+            "is_admin_invite": is_lead,
+            "role": "lead" if is_lead else "member",
+            "team": getattr(inv, "team", None),
             "created_at": inv.created_at,
             "used_at": inv.used_at,
             "created_by_uname": inv.created_by.uname if inv.created_by else None,
@@ -239,6 +260,7 @@ def update_user_role(
         )
 
     user.is_admin = payload.is_admin
+    sync_person_role_for_user(db, user)
     db.commit()
     db.refresh(user)
     return user

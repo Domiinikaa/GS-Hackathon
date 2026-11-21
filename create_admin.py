@@ -58,6 +58,7 @@ def create_or_promote_admin(
             team=existing.dzial,
             email=existing.email,
             phone=existing.nrtel,
+            role="lead",
         )
         db.commit()
         db.refresh(existing)
@@ -79,6 +80,7 @@ def create_or_promote_admin(
         team=admin_user.dzial,
         email=admin_user.email,
         phone=admin_user.nrtel,
+        role="lead",
     )
     db.commit()
     db.refresh(admin_user)
