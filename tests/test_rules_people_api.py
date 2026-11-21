@@ -82,10 +82,12 @@ def test_rule_validation(client, bad):
     assert client.post("/api/rules", json={**NEW_RULE, **bad}).status_code == 422
 
 
-def test_nested_groups_allowed(client):
+def test_nested_groups_rejected(client):
     cond = {"and": [{"field": "a", "op": "eq", "value": 1},
                     {"or": [{"field": "b", "op": "eq", "value": 2}, {"field": "c", "op": "eq", "value": 3}]}]}
-    assert client.post("/api/rules", json={**NEW_RULE, "condition": cond}).status_code == 201
+    res = client.post("/api/rules", json={**NEW_RULE, "condition": cond})
+    assert res.status_code == 422
+    assert "nested groups are not supported" in res.text
 
 
 NEW_PERSON = {

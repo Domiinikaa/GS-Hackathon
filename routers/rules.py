@@ -34,10 +34,8 @@ class ConditionIn(BaseModel):
         return self
 
 
-def _validate_group(group: Any, depth: int = 0) -> Dict[str, Any]:
-    """{"and": [...]} or {"or": [...]}; items are conditions or nested groups."""
-    if depth > 5:
-        raise ValueError("condition nested too deep")
+def _validate_group(group: Any) -> Dict[str, Any]:
+    """{"and": [...]} or {"or": [...]} with plain conditions only (no nested groups)."""
     if not isinstance(group, dict) or len(group) != 1 or next(iter(group)) not in ("and", "or"):
         raise ValueError('condition must look like {"and": [...]} or {"or": [...]}')
     mode, items = next(iter(group.items()))
@@ -45,10 +43,9 @@ def _validate_group(group: Any, depth: int = 0) -> Dict[str, Any]:
         raise ValueError("condition needs at least one item")
     out = []
     for item in items:
-        if isinstance(item, dict) and len(item) == 1 and next(iter(item)) in ("and", "or"):
-            out.append(_validate_group(item, depth + 1))
-        else:
-            out.append(ConditionIn.model_validate(item).model_dump())
+        if isinstance(item, dict) and ("and" in item or "or" in item):
+            raise ValueError("nested groups are not supported: use only AND or only OR")
+        out.append(ConditionIn.model_validate(item).model_dump())
     return {mode: out}
 
 
