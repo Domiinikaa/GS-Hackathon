@@ -31,34 +31,35 @@ export function canRetry(step: RunbookStep): boolean {
 
 export function StepIcon({ step }: { step: RunbookStep }) {
   const cls = 'w-4 h-4 mt-0.5 shrink-0';
-  if (step.done || step.status === 'succeeded') return <CheckCircle2 className={`${cls} text-emerald-400`} />;
-  if (step.status === 'failed') return <XCircle className={`${cls} text-red-400`} />;
-  if (step.status === 'skipped') return <CircleSlash className={`${cls} text-slate-500`} />;
-  return <Clock className={`${cls} text-slate-500`} />;
+  if (step.done || step.status === 'succeeded') return <CheckCircle2 className={`${cls} text-ios-green`} />;
+  if (step.status === 'failed') return <XCircle className={`${cls} text-ios-red`} />;
+  if (step.status === 'skipped') return <CircleSlash className={`${cls} text-ink-muted`} />;
+  return <Clock className={`${cls} text-ink-muted`} />;
 }
 
 const STATUS_TEXT: Record<string, { label: string; cls: string }> = {
-  succeeded: { label: 'done by the app', cls: 'text-emerald-400' },
-  failed: { label: 'failed – retry or mark done', cls: 'text-red-400' },
-  skipped: { label: 'skipped', cls: 'text-slate-400' },
+  succeeded: { label: 'done by the app', cls: 'text-ios-green' },
+  failed: { label: 'failed – retry or mark done', cls: 'text-ios-red' },
+  skipped: { label: 'skipped', cls: 'text-ink-muted' },
   waiting: { label: 'waiting for a person', cls: 'text-slate-300' },
-  waiting_approval: { label: 'waiting for approval', cls: 'text-amber-300' },
+  waiting_approval: { label: 'waiting for approval', cls: 'text-ios-orange' },
 };
 
 export default function StepRunStatus({ step }: { step: RunbookStep }) {
   const kind = stepKind(step);
-  const status = step.done ? { label: 'done', cls: 'text-emerald-400' } : step.status ? STATUS_TEXT[step.status] : undefined;
+  const status = step.done ? { label: 'done', cls: 'text-ios-green' } : step.status ? STATUS_TEXT[step.status] : undefined;
   return (
     <div className="space-y-1 mt-1">
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span title={KIND_HINT[kind]} className={`px-1.5 py-0.5 rounded border ${KIND_CLASS[kind]}`}>{KIND_LABEL[kind]}</span>
-        {step.action && <span className="font-mono text-slate-500">{actionLabel(step.action)}</span>}
-        {step.condition && <span className="text-slate-500">only if: <span className="text-slate-300">{step.condition}</span></span>}
+<span title={KIND_HINT[kind]} className={`text-xs font-medium px-2 py-0.5 rounded-full ${KIND_CLASS[kind]}`}>{KIND_LABEL[kind]}</span>
+{step.action && <span className="font-mono text-ink-muted">{actionLabel(step.action)}</span>}
+{step.condition && <span className="text-ink-muted">only if: <span className="text-slate-300">{step.condition}</span></span>}
+        
         {status && <span className={status.cls}>{status.label}</span>}
-        {step.run_no && step.run_no > 1 ? <span className="text-slate-500">attempt {step.run_no}</span> : null}
+        {step.run_no && step.run_no > 1 ? <span className="text-ink-muted">attempt {step.run_no}</span> : null}
       </div>
       {step.result && step.status !== 'waiting_approval' && (
-        <p className={`text-xs ${step.status === 'failed' ? 'text-red-300' : step.status === 'succeeded' ? 'text-emerald-300' : 'text-slate-400'}`}>
+        <p className={`text-xs ${step.status === 'failed' ? 'text-ios-red' : step.status === 'succeeded' ? 'text-ios-green' : 'text-ink-muted'}`}>
           {step.result}
         </p>
       )}

@@ -67,7 +67,8 @@ class RuleIn(BaseModel):
     team: str = Field(..., min_length=1, max_length=100)
     enabled: bool = True
     condition: Dict[str, Any]
-    channels: List[Channel] = Field(..., min_length=1)
+    # Kept for API compatibility. Who is reached and how now comes from People; the team feed is always on.
+    channels: List[Channel] = Field(default_factory=lambda: ["ui"])
     title: str = Field(..., min_length=1, max_length=300)
     body: Optional[str] = None
     severity: Severity = "warning"

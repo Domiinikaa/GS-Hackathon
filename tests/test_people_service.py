@@ -41,15 +41,21 @@ NIGHT = datetime(2026, 11, 20, 23, 30)
 
 
 def test_anna_sms_during_day(db):
-    assert simple(plan_recipients(db, "Payments", "critical", ["sms"], DAY)) == [("Anna", "sms")]
+    assert simple(plan_recipients(db, "Payments", "critical", [], DAY)) == [("Anna", "sms"), ("team:Payments", "ui")]
 
 
 def test_anna_email_at_night(db):
-    assert simple(plan_recipients(db, "Payments", "critical", ["sms"], NIGHT)) == [("Anna", "email")]
+    assert simple(plan_recipients(db, "Payments", "critical", [], NIGHT)) == [("Anna", "email"), ("team:Payments", "ui")]
 
 
 def test_rule_target_can_be_a_person(db):
-    assert simple(plan_recipients(db, "Anna", "critical", ["sms"], DAY)) == [("Anna", "sms")]
+    assert simple(plan_recipients(db, "Anna", "critical", [], DAY)) == [("Anna", "sms"), ("team:Anna", "ui")]
+
+
+def test_team_feed_is_always_included(db):
+    # The app feed no longer depends on the rule: even a rule without "ui" reaches it
+    got = simple(plan_recipients(db, "Payments", "warning", ["email"], DAY))
+    assert ("team:Payments", "ui") in got
 
 
 def test_phone_only_for_on_call(db):
@@ -57,17 +63,17 @@ def test_phone_only_for_on_call(db):
     assert got == [("Ola", "sms"), ("Tom", "phone"), ("Tom", "sms"), ("team:Settlements", "ui")]
 
 
-def test_ui_only_rule_sends_no_personal_messages(db):
-    assert simple(plan_recipients(db, "Rates", "warning", ["ui"], DAY)) == [("team:Rates", "ui")]
+def test_person_preferences_decide_channels_not_the_rule(db):
+    # Kasia prefers email for warning; what the rule lists does not matter any more
+    assert simple(plan_recipients(db, "Rates", "warning", ["ui"], DAY)) == [("Kasia", "email"), ("team:Rates", "ui")]
+    assert simple(plan_recipients(db, "Rates", "warning", ["sms"], DAY)) == [("Kasia", "email"), ("team:Rates", "ui")]
 
 
-def test_missing_phone_falls_back_to_email(db):
-    assert simple(plan_recipients(db, "Rates", "critical", ["sms"], DAY)) == [("Kasia", "email")]
-
-
-def test_empty_intersection_uses_rule_channels(db):
-    # Kasia prefers email for warning, but the rule only allows SMS -> no phone number -> email
-    assert simple(plan_recipients(db, "Rates", "warning", ["sms"], DAY)) == [("Kasia", "email")]
+def test_no_preference_uses_severity_defaults(db):
+    # Kasia has no critical preference -> default phone + sms; not on call and no phone -> email
+    assert simple(plan_recipients(db, "Rates", "critical", [], DAY)) == [("Kasia", "email"), ("team:Rates", "ui")]
+    # info has no default personal channel -> app feed only
+    assert simple(plan_recipients(db, "Rates", "info", [], DAY)) == [("team:Rates", "ui")]
 
 
 def test_unknown_team_gets_only_ui(db):
@@ -93,7 +99,7 @@ def test_quiet_hours_fallback_to_ui(db):
         quiet_hours={"email": {"from": "08:00", "to": "20:00", "else": "ui"}},
     ))
     db.commit()
-    assert simple(plan_recipients(db, "Ops", "warning", ["email"], NIGHT)) == [("Jan", "ui")]
+    assert simple(plan_recipients(db, "Ops", "warning", ["email"], NIGHT)) == [("Jan", "ui"), ("team:Ops", "ui")]
 
 
 def test_info_ui_only_preference_not_overridden_by_rule_email(db):

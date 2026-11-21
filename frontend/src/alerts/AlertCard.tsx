@@ -5,27 +5,19 @@ import type { Alert } from '../shared/types';
 import type { Color } from '../rules/ruleTypes';
 import AlertDetails from './AlertDetails';
 
-// Tailwind potrzebuje pełnych nazw klas wpisanych w kodzie, dlatego mapy zamiast `bg-${color}-500`
-const BAR: Record<Color, string> = {
-  red: 'bg-red-500',
-  amber: 'bg-amber-500',
-  blue: 'bg-blue-500',
-  green: 'bg-emerald-500',
-  slate: 'bg-slate-500',
-};
-
-const BADGE: Record<Color, string> = {
-  red: 'bg-red-500/15 text-red-400 border-red-500/30',
-  amber: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  blue: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  green: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  slate: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+// Tailwind potrzebuje pełnych nazw klas wpisanych w kodzie, dlatego mapa zamiast `bg-${color}-500`
+const DOT: Record<Color, string> = {
+  red: 'bg-ios-red',
+  amber: 'bg-ios-orange',
+  blue: 'bg-ios-blue',
+  green: 'bg-ios-green',
+  slate: 'bg-ink-faint',
 };
 
 const STATUS: Record<Alert['status'], string> = {
-  open: 'text-red-400',
-  acknowledged: 'text-amber-400',
-  resolved: 'text-emerald-400',
+  open: 'text-ios-red',
+  acknowledged: 'text-ios-orange',
+  resolved: 'text-ios-green',
 };
 
 // Backend zapisuje czas w UTC bez strefy ("2026-11-20T22:02:06"). Dopisujemy "Z",
@@ -58,62 +50,58 @@ interface Props {
 }
 
 export default function AlertCard({ alert, onAction, busy = false, expanded = false, onToggle }: Props) {
-  const color = BAR[alert.color] ? alert.color : 'slate'; // nieznany kolor z backendu → szary
+  const color = DOT[alert.color] ? alert.color : 'slate'; // nieznany kolor z backendu → szary
   // Kto ustawił obecny status – ostatni wpis historii o TYM statusie (pomijamy kroki runbooka i "created")
   const statusEntry = [...(alert.history ?? [])].reverse().find((h) => h.what === alert.status);
   const changedBy = statusEntry && statusEntry.who !== 'system' ? statusEntry.who : null;
 
   return (
-    <div id={`alert-${alert.id}`}
-      className={`relative bg-slate-900 border rounded-xl overflow-hidden ${expanded ? 'border-slate-600' : 'border-slate-800'}`}>
-      {/* kolorowy pasek z lewej */}
-      <div className={`absolute inset-y-0 left-0 w-1.5 ${BAR[color]}`} />
-
-      <div className="pl-5 pr-4 py-4 flex items-start gap-4">
-        <span className={`shrink-0 mt-0.5 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded border ${BADGE[color]}`}>
-          {alert.severity}
-        </span>
-
-        {/* klik w treść karty rozwija / zwija szczegóły */}
+    <div id={`alert-${alert.id}`} className="ios-divided">
+      <div className="ios-row items-start py-3">
+        {/* klik w treść rozwija / zwija szczegóły */}
         <button type="button" onClick={onToggle} aria-expanded={expanded}
-          className="flex-1 min-w-0 text-left group">
-          <p className="font-semibold text-white truncate flex items-center gap-1.5">
-            <span className="truncate group-hover:underline">{alert.title}</span>
-            <ChevronDown className={`w-4 h-4 shrink-0 text-slate-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-          </p>
-          {alert.body && !expanded && <p className="text-sm text-slate-400 mt-0.5 truncate">{alert.body}</p>}
-          <p className="text-xs text-slate-500 mt-2">
-            {alert.team} · <span className={STATUS[alert.status]}>{alert.status}</span>
-            {changedBy && <> by {changedBy}</>} · last seen {timeAgo(alert.last_seen)}
-          </p>
+          className="flex-1 min-w-0 text-left flex items-start gap-3">
+          <span className={`mt-[7px] w-2.5 h-2.5 rounded-full shrink-0 ${DOT[color]}`} aria-hidden="true" />
+          <span className="min-w-0">
+            <span className="block text-[15px] font-semibold text-white truncate">{alert.title}</span>
+            <span className="block text-[13px] text-ink-muted mt-0.5">
+              {alert.team}, <span className={STATUS[alert.status]}>{alert.status}</span>
+              {changedBy && <> by {changedBy}</>}
+            </span>
+            {alert.body && !expanded && <span className="block text-[13px] text-ink-muted mt-0.5 truncate">{alert.body}</span>}
+          </span>
         </button>
 
-        <div className="shrink-0 flex flex-col items-end gap-2">
+        <div className="shrink-0 flex flex-col items-end gap-1.5">
+          <span className="flex items-center gap-1 text-[13px] text-ink-muted">
+            {timeAgo(alert.last_seen)}
+            <ChevronDown className={`w-4 h-4 text-ink-faint transition-transform duration-300 ${expanded ? 'rotate-180' : ''}`} />
+          </span>
           {/* licznik deduplikacji – tylko gdy alert się powtórzył */}
           {alert.count > 1 && (
-            <span className="font-mono text-sm font-bold text-white bg-slate-800 border border-slate-700 rounded-lg px-2 py-1"
+            <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-ios-fill text-[12px] font-semibold text-white flex items-center justify-center tabular-nums"
               title={`This alert happened ${alert.count} times`}>
-              ×{alert.count}
+              {alert.count}
             </span>
           )}
-
-          {/* przyciski – tylko te, które mają sens dla obecnego statusu */}
-          <div className="flex gap-2">
-            {alert.status === 'open' && (
-              <button disabled={busy} onClick={() => onAction(alert, 'ack')}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 disabled:opacity-50">
-                Acknowledge
-              </button>
-            )}
-            {alert.status !== 'resolved' && (
-              <button disabled={busy} onClick={() => onAction(alert, 'resolve')}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50">
-                Resolve
-              </button>
-            )}
-          </div>
         </div>
       </div>
+
+      {/* przyciski – tylko te, które mają sens dla obecnego statusu */}
+      {alert.status !== 'resolved' && (
+        <div className="flex gap-2 px-4 pb-3 pl-[38px]">
+          {alert.status === 'open' && (
+            <button disabled={busy} onClick={() => onAction(alert, 'ack')}
+              className="h-8 px-3.5 rounded-full bg-ios-fill text-[13px] font-semibold text-ios-orange hover:bg-white/[0.16] transition-colors disabled:opacity-40">
+              Acknowledge
+            </button>
+          )}
+          <button disabled={busy} onClick={() => onAction(alert, 'resolve')}
+            className="h-8 px-3.5 rounded-full bg-ios-fill text-[13px] font-semibold text-ios-green hover:bg-white/[0.16] transition-colors disabled:opacity-40">
+            Resolve
+          </button>
+        </div>
+      )}
 
       {expanded && <AlertDetails alert={alert} onAction={onAction} busy={busy} />}
     </div>

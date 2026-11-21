@@ -187,16 +187,16 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
   return (
     <div className="space-y-8">
       {/* Header Banner */}
-      <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-6 relative overflow-hidden">
+      <div className="glass-card glass-card--static border border-ios-green/30 p-6 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center space-x-2 mb-1">
-              <span className="p-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+              <span className="p-1 rounded bg-ios-green/15 text-ios-green border border-ios-green/30">
                 <ShieldAlert className="w-4 h-4" />
               </span>
-              <h2 className="text-xl font-bold text-white">Lead Command Center</h2>
+              <h2 className="text-xl font-semibold text-white">Lead Command Center</h2>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-ink-muted">
               Manage teams, issue single-use invite codes, and grant Lead privileges.
             </p>
           </div>
@@ -205,7 +205,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
             <button
               onClick={loadData}
               disabled={loading}
-              className="px-3 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 flex items-center space-x-1.5 transition"
+              className="px-3 py-2 text-xs bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 rounded-lg border border-white/10 flex items-center space-x-1.5 transition"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               <span>Refresh</span>
@@ -216,7 +216,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               value={inviteTeam}
               onChange={(e) => setInviteTeam(e.target.value)}
               title="Assign team/department for the invited employee"
-              className="px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-amber-500"
+              className="field px-2.5 py-1.5 text-xs"
             >
               <option value="">Team: User chooses</option>
               {teams.map((t) => (
@@ -227,15 +227,15 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
             </select>
 
             {/* Role selector for invite code */}
-            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+            <div className="surface-well flex items-center p-0.5">
               <span className="px-2 text-[11px] font-medium text-slate-500">Role:</span>
               <button
                 type="button"
                 onClick={() => setInviteRole('member')}
                 className={`px-2.5 py-1 text-xs font-semibold rounded transition ${
                   inviteRole === 'member'
-                    ? 'bg-amber-500 text-slate-950 font-bold shadow'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'btn-primary'
+                    : 'text-ink-muted hover:text-slate-200'
                 }`}
               >
                 Member
@@ -245,8 +245,8 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                 onClick={() => setInviteRole('lead')}
                 className={`px-2.5 py-1 text-xs font-semibold rounded transition ${
                   inviteRole === 'lead'
-                    ? 'bg-amber-500 text-slate-950 font-bold shadow'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'btn-primary'
+                    : 'text-ink-muted hover:text-slate-200'
                 }`}
               >
                 Lead
@@ -256,7 +256,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
             <button
               onClick={handleGenerateInvite}
               disabled={generating}
-              className="px-4 py-2 text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg flex items-center space-x-1.5 transition shadow active:scale-95"
+              className="btn-primary px-4 py-2 text-xs flex items-center space-x-1.5 active:scale-95"
             >
               <PlusCircle className="w-4 h-4" />
               <span>{generating ? 'Generating...' : `Generate ${inviteRole === 'lead' ? 'Lead' : 'Member'} Invite`}</span>
@@ -274,14 +274,14 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                   New Single-Use {newlyCreatedInvite.role === 'lead' ? 'LEAD' : 'MEMBER'} Invite Code Ready
                   {newlyCreatedInvite.team ? ` (${newlyCreatedInvite.team})` : ''}:
                 </span>
-                <span className="text-lg font-mono font-bold text-white tracking-wider">
+                <span className="text-lg font-mono font-semibold text-white tracking-wider">
                   {newlyCreatedInvite.code}
                 </span>
               </div>
             </div>
             <button
               onClick={() => copyToClipboard(newlyCreatedInvite.code)}
-              className="px-3 py-1.5 text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg flex items-center space-x-1 transition"
+              className="px-3 py-1.5 text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold rounded-lg flex items-center space-x-1 transition"
             >
               {copiedCode === newlyCreatedInvite.code ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copiedCode === newlyCreatedInvite.code ? 'Copied!' : 'Copy Code'}</span>
@@ -303,21 +303,21 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
       </div>
 
       {/* --- SECTION: TEAM MANAGEMENT --- */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+      <div className="glass-card glass-card--static p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-base font-bold text-white flex items-center space-x-2">
-              <Briefcase className="w-4 h-4 text-amber-400" />
+            <h3 className="text-base font-semibold text-white flex items-center space-x-2">
+              <Briefcase className="w-4 h-4 text-ios-green" />
               <span>Teams ({teams.length})</span>
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-ink-muted">
               Single source of truth for teams across user accounts, People, Rules, Sources, and Alerts.
             </p>
           </div>
         </div>
 
         {/* Create Team Form */}
-        <form onSubmit={handleAddTeam} className="mb-6 bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col md:flex-row gap-3 items-end">
+        <form onSubmit={handleAddTeam} className="surface-well mb-6 p-4 flex flex-col md:flex-row gap-3 items-end">
           <div className="flex-1 w-full">
             <label className="block text-xs font-semibold text-slate-300 mb-1">Team Name *</label>
             <input
@@ -326,7 +326,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               value={newTeamName}
               onChange={(e) => setNewTeamName(e.target.value)}
               placeholder="e.g. Risk Management, Quantitative Research, Trading"
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+              className="field w-full px-3 py-2 text-sm placeholder-slate-600"
             />
           </div>
           <div className="flex-1 w-full">
@@ -336,13 +336,13 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
               value={newTeamDesc}
               onChange={(e) => setNewTeamDesc(e.target.value)}
               placeholder="Responsibilities and mandate"
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+              className="field w-full px-3 py-2 text-sm placeholder-slate-600"
             />
           </div>
           <button
             type="submit"
             disabled={addingTeam}
-            className="w-full md:w-auto px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm rounded-lg flex items-center justify-center space-x-1.5 transition active:scale-95 shrink-0"
+            className="btn-primary w-full md:w-auto px-4 py-2 text-sm flex items-center justify-center space-x-1.5 active:scale-95 shrink-0"
           >
             <FolderPlus className="w-4 h-4" />
             <span>{addingTeam ? 'Adding...' : 'Add Team'}</span>
@@ -355,7 +355,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
             const isEditing = editingTeamId === team.id;
             const isSaving = savingTeamId === team.id;
             return (
-              <div key={team.id} className="bg-slate-950/70 border border-slate-800 p-4 rounded-xl flex flex-col justify-between gap-3 group hover:border-slate-700 transition">
+              <div key={team.id} className="surface-well p-4 flex flex-col justify-between gap-3 group hover:border-slate-700 transition">
                 {isEditing ? (
                   <div className="space-y-2">
                     <input
@@ -363,20 +363,20 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                       value={editTeamName}
                       onChange={(e) => setEditTeamName(e.target.value)}
                       placeholder="Team name"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                      className="field w-full px-2.5 py-1.5 text-sm"
                     />
                     <input
                       type="text"
                       value={editTeamDesc}
                       onChange={(e) => setEditTeamDesc(e.target.value)}
                       placeholder="Description (optional)"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                      className="field w-full px-2.5 py-1.5 text-xs"
                     />
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         type="button"
                         onClick={() => setEditingTeamId(null)}
-                        className="px-2 py-1 text-xs rounded-lg border border-slate-700 text-slate-300 hover:text-white flex items-center gap-1"
+                        className="px-2 py-1 text-xs rounded-lg border border-white/10 text-slate-300 hover:text-white flex items-center gap-1"
                       >
                         <X className="w-3 h-3" />
                         Cancel
@@ -385,7 +385,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                         type="button"
                         disabled={isSaving || !editTeamName.trim()}
                         onClick={() => handleSaveTeam(team.id)}
-                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-50 flex items-center gap-1"
+                        className="btn-primary px-2.5 py-1 text-xs disabled:opacity-50 flex items-center gap-1"
                       >
                         <Check className="w-3 h-3" />
                         {isSaving ? 'Saving...' : 'Save'}
@@ -395,11 +395,11 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                 ) : (
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="font-bold text-sm text-white truncate">{team.name}</div>
+                      <div className="font-semibold text-sm text-white truncate">{team.name}</div>
                       {team.description && (
-                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">{team.description}</p>
+                        <p className="text-xs text-ink-muted mt-1 line-clamp-2">{team.description}</p>
                       )}
-                      <p className="text-[11px] font-mono text-slate-400 mt-2">
+                      <p className="text-[11px] font-mono text-ink-muted mt-2">
                         {team.people_count ?? 0} people · {team.rules_count ?? 0} rules · {team.user_count ?? 0} accounts
                       </p>
                     </div>
@@ -408,7 +408,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                         type="button"
                         onClick={() => startEditingTeam(team)}
                         title="Rename / edit team"
-                        className="opacity-70 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition"
+                        className="opacity-70 group-hover:opacity-100 p-1.5 text-ink-muted hover:text-ios-green hover:bg-ios-green/25 rounded-lg transition"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -416,7 +416,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                         type="button"
                         onClick={() => handleDeleteTeam(team.id, team.name)}
                         title="Delete this team"
-                        className="opacity-70 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                        className="opacity-70 group-hover:opacity-100 p-1.5 text-ink-muted hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -438,23 +438,23 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Single-Use Invite Codes Table */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-          <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div className="glass-card glass-card--static lg:col-span-2 overflow-hidden">
+          <div className="p-5 border-b border-white/[0.08] flex items-center justify-between">
             <div>
-              <h3 className="text-base font-bold text-white flex items-center space-x-2">
-                <Key className="w-4 h-4 text-amber-400" />
+              <h3 className="text-base font-semibold text-white flex items-center space-x-2">
+                <Key className="w-4 h-4 text-ios-green" />
                 <span>Single-Use Invite Codes</span>
               </h3>
-              <p className="text-xs text-slate-400">Each code expires immediately after a single registration.</p>
+              <p className="text-xs text-ink-muted">Each code expires immediately after a single registration.</p>
             </div>
-            <span className="text-xs font-mono bg-slate-800 px-2.5 py-1 rounded border border-slate-700 text-slate-300">
+            <span className="text-xs font-mono bg-white/[0.06] px-2.5 py-1 rounded border border-white/10 text-slate-300">
               {invites.filter((i) => !i.is_used).length} active / {invites.length} total
             </span>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm font-mono">
-              <thead className="bg-slate-950 text-slate-400 text-xs font-semibold uppercase border-b border-slate-800 font-sans">
+              <thead className="surface-well text-ink-muted text-xs font-semibold uppercase border-b font-sans">
                 <tr>
                   <th className="px-5 py-3">Invite Code</th>
                   <th className="px-5 py-3">Role Granted</th>
@@ -463,27 +463,27 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                   <th className="px-5 py-3">Claimed By</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 text-xs">
+              <tbody className="divide-y divide-white/[0.06] text-xs">
                 {invites.map((inv) => (
                   <tr key={inv.id} className="hover:bg-slate-800/40 transition">
-                    <td className="px-5 py-3 font-bold text-white tracking-wider">
+                    <td className="px-5 py-3 font-semibold text-white tracking-wider">
                       {inv.code}
                     </td>
                     <td className="px-5 py-3 font-sans">
                       {inv.role === 'lead' || inv.is_admin_invite ? (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-ios-green/15 text-ios-green border border-ios-green/30">
                           <ShieldCheck className="w-3 h-3" />
                           <span>LEAD</span>
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white/[0.06] text-ink-muted border border-white/10">
                           MEMBER
                         </span>
                       )}
                     </td>
                     <td className="px-5 py-3 font-sans text-slate-300">
                       {inv.team ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-200 border border-slate-700">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/[0.06] text-slate-200 border border-white/10">
                           {inv.team}
                         </span>
                       ) : (
@@ -492,7 +492,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                     </td>
                     <td className="px-5 py-3 font-sans">
                       {inv.is_used ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white/[0.06] text-ink-muted border border-white/10">
                           USED
                         </span>
                       ) : (
@@ -519,15 +519,15 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
         </div>
 
         {/* Employees & Leads Roster */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden h-fit">
-          <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-            <h3 className="text-base font-bold text-white flex items-center space-x-2">
-              <Users className="w-4 h-4 text-amber-400" />
+        <div className="glass-card glass-card--static overflow-hidden h-fit">
+          <div className="p-5 border-b border-white/[0.08] flex items-center justify-between">
+            <h3 className="text-base font-semibold text-white flex items-center space-x-2">
+              <Users className="w-4 h-4 text-ios-green" />
               <span>Employees & Leads ({users.length})</span>
             </h3>
           </div>
 
-          <div className="divide-y divide-slate-800 max-h-[550px] overflow-y-auto">
+          <div className="divide-y divide-white/[0.06] max-h-[550px] overflow-y-auto">
             {users.map((u) => {
               const isSelf = currentUser?.id === u.id;
               const isChanging = roleChangingUserId === u.id;
@@ -536,28 +536,28 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                 <div key={u.id} className="p-4 hover:bg-slate-800/40 transition">
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center space-x-2">
-                      <span className="text-sm font-bold text-white font-sans">
+                      <span className="text-sm font-semibold text-white font-sans">
                         @{u.uname}
-                        {isSelf && <span className="ml-1 text-[10px] text-slate-400 font-normal">(You)</span>}
+                        {isSelf && <span className="ml-1 text-[10px] text-ink-muted font-normal">(You)</span>}
                       </span>
                       {u.is_admin ? (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold">
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-ios-green/15 text-ios-green border border-ios-green/30 font-mono font-semibold">
                           LEAD
                         </span>
                       ) : (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700 font-mono">
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/[0.06] text-ink-muted border border-white/10 font-mono">
                           USER
                         </span>
                       )}
                     </div>
                     {(u.team ?? u.dzial) && (
-                      <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-slate-800 text-slate-300 border border-slate-700">
+                      <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-white/[0.06] text-slate-300 border border-white/10">
                         {u.team ?? u.dzial}
                       </span>
                     )}
                   </div>
 
-                  <div className="text-xs text-slate-400 font-mono">{u.email}</div>
+                  <div className="text-xs text-ink-muted font-mono">{u.email}</div>
                   {u.nrtel && <div className="text-[11px] text-slate-500 font-mono mt-0.5">{u.nrtel}</div>}
 
                   {/* Role promote / demote action */}
@@ -577,7 +577,7 @@ export const AdminPanel: React.FC<{ currentUser?: User | null }> = ({ currentUse
                         <button
                           onClick={() => handleToggleUserRole(u)}
                           disabled={isChanging}
-                          className="px-2 py-1 text-[10px] font-sans bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded flex items-center space-x-1 transition"
+                          className="px-2 py-1 text-[10px] font-sans bg-ios-green/15 hover:bg-ios-green/25 text-ios-green border border-ios-green/30 rounded flex items-center space-x-1 transition"
                           title="Grant Lead privileges to this user"
                         >
                           <Shield className="w-3 h-3" />

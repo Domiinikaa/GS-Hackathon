@@ -1,6 +1,13 @@
 // OSOBA 1 – lista alertów z filtrami, aktualizowana na żywo (SSE z /api/alerts/stream).
 import { useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, BellOff } from 'lucide-react';
+import { EmptyState, Notice, PageHeader, Section, Segmented, iconButton } from '../shared/ui';
+
+const SEVERITY_SECTIONS = [
+  { key: 'critical', title: 'Critical' },
+  { key: 'warning', title: 'Warning' },
+  { key: 'info', title: 'Info' },
+] as const;
 import { api } from '../shared/api';
 import { errorMessage } from '../rules/rulesApi';
 import type { Alert, AlertStatus } from '../shared/types';
@@ -134,74 +141,78 @@ export default function AlertsPage({ currentUser }: { currentUser?: User | null 
   const userTeam = currentUser?.team ?? currentUser?.dzial;
 
   const selectClass =
-    'bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500';
+    'field h-[32px] px-3 text-[13px] !rounded-[9px]';
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-            Alerts
-            <span className={`flex items-center gap-1.5 text-xs font-medium ${live ? 'text-emerald-400' : 'text-slate-500'}`}
-              title={live ? `Live updates on (${liveMode})` : 'Live updates disconnected – use Refresh'}>
-              <span className={`w-2 h-2 rounded-full ${live ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
-              {live ? 'Live' : 'Offline'}
-            </span>
-          </h1>
-          <p className="text-sm text-slate-400">What needs attention right now.</p>
-        </div>
+      <PageHeader
+        title="Alerts"
+        description={
+          <span className="inline-flex items-center gap-1.5" title={live ? `Live updates on (${liveMode})` : 'Live updates disconnected, use Refresh'}>
+            <span className={`w-2 h-2 rounded-full ${live ? 'bg-ios-green' : 'bg-ink-faint'}`} />
+            {live ? 'Live, updates as they happen' : 'Offline, tap refresh to update'}
+          </span>
+        }
+        actions={
+          <button onClick={load} title="Refresh alerts" aria-label="Refresh alerts" className={iconButton}>
+            <RefreshCw className={`w-[18px] h-[18px] ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        }
+      />
 
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Segmented<StatusFilter>
+          label="Status"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: 'open', label: 'Open' },
+            { value: 'acknowledged', label: 'Acknowledged' },
+            { value: 'resolved', label: 'Resolved' },
+            { value: 'all', label: 'All' },
+          ]}
+        />
+        <div className="flex items-center gap-2">
           {userTeam && (
             <button
               type="button"
               onClick={() => setTeam(team === userTeam ? 'all' : userTeam)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${
-                team === userTeam
-                  ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'
+              aria-pressed={team === userTeam}
+              className={`h-[32px] px-3.5 rounded-full text-[13px] font-medium transition-colors ${
+                team === userTeam ? 'bg-ios-blue text-white' : 'bg-ios-fill text-white hover:bg-white/[0.16]'
               }`}
             >
-              My team ({userTeam})
+              My team
             </button>
           )}
           <select value={team} onChange={(e) => setTeam(e.target.value)} className={selectClass} aria-label="Team">
             <option value="all">All teams</option>
             {teams.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-          <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} className={selectClass} aria-label="Status">
-            <option value="open">Open</option>
-            <option value="acknowledged">Acknowledged</option>
-            <option value="resolved">Resolved</option>
-            <option value="all">All statuses</option>
-          </select>
-          <button onClick={load}
-            className="flex items-center gap-1.5 text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
         </div>
       </div>
 
       {error && (
-        <div className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
-          {error}
-        </div>
+        <Notice tone="error">{error}</Notice>
       )}
 
-      <div className="space-y-3">
-        {visible.map((a) => (
-          <AlertCard key={a.id} alert={a} onAction={handleAction} busy={busyId === a.id}
-            expanded={expandedId === a.id} onToggle={() => toggle(a.id)} />
-        ))}
+      <div className="space-y-7">
+        {SEVERITY_SECTIONS.map(({ key, title }) => {
+          const items = visible.filter((a) => (SEVERITY_SECTIONS.some((s) => s.key === a.severity) ? a.severity : 'info') === key);
+          if (items.length === 0) return null;
+          return (
+            <Section key={key} title={`${title}, ${items.length}`}>
+              {items.map((a) => (
+                <AlertCard key={a.id} alert={a} onAction={handleAction} busy={busyId === a.id}
+                  expanded={expandedId === a.id} onToggle={() => toggle(a.id)} />
+              ))}
+            </Section>
+          );
+        })}
 
         {!loading && !error && visible.length === 0 && (
-          <div className="text-center py-12 border border-dashed border-slate-800 rounded-xl">
-            <p className="text-slate-400">No alerts here.</p>
-            <p className="text-xs text-slate-600 mt-1">
-              Tip: create a test alert with <code className="text-amber-400">POST /api/alerts/test</code> in <a href="/docs" target="_blank" rel="noreferrer" className="underline">/docs</a>.
-            </p>
-          </div>
+          <EmptyState icon={BellOff} title="Nothing needs attention"
+            text={<>No alerts match these filters. To try it out, send a test alert with <code className="font-mono text-gs-gold">POST /api/alerts/test</code> in <a href="/docs" target="_blank" rel="noreferrer" className="underline hover:text-white">API docs</a>.</>} />
         )}
       </div>
     </div>

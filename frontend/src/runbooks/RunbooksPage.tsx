@@ -1,9 +1,10 @@
 // OSOBA 4 – runbooki: wklej YAML / Markdown / tekst, zobacz kroki na żywo, zapisz, podepnij do reguły.
-import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, BookOpen, Check, Link2, Plus, Save, Trash2, Unlink, X } from 'lucide-react';
+import { useEffect, useId, useMemo, useState } from 'react';
+import { AlertTriangle, BookOpen, Check, ChevronRight, Info, Link2, Plus, Save, Unlink, X } from 'lucide-react';
 import type { Runbook, RunbookStep, StepKind } from '../shared/types';
 import { MatchGroup, RuleRef, RunbookFormat, describeMatches, errorText, runbookApi } from './runbookApi';
 import StepList from './StepList';
+import { EmptyState, PageHeader, Row, ghostButton } from '../shared/ui';
 import EngineTester from './EngineTester';
 import SimulatorPanel from './SimulatorPanel';
 import ActionsPanel from './ActionsPanel';
@@ -70,9 +71,13 @@ const PLACEHOLDER = `Paste a runbook in any format, for example:
 
 No idea where to start? Click one of the example buttons under this box.`;
 
-const inputClass =
-  'w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500';
-const labelClass = 'block text-xs font-semibold text-slate-300 mb-1';
+const inputClass = 'field w-full px-3.5 py-2.5 text-sm';
+const labelClass = 'block text-[13px] font-medium text-ink-muted mb-1.5';
+
+// Short label for the format pill on a runbook card
+const FORMAT_LABEL: Record<string, string> = {
+  yaml: 'YAML', json: 'JSON', html: 'HTML', markdown: 'Markdown', text: 'Free text', link: 'Link',
+};
 
 type Editing = Runbook | 'new' | null;
 
@@ -83,6 +88,26 @@ export default function RunbooksPage() {
   const [editing, setEditing] = useState<Editing>(null);
   const [notice, setNotice] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);  // id runbooka czekającego na "Yes"
+  const [openIds, setOpenIds] = useState<Set<number>>(new Set());
+  const allOpen = runbooks.length > 0 && runbooks.every((r) => openIds.has(r.id));
+
+  function toggleOpen(id: number) {
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function duplicateRunbook(rb: Runbook) {
+    const copy: Runbook = {
+      ...rb,
+      id: 0,
+      name: `${rb.name}-copy`,
+    };
+    setEditing(copy);
+  }
 
   // krótki komunikat po akcji (np. "Saved"), znika sam po 4 s
   useEffect(() => {
@@ -138,29 +163,31 @@ export default function RunbooksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Runbooks</h1>
-          <p className="text-sm text-slate-400">
-            Paste a runbook in any format. Steps are extracted automatically and attached to alerts.
-          </p>
-        </div>
-        {editing === null && (
-          <button onClick={() => setEditing('new')}
-            className="flex items-center space-x-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm">
-            <Plus className="w-4 h-4" /><span>New runbook</span>
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title="Runbooks"
+        description="Paste a runbook in any format. Steps are pulled out automatically and shown on every alert it is attached to."
+        actions={<>
+          {runbooks.length > 0 && (
+            <button onClick={() => setOpenIds(allOpen ? new Set() : new Set(runbooks.map((r) => r.id)))} className={ghostButton}>
+              {allOpen ? 'Collapse all' : 'Expand all'}
+            </button>
+          )}
+          {editing === null && (
+            <button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]">
+              <Plus className="w-4 h-4" />New runbook
+            </button>
+          )}
+        </>}
+      />
 
       {loadError && (
-        <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+        <p role="alert" className="text-sm text-signal-critical bg-signal-critical/10 rounded-xl px-4 py-2.5">
           Could not load runbooks: {loadError}
         </p>
       )}
 
       {notice && (
-        <p role="status" className="flex items-center gap-2 text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/40 rounded-lg px-3 py-2">
+        <p role="status" className="flex items-center gap-2 text-sm text-signal-clear bg-signal-clear/10 rounded-xl px-4 py-2.5">
           <Check className="w-4 h-4 shrink-0" />{notice}
         </p>
       )}
@@ -176,57 +203,26 @@ export default function RunbooksPage() {
         />
       )}
 
-      <div className="space-y-3">
-        {runbooks.map((rb) => {
-          const attached = rules.filter((r) => r.runbook_id === rb.id);
-          const active = editing !== null && editing !== 'new' && editing.id === rb.id;
-          return (
-            <div key={rb.id} onClick={() => setEditing(rb)}
-              className={`bg-slate-900 border rounded-xl p-5 flex gap-4 cursor-pointer hover:border-slate-600 ${
-                active ? 'border-amber-500/60' : 'border-slate-800'}`}>
-              <BookOpen className="w-5 h-5 text-slate-400 mt-0.5 shrink-0" />
-              <div className="flex-1 space-y-2 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-white">{rb.name}</h3>
-                  <span className="text-xs uppercase text-slate-500">{rb.format}</span>
-                  <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">{rb.steps.length} steps</span>
-                </div>
-                <p className="text-sm text-slate-400 truncate">{rb.steps.map((s) => s.text).join(' → ')}</p>
-                <div className="flex gap-2 flex-wrap">
-                  {(rb as Runbook & { matches?: MatchGroup | null }).matches && (
-                    <span className="text-xs bg-sky-500/10 border border-sky-500/30 text-sky-300 px-2 py-0.5 rounded font-mono">
-                      for events: {describeMatches((rb as Runbook & { matches?: MatchGroup | null }).matches)}
-                    </span>
-                  )}
-                  {attached.length === 0
-                    ? <span className="text-xs text-slate-500">Not attached to any rule</span>
-                    : attached.map((r) => (
-                      <span key={r.id} className="inline-flex items-center gap-1 text-xs bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded">
-                        <Link2 className="w-3 h-3" />{r.name}
-                      </span>
-                    ))}
-                </div>
-              </div>
-              {confirmDelete === rb.id ? (
-                <div onClick={(e) => e.stopPropagation()} className="self-start flex items-center gap-2 text-xs cursor-default">
-                  <span className="text-slate-300">
-                    Delete?{attached.length > 0 && ` ${attached.length} rule${attached.length > 1 ? 's' : ''} will be detached.`}
-                  </span>
-                  <button onClick={() => handleDelete(rb)}
-                    className="px-2 py-1 rounded bg-red-500/20 border border-red-500/50 text-red-300 hover:bg-red-500/30">Yes, delete</button>
-                  <button onClick={() => setConfirmDelete(null)} className="px-2 py-1 rounded text-slate-400 hover:text-white">No</button>
-                </div>
-              ) : (
-                <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(rb.id); }}
-                  className="text-slate-400 hover:text-red-400 self-start" title="Delete">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          );
-        })}
+      <div className="grid gap-5 lg:grid-cols-2 items-start">
+        {runbooks.map((rb) => (
+          <RunbookCard
+            key={rb.id}
+            runbook={rb}
+            attached={rules.filter((r) => r.runbook_id === rb.id)}
+            editing={editing !== null && editing !== 'new' && editing.id === rb.id}
+            open={openIds.has(rb.id)}
+            onToggleOpen={() => toggleOpen(rb.id)}
+            onEdit={() => setEditing(rb)}
+            onDuplicate={() => duplicateRunbook(rb)}
+            confirming={confirmDelete === rb.id}
+            onAskDelete={() => setConfirmDelete(rb.id)}
+            onCancelDelete={() => setConfirmDelete(null)}
+            onDelete={() => handleDelete(rb)}
+          />
+        ))}
         {runbooks.length === 0 && !loadError && (
-          <p className="text-center text-slate-500 py-8">No runbooks yet. Create the first one!</p>
+          <div className="lg:col-span-2"><EmptyState icon={BookOpen} title="No runbooks yet"
+            text="Add one so responders see clear next steps on every alert." /></div>
         )}
       </div>
 
@@ -236,6 +232,76 @@ export default function RunbooksPage() {
 
       <EngineTester />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------- karta
+
+interface CardProps {
+  runbook: Runbook;
+  attached: RuleRef[];
+  editing: boolean;
+  open: boolean;
+  onToggleOpen: () => void;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  confirming: boolean;        // waiting for "Yes, delete"
+  onAskDelete: () => void;
+  onCancelDelete: () => void;
+  onDelete: () => void;
+}
+
+function RunbookCard({ runbook: rb, attached, editing, open, onToggleOpen, onEdit, onDuplicate, confirming, onAskDelete, onCancelDelete, onDelete }: CardProps) {
+  const stepsId = useId();
+  const approvals = rb.steps.filter((s) => s.approval === 'required').length;
+  const matches = (rb as Runbook & { matches?: MatchGroup | null }).matches;
+
+  return (
+    <article className={`ios-group ${editing ? 'ring-2 ring-ios-blue' : ''}`}>
+      <div className="ios-row py-3.5">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-[17px] font-semibold text-white leading-snug">{rb.name}</h3>
+          <p className="text-[13px] text-ink-muted">{FORMAT_LABEL[rb.format] ?? rb.format}</p>
+        </div>
+      </div>
+      <Row label="Steps" value={<span className="tabular-nums">{rb.steps.length}</span>} />
+      <Row label="Need approval" value={<span className={approvals > 0 ? 'text-ios-orange tabular-nums' : 'tabular-nums'}>{approvals}</span>} />
+      <Row label="Used by" value={attached.length ? attached.map((r) => r.name).join(', ') : 'No rule yet'} />
+      {matches && <Row label="Applies to" value={<code className="font-mono text-[13px]">{describeMatches(matches)}</code>} />}
+
+      <button type="button" onClick={onToggleOpen} aria-expanded={open} aria-controls={stepsId}
+        className="ios-row ios-row--tap w-full text-left">
+        <span className="flex-1 text-[15px] text-white">{open ? 'Hide steps' : 'Show steps'}</span>
+        <ChevronRight className={`w-4 h-4 text-ink-faint transition-transform duration-300 ${open ? 'rotate-90' : ''}`} aria-hidden="true" />
+      </button>
+      <div id={stepsId} className="disclosure ios-divided" data-open={open}>
+        <div {...(open ? {} : ({ inert: '' } as Record<string, string>))}>
+          <div className="bg-black/25 px-4 py-4">
+            <StepList steps={rb.steps} empty="This runbook has no steps yet." />
+          </div>
+        </div>
+      </div>
+
+      {confirming ? (
+        <div className="ios-row flex-wrap justify-between ios-divided">
+          <span className="text-[15px] text-white">
+            Delete?{attached.length > 0 && ` ${attached.length} rule${attached.length > 1 ? 's' : ''} will be detached.`}
+          </span>
+          <span className="flex items-center gap-4">
+            <button type="button" onClick={onCancelDelete} className="text-[15px] text-ios-blue hover:opacity-70">No</button>
+            <button type="button" onClick={onDelete} className="text-[15px] font-semibold text-ios-red hover:opacity-70">Yes, delete</button>
+          </span>
+        </div>
+      ) : (
+        <div className="ios-row justify-between ios-divided">
+          <div className="flex items-center gap-4">
+            <button type="button" onClick={onEdit} className="text-[15px] text-ios-blue hover:opacity-70">Edit runbook</button>
+            <button type="button" onClick={onDuplicate} className="text-[15px] text-amber-400 hover:opacity-70">Duplicate</button>
+          </div>
+          <button type="button" onClick={onAskDelete} className="text-[15px] text-ios-red hover:opacity-70">Delete</button>
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -301,7 +367,7 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
     setSaving(true);
     setSaveError('');
     try {
-      if (initial) {
+      if (initial && initial.id > 0) {
         onSaved(await runbookApi.update(initial.id, name.trim(), raw, format, kinds()), false);
         return;
       }
@@ -345,15 +411,20 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
   }
 
   return (
-    <section className="bg-slate-900 border border-amber-500/30 rounded-xl p-5 space-y-4">
+    <section className="glass-card glass-card--static ring-1 ring-gs-gold/30 p-6 space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="font-bold text-white">{initial ? `Edit runbook #${initial.id}` : 'New runbook'}</h2>
-        <button onClick={onClose} className="text-slate-400 hover:text-white" title="Close"><X className="w-4 h-4" /></button>
+        <h2 className="text-lg font-semibold text-ink">
+          {initial && initial.id > 0 ? `Edit ${initial.name}` : initial ? `Duplicate "${name}"` : 'New runbook'}
+        </h2>
+        <button onClick={onClose} title="Close editor" aria-label="Close editor"
+          className="w-9 h-9 rounded-full flex items-center justify-center text-ink-muted hover:text-ink hover:bg-white/5">
+          <X className="w-4 h-4" />
+        </button>
       </div>
 
       <div className="grid sm:grid-cols-3 gap-3">
         <div className="sm:col-span-2">
-          <label className={labelClass}>Name *</label>
+          <label className={labelClass}>Name</label>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. settlement-timeout" className={inputClass} />
         </div>
         <div>
@@ -368,56 +439,59 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
         <div>
           <label className={labelClass}>Runbook content</label>
           <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={14} spellCheck={false} placeholder={PLACEHOLDER}
-            className={`${inputClass} font-mono text-xs`} />
+            className={`${inputClass} font-mono !text-[13px] leading-relaxed`} />
           {!raw.trim() && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-slate-400">Start from an example:</span>
+              <span className="text-xs text-ink-muted">Start from an example:</span>
               {EXAMPLES.map((ex) => (
                 <button key={ex.label} type="button" title={ex.hint} onClick={() => { setFormat('auto'); setRaw(ex.raw); }}
-                  className="text-xs px-2.5 py-1 rounded-full border border-slate-700 text-slate-300 hover:border-amber-500 hover:text-amber-300">
+                  className="text-xs px-2.5 py-1 rounded-full bg-ios-fill text-ios-blue hover:bg-white/[0.16] transition-colors">
                   {ex.label}
                 </button>
               ))}
             </div>
           )}
-          <p className="text-xs text-slate-500 mt-1">
-            Use <code className="text-slate-300">{'{{field}}'}</code> to insert values from the event, e.g.{' '}
-            <code className="text-slate-300">{'{{workflowId}}'}</code>.
+          <p className="text-xs text-ink-muted mt-1.5">
+            Use <code className="font-mono text-ink">{'{{field}}'}</code> to insert values from the event, e.g.{' '}
+            <code className="font-mono text-ink">{'{{workflowId}}'}</code>.
           </p>
         </div>
         <div>
           <label className={labelClass}>
-            Extracted steps {format === 'auto' && detected && !parseError && <span className="text-slate-500 font-normal">(detected: {detected})</span>}
+            Steps preview {format === 'auto' && detected && !parseError && <span className="font-normal">, read as {FORMAT_LABEL[detected] ?? detected}</span>}
           </label>
-          {parseError
-            ? <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 whitespace-pre-wrap">{parseError}</p>
-            : <StepList steps={steps} empty="Start typing to see steps."
-                onKindChange={(i, kind) => setKindByText((k) => ({ ...k, [preview[i].text]: kind }))} />}
+          <div className="surface-well p-4 min-h-[200px]">
+            {parseError
+              ? <p className="text-sm text-ios-red whitespace-pre-wrap">{parseError}</p>
+              : <StepList steps={steps} empty="Start typing to see the steps."
+                  onKindChange={(i, kind) => setKindByText((k) => ({ ...k, [preview[i].text]: kind }))} />}
+          </div>
           {!parseError && steps.length > 0 && (
-            <p className="text-xs text-slate-500 mt-2">
-              <span className="text-emerald-300">auto</span>: the app does it ·{' '}
-              <span className="text-amber-300">needs approval</span>: the app does it after a team lead approves ·{' '}
-              <span className="text-slate-300">manual</span>: a person does it. Change it with the label on each step.
+            <p className="text-xs text-ink-muted mt-2 leading-relaxed">
+              <span className="text-ios-green">Auto</span>: the app does it.{' '}
+              <span className="text-ios-orange">Needs approval</span>: the app does it after a team lead approves.{' '}
+              <span className="text-ink">Manual</span>: a person does it. Change it with the label on each step.
             </p>
           )}
           {!parseError && warnings.length > 0 && (
-            <div role="status" className="mt-3 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/40 rounded-lg px-3 py-2 space-y-1">
+            <div role="status" className="mt-3 text-xs text-signal-warning bg-signal-warning/10 rounded-xl px-3.5 py-2.5 space-y-1">
               {warnings.map((w) => (
                 <p key={w} className="flex gap-2"><AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span>{w}</span></p>
               ))}
             </div>
           )}
           {!parseError && matches && (
-            <p className="mt-3 text-xs text-sky-300 bg-sky-500/10 border border-sky-500/30 rounded-lg px-3 py-2">
-              This runbook says which events it is for: <span className="font-mono">{describeMatches(matches)}</span>.
-              Rules without their own runbook will use it for these events automatically.
+            <p className="mt-3 flex gap-2 text-xs text-signal-info bg-signal-info/10 rounded-xl px-3.5 py-2.5">
+              <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>This runbook says which events it is for: <span className="font-mono">{describeMatches(matches)}</span>.
+              Rules without their own runbook will use it for these events automatically.</span>
             </p>
           )}
         </div>
       </div>
 
       {!initial && (
-        <div className="border-t border-slate-800 pt-4 space-y-1">
+        <div className="border-t border-white/[0.06] pt-5 space-y-1">
           <label htmlFor="new-runbook-rule" className={labelClass}>Attach to rule (optional)</label>
           <select id="new-runbook-rule" value={ruleToAttach} onChange={(e) => setRuleToAttach(e.target.value)}
             className={`${inputClass} sm:max-w-md`}>
@@ -426,19 +500,19 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
               <option key={r.id} value={r.id}>{r.name} ({r.team}){r.runbook_id ? ' – replaces its runbook' : ''}</option>
             ))}
           </select>
-          <p className="text-xs text-slate-500">Alerts from this rule will show these steps. You can change it later.</p>
+          <p className="text-xs text-ink-muted">Alerts from this rule will show these steps. You can change it later.</p>
         </div>
       )}
 
       {initial && (
-        <div className="border-t border-slate-800 pt-4 space-y-2">
+        <div className="border-t border-white/[0.06] pt-5 space-y-2.5">
           <label className={labelClass}>Attached to rules</label>
           <div className="flex flex-wrap gap-2">
-            {attached.length === 0 && <span className="text-xs text-slate-500">None yet.</span>}
+            {attached.length === 0 && <span className="text-sm text-ink-muted">None yet.</span>}
             {attached.map((r) => (
-              <span key={r.id} className="inline-flex items-center gap-1 text-xs bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded">
+              <span key={r.id} className="inline-flex items-center gap-1.5 text-xs font-medium bg-white/5 text-ink pl-2.5 pr-1.5 py-1 rounded-full">
                 {r.name}
-                <button onClick={() => detach(r.id)} className="text-slate-500 hover:text-red-400" title="Detach">
+                <button onClick={() => detach(r.id)} className="text-ink-muted hover:text-signal-critical" title="Detach" aria-label={`Detach from ${r.name}`}>
                   <Unlink className="w-3 h-3" />
                 </button>
               </span>
@@ -452,20 +526,20 @@ function RunbookEditor({ initial, rules, onSaved, onRulesChanged, onClose }: Edi
               ))}
             </select>
             <button onClick={attach} disabled={!ruleToAttach}
-              className="flex items-center gap-1 border border-slate-600 hover:border-amber-500 disabled:opacity-40 text-slate-200 px-3 py-2 rounded-lg text-sm">
+              className="flex items-center gap-1.5 bg-white/[0.07] hover:bg-white/10 disabled:opacity-40 text-ink font-medium px-4 rounded-full text-sm">
               <Link2 className="w-4 h-4" />Attach
             </button>
           </div>
         </div>
       )}
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 pt-1">
         <button onClick={save} disabled={saving || !!parseError}
-          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm">
+          className="btn-primary flex items-center gap-2 px-5 h-10 text-sm disabled:opacity-50">
           <Save className="w-4 h-4" />{saving ? 'Saving…' : 'Save runbook'}
         </button>
-        <button onClick={onClose} className="text-sm text-slate-400 hover:text-white">Cancel</button>
-        {saveError && <span className="text-xs text-red-400">{saveError}</span>}
+        <button onClick={onClose} className="text-sm font-medium text-ink-muted hover:text-ink px-3 h-10 rounded-full hover:bg-white/5">Cancel</button>
+        {saveError && <span role="alert" className="text-sm text-signal-critical">{saveError}</span>}
       </div>
     </section>
   );

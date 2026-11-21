@@ -1,11 +1,12 @@
 // People page.
 import { useEffect, useMemo, useState } from 'react';
-import { Clock, Mail, Pencil, Phone, Plus, RefreshCw, Trash2, UserRound } from 'lucide-react';
+import { ChevronRight, Plus, RefreshCw, Users } from 'lucide-react';
+import { ChannelList, EmptyState, Notice, PageHeader, Row, SEVERITY_DOT, Section, Segmented, type SeverityLevel, Toggle, cn, iconButton } from '../shared/ui';
 import type { Person } from '../shared/types';
 import type { User } from '../types';
 import { errorMessage } from '../rules/rulesApi';
 import { PersonInput, peopleApi } from './peopleApi';
-import { SEVERITY_LABEL, SEVERITY_ORDER, SEVERITY_STYLE, channelLabel, describeQuietHours } from './describePerson';
+import { SEVERITY_LABEL, SEVERITY_ORDER, describeQuietHours } from './describePerson';
 import PersonForm from './PersonForm';
 
 function toInput(p: Person): PersonInput {
@@ -23,6 +24,7 @@ export default function PeoplePage({ currentUser }: { currentUser?: User | null 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [openId, setOpenId] = useState<number | null>(null);
   const [teamFilter, setTeamFilter] = useState<string>('all');
   // null = form closed, 'new' = new person, Person = editing that person
   const [editing, setEditing] = useState<Person | 'new' | null>(null);
@@ -107,33 +109,23 @@ export default function PeoplePage({ currentUser }: { currentUser?: User | null 
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-white">People</h1>
-          <p className="text-sm text-slate-400">
-            Team members, on-call assignments, and notification preferences.
-            {!isAdmin && ' You can edit your own profile.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={load} title="Reload" className="text-slate-400 hover:text-white p-2">
+      <PageHeader
+        title="People"
+        description={<>Team members, who is on call, and how each person wants to be reached.{!isAdmin && ' You can edit your own profile.'}</>}
+        actions={<>
+          <button onClick={load} title="Reload people" aria-label="Reload people" className={iconButton}>
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           {isAdmin && editing === null && (
-            <button onClick={() => setEditing('new')}
-              className="flex items-center space-x-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm">
-              <Plus className="w-4 h-4" /><span>Add person</span>
+            <button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]">
+              <Plus className="w-4 h-4" />Add person
             </button>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
-      {error && (
-        <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</p>
-      )}
-      {notice && (
-        <p className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">{notice}</p>
-      )}
+      {error && <Notice tone="error">{error}</Notice>}
+      {notice && <Notice tone="success">{notice}</Notice>}
 
       {editing !== null && (
         <PersonForm
@@ -147,114 +139,112 @@ export default function PeoplePage({ currentUser }: { currentUser?: User | null 
       )}
 
       {teams.length > 1 && (
-        <div className="flex gap-2 flex-wrap">
-          {['all', ...teams].map((t) => (
-            <button key={t} onClick={() => setTeamFilter(t)}
-              className={`px-3 py-1 rounded-lg text-sm border ${
-                teamFilter === t ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'border-slate-700 text-slate-400 hover:border-slate-500'
-              }`}>
-              {t === 'all' ? `All teams (${people.length})` : `${t} (${people.filter((p) => p.team === t).length})`}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Filter by team"
+          value={teamFilter}
+          onChange={setTeamFilter}
+          options={[{ value: 'all', label: 'All teams' }, ...teams.map((t) => ({ value: t, label: t }))]}
+        />
       )}
 
-      {grouped.map(([team, members]) => (
-        <section key={team} className="space-y-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold uppercase tracking-wide text-slate-400">{team}</h2>
-            {!members.some((m) => m.on_call) && (
-              <span className="text-xs text-amber-300/80" title="Phone-call alerts go only to the on-call person">
-                · nobody on call – phone alerts fall back to SMS
-              </span>
-            )}
-            {!members.some((m) => m.role === 'lead') && (
-              <span className="text-xs text-amber-300/80" title="Risky runbook steps need approval from the team lead">
-                · no team lead – risky steps can't be approved
-              </span>
-            )}
-          </div>
-
-          {members.map((person) => {
-            const quiet = describeQuietHours(person);
-            return (
-              <div key={person.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex gap-4">
-                <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center shrink-0">
-                  <UserRound className="w-5 h-5 text-slate-400" />
-                </div>
-
-                <div className="flex-1 space-y-3 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-white">
-                      {person.name}{isMe(person) && <span className="text-amber-400 font-normal"> (you)</span>}
-                    </h3>
-                    {person.role === 'lead' && (
-                      <span className="text-xs font-bold text-violet-300 bg-violet-500/10 border border-violet-500/40 px-2 py-0.5 rounded"
-                        title="Approves risky runbook steps for this team">
-                        LEAD
-                      </span>
-                    )}
-                    {person.on_call && (
-                      <span className="text-xs font-bold text-emerald-300 bg-emerald-500/10 border border-emerald-500/40 px-2 py-0.5 rounded">
-                        ON CALL
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex gap-4 flex-wrap text-sm text-slate-400">
-                    <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{person.email ?? '—'}</span>
-                    <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{person.phone ?? '—'}</span>
-                  </div>
-
-                  <div className="flex gap-2 flex-wrap">
-                    {SEVERITY_ORDER.map((sev) => {
-                      const chans = person.channel_prefs?.[sev] ?? [];
-                      return (
-                        <span key={sev} className={`text-xs border px-2 py-1 rounded ${SEVERITY_STYLE[sev]}`}>
-                          <b>{SEVERITY_LABEL[sev]}</b> → {chans.length ? chans.map(channelLabel).join(' + ') : 'rule channels'}
-                        </span>
-                      );
-                    })}
-                  </div>
-
-                  {quiet.length > 0 && (
-                    <div className="text-xs text-slate-400 space-y-0.5">
-                      {quiet.map((q) => (
-                        <p key={q} className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{q}</p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {canEdit(person) && (
-                <div className="flex items-start gap-3">
-                  <button onClick={() => toggleOnCall(person)}
-                    title="Phone-call alerts go only to the on-call person"
-                    aria-label={`${person.name}: ${person.on_call ? 'on call, click to take off call' : 'off call, click to put on call'}`}
-                    className={`text-xs px-2 py-1 rounded border whitespace-nowrap ${
-                      person.on_call ? 'border-emerald-500/50 text-emerald-400' : 'border-slate-600 text-slate-400'
-                    }`}>
-                    {person.on_call ? 'On call' : 'Off call'}
-                  </button>
-                  <button onClick={() => setEditing(person)} className="text-slate-400 hover:text-white" title="Edit">
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  {isAdmin && (
-                    <button onClick={() => deletePerson(person)} className="text-slate-400 hover:text-red-400" title="Remove">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-                )}
-              </div>
-            );
-          })}
-        </section>
-      ))}
+      <div className="space-y-7">
+        {grouped.map(([team, members]) => {
+          const warnings = [
+            !members.some((m) => m.on_call) && 'Nobody is on call, so phone alerts fall back to SMS.',
+            !members.some((m) => m.role === 'lead') && "No team lead, so risky runbook steps can't be approved.",
+          ].filter(Boolean) as string[];
+          return (
+            <Section key={team} title={`${team}, ${members.length} ${members.length === 1 ? 'person' : 'people'}`}
+              footer={warnings.length > 0 && <span className="text-ios-orange">{warnings.join(' ')}</span>}>
+              {members.map((person) => (
+                <PersonRow key={person.id} person={person} open={openId === person.id}
+                  me={isMe(person)} canEdit={canEdit(person)} canDelete={isAdmin}
+                  onToggleOpen={() => setOpenId(openId === person.id ? null : person.id)}
+                  onToggleOnCall={() => toggleOnCall(person)}
+                  onEdit={() => setEditing(person)}
+                  onDelete={() => deletePerson(person)} />
+              ))}
+            </Section>
+          );
+        })}
+      </div>
 
       {!loading && people.length === 0 && !error && (
-        <p className="text-center text-slate-500 py-8">No people yet. People appear here when they register with an invite code.</p>
+        <EmptyState icon={Users} title="No people yet" text="People appear here when they register with an invite code." />
       )}
     </div>
   );
+}
+
+// What happens when a person has not chosen channels (matches DEFAULT_CHANNELS in people_service.py)
+const DEFAULT_LABEL: Record<string, string> = {
+  critical: 'Default: phone and SMS',
+  warning: 'Default: email',
+  info: 'App only',
+};
+
+function PersonRow({ person, open, me, canEdit, canDelete, onToggleOpen, onToggleOnCall, onEdit, onDelete }: {
+  person: Person; open: boolean; me: boolean; canEdit: boolean; canDelete: boolean;
+  onToggleOpen: () => void; onToggleOnCall: () => void; onEdit: () => void; onDelete: () => void;
+}) {
+  const quiet = describeQuietHours(person);
+  return (
+    <div className="ios-divided">
+      <div className="ios-row">
+        <button type="button" onClick={onToggleOpen} aria-expanded={open}
+          className="flex-1 min-w-0 flex items-center gap-3 text-left">
+          <span className="w-10 h-10 rounded-full bg-gradient-to-b from-[#8e8e93] to-[#636366] flex items-center justify-center shrink-0 text-[15px] font-semibold text-white"
+            aria-hidden="true">
+            {initials(person.name)}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[15px] font-semibold text-white truncate">
+              {person.name}{me && <span className="font-normal text-ink-muted"> (you)</span>}
+            </span>
+            <span className="block text-[13px] text-ink-muted truncate">
+              {person.role === 'lead' ? 'Lead' : 'Member'}{person.on_call && <span className="text-ios-green">, on call</span>}
+            </span>
+          </span>
+        </button>
+        {canEdit && (
+          <Toggle checked={!!person.on_call} onChange={onToggleOnCall}
+            label={`${person.name}: ${person.on_call ? 'on call, turn off' : 'off call, turn on'}`} />
+        )}
+        <button type="button" onClick={onToggleOpen} aria-label={open ? 'Hide details' : 'Show details'} className="p-1 -mr-1">
+          <ChevronRight className={cn('w-4 h-4 text-ink-faint transition-transform duration-300', open && 'rotate-90')} />
+        </button>
+      </div>
+
+      <div className="disclosure" data-open={open}>
+        <div {...(open ? {} : ({ inert: '' } as Record<string, string>))}>
+          <div className="bg-black/25 ios-divided" style={{ paddingLeft: 52 }}>
+            <Row label="Email" value={person.email ?? 'Not set'} />
+            <Row label="Phone" value={person.phone ?? 'Not set'} />
+            {SEVERITY_ORDER.map((sev) => {
+              const chans = (person.channel_prefs?.[sev] ?? []).filter((c) => c !== 'ui');
+              return (
+                <Row key={sev}
+                  label={<span className="inline-flex items-center gap-2">
+                    <span className={cn('w-2 h-2 rounded-full', SEVERITY_DOT[sev as SeverityLevel] ?? 'bg-ink-faint')} />
+                    {SEVERITY_LABEL[sev]} alerts
+                  </span>}
+                  value={chans.length ? <ChannelList channels={chans} /> : <span>{DEFAULT_LABEL[sev] ?? 'Default'}</span>} />
+              );
+            })}
+            <Row label="Quiet hours" value={quiet.length ? quiet.join(' ') : 'None'} />
+            {(canEdit || canDelete) && (
+              <div className="ios-row justify-between">
+                {canEdit ? <button type="button" onClick={onEdit} className="text-[15px] text-ios-blue hover:opacity-70">Edit</button> : <span />}
+                {canDelete && <button type="button" onClick={onDelete} className="text-[15px] text-ios-red hover:opacity-70">Remove</button>}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function initials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
 }

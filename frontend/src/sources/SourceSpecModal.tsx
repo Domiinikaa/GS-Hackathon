@@ -81,7 +81,7 @@ export default function SourceSpecModal({
   onClose,
   onSaved,
 }: SourceSpecModalProps) {
-  const isEditing = Boolean(existing);
+  const isEditing = Boolean(existing && existing.id > 0);
 
   const [editorMode, setEditorMode] = useState<'form' | 'raw'>(
     initialRawMode && !isEditing ? 'raw' : 'form'
@@ -345,23 +345,23 @@ config:
       return (
         <div
           key={field.name}
-          className="flex items-start justify-between gap-4 p-3 rounded-xl bg-slate-950/70 border border-slate-800"
+          className="surface-well flex items-start justify-between gap-4 p-3"
         >
           <div>
             <div className="text-xs font-semibold text-slate-200">{field.label}</div>
             {field.description && (
-              <div className="text-[11px] text-slate-400 mt-0.5">{field.description}</div>
+              <div className="text-[11px] text-ink-muted mt-0.5">{field.description}</div>
             )}
           </div>
           <button
             type="button"
             onClick={() => setConfig((prev) => ({ ...prev, [field.name]: !checked }))}
             className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${
-              checked ? 'bg-amber-500' : 'bg-slate-700'
+              checked ? 'bg-amber-500' : 'bg-white/10'
             }`}
           >
             <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-slate-950 transition-transform mt-0.5 ${
+              className={`surface-well inline-block h-4 w-4 transform rounded-full transition-transform mt-0.5 ${
                 checked ? 'translate-x-4' : 'translate-x-0.5'
               }`}
             />
@@ -379,7 +379,7 @@ config:
           <select
             value={String(val ?? field.default ?? '')}
             onChange={(e) => setConfig((prev) => ({ ...prev, [field.name]: e.target.value }))}
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+            className="field w-full px-3 py-2 text-sm"
           >
             {field.options.map((opt) => (
               <option key={opt} value={opt}>
@@ -410,7 +410,7 @@ config:
             onChange={(e) =>
               setJsonTextMap((prev) => ({ ...prev, [field.name]: e.target.value }))
             }
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-500"
+            className="field w-full p-2.5 text-xs font-mono"
           />
           {field.description && (
             <p className="text-[11px] text-slate-500 mt-1">{field.description}</p>
@@ -434,14 +434,14 @@ config:
               onChange={(e) =>
                 setConfig((prev) => ({ ...prev, [field.name]: e.target.value }))
               }
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 pr-9 text-sm text-white focus:outline-none focus:border-amber-500"
+              className="field w-full px-3 py-2 pr-9 text-sm"
             />
             <button
               type="button"
               onClick={() =>
                 setShowSecrets((prev) => ({ ...prev, [field.name]: !visible }))
               }
-              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
+              className="absolute right-2.5 top-2.5 text-ink-muted hover:text-white"
             >
               {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -469,7 +469,7 @@ config:
                 [field.name]: e.target.value === '' ? '' : Number(e.target.value),
               }))
             }
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+            className="field w-full px-3 py-2 text-sm"
           />
           {field.description && (
             <p className="text-[11px] text-slate-500 mt-1">{field.description}</p>
@@ -488,7 +488,7 @@ config:
           value={String(val ?? '')}
           placeholder={field.placeholder}
           onChange={(e) => setConfig((prev) => ({ ...prev, [field.name]: e.target.value }))}
-          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+          className="field w-full px-3 py-2 text-sm"
         />
         {field.description && (
           <p className="text-[11px] text-slate-500 mt-1">{field.description}</p>
@@ -505,29 +505,29 @@ config:
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="glass-scrim fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="glass-card glass-card--static w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 shrink-0">
+        <div className="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between gap-4 shrink-0">
           <div>
-            <h2 className="text-lg font-bold text-white">
+            <h2 className="text-lg font-semibold text-white">
               {isEditing ? `Edit Source — ${existing?.name}` : 'Configure Universal Log / Event Source'}
             </h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-ink-muted">
               Define any connector specification (Webhook, REST API, SSE, Log File, Kafka, RabbitMQ, or Custom) with zero code changes.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             {!isEditing && (
-              <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
+              <div className="surface-well flex items-center p-1">
                 <button
                   type="button"
                   onClick={() => setEditorMode('form')}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition ${
                     editorMode === 'form'
-                      ? 'bg-amber-500 text-slate-950 font-semibold'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'btn-primary'
+                      : 'text-ink-muted hover:text-white'
                   }`}
                 >
                   <Sliders className="w-3.5 h-3.5" />
@@ -538,8 +538,8 @@ config:
                   onClick={() => setEditorMode('raw')}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition ${
                     editorMode === 'raw'
-                      ? 'bg-amber-500 text-slate-950 font-semibold'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'btn-primary'
+                      : 'text-ink-muted hover:text-white'
                   }`}
                 >
                   <Code2 className="w-3.5 h-3.5" />
@@ -551,7 +551,7 @@ config:
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              className="p-1.5 rounded-lg text-ink-muted hover:text-white hover:bg-white/[0.08] transition"
             >
               <X className="w-5 h-5" />
             </button>
@@ -566,7 +566,7 @@ config:
                 <label className="text-xs font-semibold uppercase tracking-wider text-amber-400">
                   Config-as-Code Specification (YAML or JSON)
                 </label>
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[11px] text-ink-muted">
                   Paste any valid YAML or JSON source spec to create it immediately.
                 </span>
               </div>
@@ -574,14 +574,14 @@ config:
                 rows={18}
                 value={rawSpecText}
                 onChange={(e) => setRawSpecText(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-xs font-mono text-emerald-300 focus:outline-none focus:border-amber-500"
+                className="field w-full p-4 text-xs font-mono text-emerald-300"
               />
             </div>
           ) : (
             <>
               {/* 1. Source Type Selector */}
               <section className="space-y-2.5">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
                   Source Connector Type
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
@@ -595,7 +595,7 @@ config:
                         className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-1 ${
                           selected
                             ? 'bg-amber-500/15 border-amber-500 text-white shadow'
-                            : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-600 hover:text-slate-200'
+                            : 'surface-well text-ink-muted hover:border-white/20 hover:text-slate-200'
                         }`}
                       >
                         <div className="flex items-center justify-between">
@@ -603,7 +603,7 @@ config:
                             icon={t.icon}
                             className={`w-4 h-4 ${selected ? 'text-amber-400' : 'text-slate-500'}`}
                           />
-                          <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                          <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-300">
                             {t.mode}
                           </span>
                         </div>
@@ -615,12 +615,12 @@ config:
                   })}
                 </div>
                 {activeSpec && (
-                  <p className="text-xs text-slate-400">{activeSpec.description}</p>
+                  <p className="text-xs text-ink-muted">{activeSpec.description}</p>
                 )}
               </section>
 
               {/* 2. Basic Metadata */}
-              <section className="pt-2 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <section className="pt-2 border-t border-white/[0.08] grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">
                     Source Name *
@@ -630,7 +630,7 @@ config:
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. trade-gateway or payments-kafka"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+                    className="field w-full px-3 py-2 text-sm"
                   />
                 </div>
                 <div>
@@ -640,7 +640,7 @@ config:
                   <select
                     value={team}
                     onChange={(e) => setTeam(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+                    className="field w-full px-3 py-2 text-sm"
                   >
                     {team && team !== 'All' && !teams.includes(team) && (
                       <option value={team}>{team}</option>
@@ -655,8 +655,8 @@ config:
 
               {/* 3. Dynamic Connection Spec */}
               {connectionFields.length > 0 && (
-                <section className="space-y-3 pt-2 border-t border-slate-800">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <section className="space-y-3 pt-2 border-t border-white/[0.08]">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
                     Connection Specification ({activeSpec?.label})
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -666,8 +666,8 @@ config:
               )}
 
               {/* 3. Parsing, Envelope Unwrapping & Field Aliases (Idea 5) */}
-              <section className="space-y-3 pt-2 border-t border-slate-800">
-                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <section className="space-y-3 pt-2 border-t border-white/[0.08]">
+                <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
                   Schema-Less Parsing, Envelope Unwrapping & Field Aliases
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -687,7 +687,7 @@ config:
                               : prev.regex_pattern,
                         }))
                       }
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+                      className="field w-full px-3 py-2 text-sm"
                     >
                       <option value="auto">Auto-detect (JSON / NDJSON / Key-Value / Regex)</option>
                       <option value="json">Strict JSON (object or array)</option>
@@ -708,7 +708,7 @@ config:
                         setConfig((prev) => ({ ...prev, root_path: e.target.value }))
                       }
                       placeholder="e.g. payload or data.event (leave blank to keep envelope)"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+                      className="field w-full px-3 py-2 text-sm"
                     />
                   </div>
 
@@ -723,7 +723,7 @@ config:
                         onChange={(e) =>
                           setConfig((prev) => ({ ...prev, regex_pattern: e.target.value }))
                         }
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs font-mono text-amber-200 focus:outline-none focus:border-amber-500"
+                        className="field w-full px-3 py-2 text-xs font-mono text-amber-200"
                       />
                     </div>
                   )}
@@ -755,7 +755,7 @@ config:
                             prev.map((r, i) => (i === idx ? { ...r, from: e.target.value } : r))
                           )
                         }
-                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white"
+                        className="surface-well flex-1 px-2.5 py-1.5 text-xs font-mono text-white"
                       />
                       <span className="text-slate-500 text-xs">→</span>
                       <input
@@ -767,7 +767,7 @@ config:
                             prev.map((r, i) => (i === idx ? { ...r, to: e.target.value } : r))
                           )
                         }
-                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white"
+                        className="surface-well flex-1 px-2.5 py-1.5 text-xs font-mono text-white"
                       />
                       <button
                         type="button"
@@ -782,9 +782,9 @@ config:
               </section>
 
               {/* 6. Sample Event & Live Dry-Run Against Rules (Idea 3) */}
-              <section className="space-y-3 pt-2 border-t border-slate-800">
+              <section className="space-y-3 pt-2 border-t border-white/[0.08]">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-ink-muted">
                     Unseen Schema Playground & Live Rule Dry-Run
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -793,7 +793,7 @@ config:
                         key={p.id}
                         type="button"
                         onClick={() => handleApplyPreset(p.id)}
-                        className="text-[11px] px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                        className="text-[11px] px-2 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 transition"
                       >
                         {p.label.replace(' (Appendix A)', '')}
                       </button>
@@ -806,7 +806,7 @@ config:
                   value={sampleText}
                   onChange={(e) => setSampleText(e.target.value)}
                   placeholder='Paste any unseen JSON payload or raw log line here to auto-discover fields and dry-run against active rules...'
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs font-mono text-emerald-300 focus:outline-none focus:border-amber-500"
+                  className="field w-full p-3 text-xs font-mono text-emerald-300"
                 />
 
                 <div className="flex items-center justify-start gap-3">
@@ -814,7 +814,7 @@ config:
                     type="button"
                     disabled={dryRunLoading}
                     onClick={handleDryRun}
-                    className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-semibold text-amber-300 flex items-center gap-1.5 transition"
+                    className="px-3.5 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-xs font-semibold text-amber-300 flex items-center gap-1.5 transition"
                   >
                     <Play className="w-3.5 h-3.5" />
                     {dryRunLoading ? 'Running Dry-Run...' : 'Dry-Run Parse & Match Rules'}
@@ -829,17 +829,17 @@ config:
                 )}
 
                 {dryRunResult && (
-                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-700 space-y-4">
+                  <div className="surface-well p-4 space-y-4">
                     {/* Detected Fields */}
                     <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-2">
                         Detected Schema Fields ({dryRunResult.detected_fields.length})
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {dryRunResult.detected_fields.map((f) => (
                           <span
                             key={f.path}
-                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-900 border border-slate-700 text-[11px] font-mono text-slate-200"
+                            className="glass-pill px-2.5 py-0.5 text-[11px] font-mono text-slate-200"
                           >
                             <span className="text-amber-400">{f.path}</span>
                             <span className="text-slate-500">({f.type})</span>
@@ -850,7 +850,7 @@ config:
 
                     {/* Matched Rules */}
                     <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-2">
                         Active Rules Matched ({dryRunResult.matched_rules.length}) — No Alert Persisted
                       </div>
                       {dryRunResult.matched_rules.length === 0 ? (
@@ -868,11 +868,11 @@ config:
                                 <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
                                   <CheckCircle2 className="w-4 h-4" />
                                   {m.rule_name}
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-slate-300 font-mono">
+                                  <span className="glass-pill text-[10px] px-2 py-0.5 text-slate-300 font-mono">
                                     {m.team}
                                   </span>
                                 </div>
-                                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-slate-900 text-amber-300">
+                                <span className="glass-pill text-[10px] uppercase font-semibold px-2 py-0.5 text-amber-300">
                                   {m.severity} • {m.channels.join(', ')}
                                 </span>
                               </div>
@@ -893,7 +893,7 @@ config:
 
               {/* 5. Simulation Mode Settings (at the very bottom) */}
               {simulationFields.length > 0 && (
-                <section className="space-y-3 pt-2 border-t border-slate-800">
+                <section className="space-y-3 pt-2 border-t border-white/[0.08]">
                   <div className="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5" />
                     Built-in Simulation Settings (Optional — Test Without External Infra)
@@ -908,7 +908,7 @@ config:
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/80 shrink-0 space-y-3">
+        <div className="glass-card glass-card--static px-6 py-4 border-t shrink-0 space-y-3">
           {saveError && (
             <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -921,7 +921,7 @@ config:
                 type="checkbox"
                 checked={enabled}
                 onChange={(e) => setEnabled(e.target.checked)}
-                className="rounded border-slate-600 bg-slate-950 text-amber-500 focus:ring-amber-500"
+                className="surface-well rounded border-white/15 text-amber-500 focus:ring-amber-500"
               />
               Enable source immediately on save
             </label>
@@ -929,7 +929,7 @@ config:
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition"
+            className="px-4 py-2 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-white/[0.08] transition"
           >
             Cancel
           </button>
@@ -937,7 +937,7 @@ config:
             type="button"
             disabled={saving}
             onClick={handleSave}
-            className="px-5 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 disabled:opacity-50 transition"
+            className="btn-primary px-5 py-2 text-sm disabled:opacity-50"
           >
             {saving
               ? 'Saving...'

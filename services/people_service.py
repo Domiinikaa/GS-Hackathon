@@ -12,6 +12,9 @@ from models import Alert, Person, User
 from services.contracts import Recipient
 
 PERSONAL_CHANNELS = ("phone", "sms", "email")
+# Personal channels used when a person has no preference for a severity
+DEFAULT_CHANNELS = {"critical": ("phone", "sms"), "warning": ("email",), "info": ()}
+
 # Where to go when a channel is unavailable (missing address etc.)
 FALLBACK = {"phone": "sms", "sms": "email", "email": None}
 
@@ -85,37 +88,34 @@ def plan_recipients(
     db: Session,
     target: str,
     severity: str,
-    rule_channels: Iterable[str],
+    rule_channels: Iterable[str] | None = None,
     now: datetime | None = None,
 ) -> list[PlannedRecipient]:
-    """Core logic: who, on which channel, and why. Used by the pipeline and by the UI preview."""
+    """Core logic: who, on which channel, and why. Used by the pipeline and by the UI preview.
+
+    The rule only decides WHAT is alerted and to WHICH team. HOW each person is reached comes
+    from their own preferences in People:
+    - the team's live feed in the app (channel "ui") always gets the alert,
+    - personal channels (phone / sms / email) come from the person's channel_prefs for this
+      severity, or DEFAULT_CHANNELS when they have not set any.
+    `rule_channels` is accepted for API compatibility and no longer changes the result.
+    """
     now_t = (now or datetime.now()).time()
-    rule_channels = list(dict.fromkeys(rule_channels or []))
-    out: list[PlannedRecipient] = []
-
-    if "ui" in rule_channels:
-        out.append(PlannedRecipient(
-            Recipient(person_id=None, name=f"team:{target}", channel="ui", to=None),
-            "live feed for the whole team",
-        ))
-
-    personal_rule = [c for c in rule_channels if c in PERSONAL_CHANNELS]
-    if not personal_rule:
-        return out
+    out: list[PlannedRecipient] = [PlannedRecipient(
+        Recipient(person_id=None, name=f"team:{target}", channel="ui", to=None),
+        "live feed for the whole team",
+    )]
 
     seen: set[tuple[int, str]] = set()
     for person in _audience(db, target):
-        prefs = (person.channel_prefs or {}).get(severity)
+        prefs = [c for c in (person.channel_prefs or {}).get(severity, []) if c in PERSONAL_CHANNELS]
         if prefs:
-            matched_any = [c for c in rule_channels if c in prefs]
-            wanted = [c for c in personal_rule if c in prefs]
+            wanted = prefs
             base_reason = f"prefers {', '.join(prefs)} for {severity}"
-            if not matched_any:
-                wanted = personal_rule
-                base_reason += "; using rule channels"
         else:
-            wanted = personal_rule
-            base_reason = f"no preference for {severity}; using rule channels"
+            wanted = list(DEFAULT_CHANNELS.get(severity, ()))
+            base_reason = (f"no preference for {severity}; default {', '.join(wanted)}" if wanted
+                           else f"no preference for {severity}; app feed only")
 
         for channel in wanted:
             final, notes = _resolve_channel(person, channel, now_t)
@@ -244,5 +244,5 @@ def migrate_admins_to_leads(db: Session) -> int:
     return updated
 
 
-def recipients_for(db: Session, alert: Alert, rule_channels: list[str]) -> list[Recipient]:
+def recipients_for(db: Session, alert: Alert, rule_channels: list[str] | None = None) -> list[Recipient]:
     return [p.recipient for p in plan_recipients(db, alert.team, alert.severity, rule_channels)]

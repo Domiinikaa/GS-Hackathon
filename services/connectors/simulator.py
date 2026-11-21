@@ -14,7 +14,7 @@ from typing import Any
 SIMULATOR_PRESETS: dict[str, dict[str, Any]] = {
     "workflow_failure": {
         "id": "workflow_failure",
-        "label": "Workflow Failure (Appendix A)",
+        "label": "Workflow Failure",
         "description": "Settlement workflow timeout in prod — matches 'settlements-prod' rule.",
         "format": "json",
         "sample": {
@@ -33,7 +33,7 @@ SIMULATOR_PRESETS: dict[str, dict[str, Any]] = {
     },
     "metric_breach": {
         "id": "metric_breach",
-        "label": "Metric Threshold Breach (Appendix A)",
+        "label": "Metric Threshold Breach",
         "description": "Prometheus/Alertmanager-style HTTP webhook — matches 'anna-payments-critical' rule.",
         "format": "json",
         "sample": {
@@ -52,7 +52,7 @@ SIMULATOR_PRESETS: dict[str, dict[str, Any]] = {
     },
     "trade_rejected": {
         "id": "trade_rejected",
-        "label": "Business Event — Trade Rejected (Appendix A)",
+        "label": "Business Event — Trade Rejected",
         "description": "Broker envelope with meta/payload — matches 'rates-big-rejections' rule.",
         "format": "json",
         "sample": {
@@ -72,7 +72,7 @@ SIMULATOR_PRESETS: dict[str, dict[str, Any]] = {
     },
     "pricing_log": {
         "id": "pricing_log",
-        "label": "Pricing Engine Log Line (Appendix A)",
+        "label": "Pricing Engine Log Line",
         "description": "Raw plain-text log line for Tailed Log File — matches 'pricing-warnings' rule.",
         "format": "text",
         "sample": (

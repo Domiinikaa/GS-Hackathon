@@ -1,8 +1,9 @@
 // Rules page.
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
-import { CHANNELS, COLOR_DOT, Rule } from './ruleTypes';
-import RuleConditions from './RuleConditions';
+import { Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { EmptyState, Notice, PageHeader, ghostButton } from '../shared/ui';
+import { Rule } from './ruleTypes';
+import RuleCard from './RuleCard';
 import { RunbookSummary, errorMessage, rulesApi } from './rulesApi';
 import RuleForm from './RuleForm';
 
@@ -15,6 +16,17 @@ export default function RulesPage() {
   const [filter, setFilter] = useState('');
   // null = form closed, 'new' = new rule, Rule = editing that rule
   const [editing, setEditing] = useState<Rule | 'new' | null>(null);
+  // ids of rules whose details are expanded
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+
+  function toggleOpen(id: string) {
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   async function load() {
     setLoading(true);
@@ -42,10 +54,19 @@ export default function RulesPage() {
     window.setTimeout(() => setNotice(''), 3000);
   }
 
+  function duplicateRule(rule: Rule) {
+    const copy: Rule = {
+      ...rule,
+      id: '',
+      name: `${rule.name} (Copy)`,
+    };
+    setEditing(copy);
+  }
+
   // Returns an error message to show in the form, or null on success
   async function saveRule(rule: Rule): Promise<string | null> {
     try {
-      const isNew = editing === 'new';
+      const isNew = editing === 'new' || !rule.id;
       const saved = isNew ? await rulesApi.create(rule) : await rulesApi.update(rule);
       setRules((prev) => (isNew ? [...prev, saved] : prev.map((r) => (r.id === saved.id ? saved : r))));
       setEditing(null);
@@ -92,32 +113,30 @@ export default function RulesPage() {
     return rules.filter((r) => `${r.name} ${r.team} ${r.title}`.toLowerCase().includes(q));
   }, [rules, filter]);
 
+  const enabledCount = rules.filter((r) => r.enabled).length;
+  const allOpen = visible.length > 0 && visible.every((r) => openIds.has(r.id));
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Alert rules</h1>
-          <p className="text-sm text-slate-400">Decide which events reach which people, and on which channels.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={load} title="Reload" className="text-slate-400 hover:text-white p-2">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          {editing === null && (
-            <button onClick={() => setEditing('new')}
-              className="flex items-center space-x-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm">
-              <Plus className="w-4 h-4" /><span>New rule</span>
+      <PageHeader
+        title="Alert rules"
+        description={<>Decide which events reach which people, and on which channels.{rules.length > 0 && ` ${enabledCount} of ${rules.length} rules are on.`}</>}
+        actions={<>
+          {visible.length > 0 && (
+            <button onClick={() => setOpenIds(allOpen ? new Set() : new Set(visible.map((r) => r.id)))} className={ghostButton}>
+              {allOpen ? 'Collapse all' : 'Expand all'}
             </button>
           )}
-        </div>
-      </div>
+          {editing === null && (
+            <button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]">
+              <Plus className="w-4 h-4" />New rule
+            </button>
+          )}
+        </>}
+      />
 
-      {error && (
-        <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</p>
-      )}
-      {notice && (
-        <p className="text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">{notice}</p>
-      )}
+      {error && <Notice tone="error">{error}</Notice>}
+      {notice && <Notice tone="success">{notice}</Notice>}
 
       {editing !== null && (
         <RuleForm
@@ -130,69 +149,34 @@ export default function RulesPage() {
 
       {rules.length > 3 && (
         <div className="relative">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-          <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter by name, team or title"
-            className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500" />
+          <Search className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
+          <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter by name, team or headline"
+            aria-label="Filter rules"
+            className="field w-full h-10 pl-10 pr-4 text-[15px]" />
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="grid gap-5 lg:grid-cols-2 items-start">
         {visible.map((rule) => (
-          <div key={rule.id}
-            className={`bg-slate-900 border border-slate-800 rounded-xl p-5 flex gap-4 ${rule.enabled ? '' : 'opacity-50'}`}>
-            <span className={`w-3 h-3 rounded-full mt-1.5 shrink-0 ${COLOR_DOT[rule.color] ?? 'bg-slate-500'}`} />
-            <div className="flex-1 space-y-2 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-bold text-white">{rule.name}</h3>
-                <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">{rule.team}</span>
-                <span className="text-xs uppercase text-slate-500">{rule.severity}</span>
-                {rule.runbook_id && (
-                  <span className="inline-flex items-center gap-1 text-xs bg-sky-500/10 border border-sky-500/30 text-sky-300 px-2 py-0.5 rounded">
-                    <BookOpen className="w-3 h-3" />
-                    {runbookNameById.get(rule.runbook_id) ?? `Runbook #${rule.runbook_id}`}
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-slate-400">
-                Send to <b className="text-slate-200">{rule.team}</b> via{' '}
-                {rule.channels.map((ch) => (
-                  <span key={ch} className="text-xs bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded mr-1">
-                    {CHANNELS.find((c) => c.value === ch)?.label ?? ch}
-                  </span>
-                ))}
-              </p>
-              <RuleConditions condition={rule.condition} />
-              {rule.group_by && rule.group_window_s && (
-                <p className="text-sm text-slate-400">
-                  Combine repeats: one alert per <span className="font-mono text-slate-200">{rule.group_by}</span> every{' '}
-                  {Math.round(rule.group_window_s / 60)} min
-                </p>
-              )}
-              <p className="text-xs text-slate-500">
-                Headline: <span className="font-mono break-all">{rule.title}</span>
-              </p>
-            </div>
-            <div className="flex items-start gap-3">
-              <button onClick={() => toggleEnabled(rule)}
-                className={`text-xs px-2 py-1 rounded border ${
-                  rule.enabled ? 'border-emerald-500/50 text-emerald-400' : 'border-slate-600 text-slate-400'
-                }`}>
-                {rule.enabled ? 'Enabled' : 'Disabled'}
-              </button>
-              <button onClick={() => setEditing(rule)} className="text-slate-400 hover:text-white" title="Edit">
-                <Pencil className="w-4 h-4" />
-              </button>
-              <button onClick={() => deleteRule(rule)} className="text-slate-400 hover:text-red-400" title="Delete">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+          <RuleCard
+            key={rule.id}
+            rule={rule}
+            runbookName={rule.runbook_id ? runbookNameById.get(rule.runbook_id) : undefined}
+            open={openIds.has(rule.id)}
+            onToggleOpen={() => toggleOpen(rule.id)}
+            onToggleEnabled={() => toggleEnabled(rule)}
+            onEdit={() => setEditing(rule)}
+            onDuplicate={() => duplicateRule(rule)}
+            onDelete={() => deleteRule(rule)}
+          />
         ))}
         {!loading && rules.length === 0 && !error && (
-          <p className="text-center text-slate-500 py-8">No rules yet. Create the first one!</p>
+          <div className="lg:col-span-2"><EmptyState icon={SlidersHorizontal} title="No rules yet"
+            text="Create a rule to start turning events into alerts."
+            action={<button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]"><Plus className="w-4 h-4" />New rule</button>} /></div>
         )}
         {!loading && rules.length > 0 && visible.length === 0 && (
-          <p className="text-center text-slate-500 py-8">No rules match “{filter}”.</p>
+          <p className="lg:col-span-2 text-center text-ink-muted py-8">No rules match “{filter}”.</p>
         )}
       </div>
     </div>

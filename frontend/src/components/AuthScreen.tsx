@@ -75,19 +75,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+      <div className="glass-card glass-card--static w-full max-w-md p-8 relative overflow-hidden">
         {/* Glow accent */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-1 bg-amber-500/80 rounded-full blur-[2px]" />
 
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-3">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-[14px] bg-ios-blue text-white mb-4">
             <ShieldCheck className="w-6 h-6" />
           </div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">
+          <h2 className="text-3xl font-semibold tracking-tight text-white tracking-tight">
             {isRegister ? 'Register with Invite Code' : 'Sign In to Portal'}
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-ink-muted mt-1">
             {isRegister
               ? 'Single-use invite code required from your Lead'
               : 'Enter your credentials to access your private dashboard'}
@@ -95,12 +94,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
         </div>
 
         {/* Mode Toggle Buttons */}
-        <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 mb-6">
+        <div className="surface-well flex p-1 mb-6">
           <button
             type="button"
             onClick={() => { setIsRegister(false); setError(null); setConfirmPassword(''); }}
             className={`flex-1 py-2 text-xs font-semibold rounded-md transition ${
-              !isRegister ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
+              !isRegister ? 'btn-primary' : 'text-ink-muted hover:text-white'
             }`}
           >
             Sign In
@@ -109,7 +108,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
             type="button"
             onClick={() => { setIsRegister(true); setError(null); setConfirmPassword(''); }}
             className={`flex-1 py-2 text-xs font-semibold rounded-md transition ${
-              isRegister ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
+              isRegister ? 'btn-primary' : 'text-ink-muted hover:text-white'
             }`}
           >
             Register with Code
@@ -127,7 +126,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           {/* Uname */}
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">
-              Username <span className="text-amber-400">*</span>
+              Username <span className="text-ink-faint">*</span>
             </label>
             <div className="relative">
               <UserIcon className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -137,7 +136,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                 value={uname}
                 onChange={(e) => setUname(e.target.value)}
                 placeholder={isRegister ? 'e.g. jsmith' : 'username or email'}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                className="field w-full pl-9 pr-3 py-2 text-sm placeholder-slate-600"
               />
             </div>
           </div>
@@ -146,7 +145,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           {isRegister && (
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">
-                Email Address <span className="text-amber-400">*</span>
+                Email Address <span className="text-ink-faint">*</span>
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -156,7 +155,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="e.g. jsmith@goldmansachs.com"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                  className="field w-full pl-9 pr-3 py-2 text-sm placeholder-slate-600"
                 />
               </div>
             </div>
@@ -165,7 +164,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           {/* Password */}
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">
-              Password <span className="text-amber-400">*</span>
+              Password <span className="text-ink-faint">*</span>
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -176,7 +175,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                className="field w-full pl-9 pr-3 py-2 text-sm placeholder-slate-600"
               />
             </div>
           </div>
@@ -185,7 +184,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           {isRegister && (
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">
-                Confirm Password <span className="text-amber-400">*</span>
+                Confirm Password <span className="text-ink-faint">*</span>
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -196,7 +195,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repeat password"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                  className="field w-full pl-9 pr-3 py-2 text-sm placeholder-slate-600"
                 />
               </div>
             </div>
@@ -208,20 +207,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
               {/* Single-Use Invite Code */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-amber-400">
-                    Invite Code <span className="text-amber-400">*</span>
+                  <label className="text-xs font-medium text-ink-muted">
+                    Invite Code <span className="text-ink-faint">*</span>
                   </label>
                   <span className="text-[10px] text-slate-500">from Lead</span>
                 </div>
                 <div className="relative">
-                  <Key className="w-4 h-4 text-amber-500 absolute left-3 top-3" />
+                  <Key className="w-4 h-4 text-ink-muted absolute left-3 top-3" />
                   <input
                     type="text"
                     required
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                     placeholder="e.g. GS-XXXX-XXXX"
-                    className="w-full bg-slate-950 border border-amber-500/40 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-slate-600 font-mono tracking-wider focus:outline-none focus:border-amber-500 uppercase"
+                    className="field w-full pl-9 pr-3 py-2 text-sm placeholder-slate-600 font-mono tracking-wider uppercase"
                   />
                 </div>
               </div>
@@ -238,7 +237,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                     value={nrtel}
                     onChange={(e) => setNrtel(e.target.value)}
                     placeholder="+1 (212) 555-0199"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                    className="field w-full pl-9 pr-3 py-2 text-sm placeholder-slate-600"
                   />
                 </div>
               </div>
@@ -253,7 +252,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                   <select
                     value={team}
                     onChange={(e) => setTeam(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+                    className="field w-full pl-9 pr-3 py-2 text-sm"
                   >
                     <option value="">Select team...</option>
                     {teams.map((t) => (
@@ -271,7 +270,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-amber-500/10 active:scale-95"
+            className="btn-primary w-full py-2.5 text-sm flex items-center justify-center space-x-2"
           >
             <span>{loading ? 'Processing...' : (isRegister ? 'Complete Registration' : 'Sign In')}</span>
             <ArrowRight className="w-4 h-4" />
