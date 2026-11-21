@@ -1,8 +1,233 @@
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ------------------------------------------------------------------
+   iOS dark design tokens (Human Interface Guidelines, dark appearance)
+   ------------------------------------------------------------------ */
+:root {
+  color-scheme: dark;
+
+  --ios-bg: #000000;              /* systemGroupedBackground */
+  --ios-cell: #1c1c1e;            /* secondarySystemGroupedBackground */
+  --ios-cell-raised: #2c2c2e;     /* tertiarySystemGroupedBackground */
+  --ios-fill: rgba(118, 118, 128, 0.24); /* tertiarySystemFill: fields, chips */
+  --ios-separator: rgba(84, 84, 88, 0.6);
+  --ios-label: #ffffff;
+  --ios-label-2: rgba(235, 235, 245, 0.6);
+  --ios-label-3: rgba(235, 235, 245, 0.3);
+
+  --ios-blue: #0a84ff;
+  --ios-green: #30d158;
+  --ios-red: #ff453a;
+  --ios-orange: #ff9f0a;
+
+  --ios-radius: 12px;
+  --ios-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+html {
+  background: var(--ios-bg);
+}
+
 body {
   margin: 0;
   min-height: 100vh;
+  background: var(--ios-bg);
+  color: var(--ios-label);
+  /* San Francisco on Apple devices, Segoe UI Variable on Windows */
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  letter-spacing: -0.022em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ios-blue);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(10, 132, 255, 0.45);
+}
+
+@layer components {
+  /* --------------------------------------------------------------
+     Grouped list (Settings-style): a rounded group of cells
+     -------------------------------------------------------------- */
+  .ios-group {
+    border-radius: var(--ios-radius);
+    background: var(--ios-cell);
+    overflow: hidden;
+  }
+
+  /* One cell. Cells after the first get an inset hairline on top. */
+  .ios-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 10px 16px;
+  }
+
+  .ios-row + .ios-row::before,
+  .ios-row + .ios-divided::before,
+  .ios-divided + .ios-row::before,
+  .ios-divided + .ios-divided::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 16px;
+    right: 0;
+    height: 1px;
+    background: var(--ios-separator);
+    transform: scaleY(0.5);
+    transform-origin: top;
+  }
+
+  .ios-divided {
+    position: relative;
+  }
+
+  .ios-row--tap {
+    cursor: pointer;
+    transition: background 120ms var(--ios-ease);
+  }
+
+  .ios-row--tap:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .ios-row--tap:active {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  /* --------------------------------------------------------------
+     Legacy class names, restyled so every page follows the same look
+     -------------------------------------------------------------- */
+  .glass-card,
+  .surface {
+    position: relative;
+    border-radius: var(--ios-radius);
+    background: var(--ios-cell);
+  }
+
+  .surface-well {
+    border-radius: 10px;
+    background: var(--ios-cell-raised);
+  }
+
+  .glass-pill,
+  .glass-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 9999px;
+    background: var(--ios-fill);
+  }
+
+  .glass,
+  .glass-menu {
+    border-radius: var(--ios-radius);
+    background: rgba(28, 28, 30, 0.82);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    backdrop-filter: blur(30px) saturate(180%);
+  }
+
+  .glass-scrim {
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  .field {
+    border-radius: 10px;
+    background: var(--ios-fill);
+    border: 0;
+    color: var(--ios-label);
+  }
+
+  .field::placeholder {
+    color: var(--ios-label-3);
+  }
+
+  .field:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--ios-blue);
+  }
+
+  .btn-primary {
+    border-radius: 9999px;
+    background: var(--ios-blue);
+    color: #ffffff;
+    font-weight: 600;
+    transition: opacity 120ms var(--ios-ease);
+  }
+
+  .btn-primary:hover {
+    opacity: 0.88;
+  }
+
+  .btn-primary:active {
+    opacity: 0.7;
+  }
+
+  /* iOS switch (51x31); use on <button role="switch" aria-checked> */
+  .switch {
+    position: relative;
+    flex-shrink: 0;
+    width: 51px;
+    height: 31px;
+    border-radius: 9999px;
+    background: rgba(120, 120, 128, 0.32);
+    transition: background 200ms var(--ios-ease);
+  }
+
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 27px;
+    height: 27px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 3px 1px rgba(0, 0, 0, 0.06);
+    transition: transform 250ms var(--ios-ease);
+  }
+
+  .switch[aria-checked='true'] {
+    background: var(--ios-green);
+  }
+
+  .switch[aria-checked='true']::after {
+    transform: translateX(20px);
+  }
+
+  /* Smooth open/close for disclosure panels: wrap content in .disclosure > div */
+  .disclosure {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 280ms var(--ios-ease);
+  }
+
+  .disclosure[data-open='true'] {
+    grid-template-rows: 1fr;
+  }
+
+  .disclosure > div {
+    overflow: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch, .switch::after, .disclosure, .btn-primary, .ios-row--tap { transition-duration: 0.01ms; }
 }

@@ -43,10 +43,10 @@ export const KIND_HINT: Record<StepKind, string> = {
 };
 
 export const KIND_CLASS: Record<StepKind, string> = {
-  manual: 'border-slate-600 text-slate-300',
-  auto: 'border-emerald-500/40 text-emerald-300 bg-emerald-500/10',
-  approve: 'border-amber-500/40 text-amber-300 bg-amber-500/10',
-  approve_manual: 'border-amber-500/40 text-amber-300 bg-amber-500/10',
+  manual: 'bg-ios-fill text-ink-muted',
+  auto: 'bg-ios-green/15 text-ios-green',
+  approve: 'bg-ios-orange/15 text-ios-orange',
+  approve_manual: 'bg-ios-orange/15 text-ios-orange',
 };
 
 export const ACTION_LABEL: Record<string, string> = {
