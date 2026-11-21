@@ -1,21 +1,20 @@
 // Outbox: co, komu i jakim kanałem poszło, ze statusem i ponawianiem + przełączniki awarii + fałszywy telefon.
 import { useEffect, useState } from 'react';
-import { Mail, MessageSquare, Phone, RefreshCw } from 'lucide-react';
+import { MessageSquare, RefreshCw } from 'lucide-react';
 import { api } from '../shared/api';
 import type { ChannelState, Delivery } from '../shared/types';
 import { timeAgo } from '../alerts/AlertCard';
 import FakePhone from './FakePhone';
-import { Notice, PageHeader, Toggle, cn } from '../shared/ui';
+import { CHANNEL_META, Notice, PageHeader, Row, RowIcon, Section, Toggle } from '../shared/ui';
 
-const STATUS_STYLE: Record<Delivery['status'], string> = {
-  pending: 'bg-white/[0.06] text-slate-300 border-white/10',
-  sending: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
-  sent: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
-  failed: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
-  dead: 'bg-rose-500/10 text-rose-300 border-rose-500/30',
+const STATUS_TEXT: Record<Delivery['status'], string> = {
+  pending: 'text-ink-muted',
+  sending: 'text-ios-blue',
+  sent: 'text-ios-green',
+  failed: 'text-ios-orange',
+  dead: 'text-ios-red',
 };
 
-const CHANNEL_ICON = { email: Mail, sms: MessageSquare, phone: Phone, ui: MessageSquare } as const;
 
 export default function OutboxPage() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
@@ -48,7 +47,7 @@ export default function OutboxPage() {
         description="Every notification we sent, by which channel, and whether it arrived."
         actions={<>
           <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"
-            className="field h-9 px-3 text-sm !rounded-full">
+            className="field h-[32px] px-3 text-[13px]">
             <option value="all">All statuses</option>
             <option value="pending">Pending</option>
             <option value="sent">Sent</option>
@@ -59,80 +58,52 @@ export default function OutboxPage() {
         </>}
       />
 
-      {/* Kanały i udawana awaria */}
-      <div className="flex flex-wrap gap-2">
-        {channels.map((c) => {
-          const Icon = CHANNEL_ICON[c.channel] ?? MessageSquare;
-          const canToggle = c.channel === 'sms' || c.channel === 'phone';
-          return (
-            <div key={c.channel} className={cn('glass-pill h-11 pl-3.5 pr-3 gap-2.5 text-sm transition-colors',
-              c.down && '!border-rose-500/40 !bg-rose-500/10 text-rose-200')}>
-              <Icon className={cn('w-4 h-4', c.down ? 'text-rose-300' : 'text-ink-muted')} />
-              <span className="capitalize font-medium text-white">{c.channel}</span>
-              <span className={cn('flex items-center gap-1.5 text-xs', c.down ? 'text-rose-300' : 'text-emerald-300')}>
-                <span className={cn('w-1.5 h-1.5 rounded-full', c.down ? 'bg-rose-400' : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]')} />
-                {c.down ? 'Down' : 'Working'}
-              </span>
-              {canToggle ? (
-                <span className="flex items-center gap-2 pl-2.5 ml-0.5 border-l border-white/10 text-xs text-ink-muted">
-                  Outage
-                  <Toggle checked={c.down} onChange={() => toggleOutage(c.channel, !c.down)}
-                    label={c.down ? `Restore ${c.channel}` : `Simulate ${c.channel} outage`} className="scale-[0.82] origin-right" />
-                </span>
-              ) : (
-                <span className="pl-2.5 ml-0.5 border-l border-white/10 text-xs text-ink-muted" title="Inbox: http://localhost:8025">Sent by SMTP</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
       {error && <Notice tone="error">{error}</Notice>}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-6 items-start">
-        {/* Tabela wysyłek */}
-        <div className="glass-card glass-card--static overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-[13px] text-ink-muted border-b border-white/[0.08]">
-              <tr>
-                <th className="text-left font-medium px-5 py-3">To</th>
-                <th className="text-left font-medium px-5 py-3">Message</th>
-                <th className="text-left font-medium px-5 py-3">Status</th>
-                <th className="text-right font-medium px-5 py-3">When</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.06]">
-              {deliveries.map((d) => {
-                const Icon = CHANNEL_ICON[d.channel] ?? MessageSquare;
-                return (
-                  <tr key={d.id} className="align-top hover:bg-white/[0.03] transition-colors">
-                    <td className="px-5 py-3 whitespace-nowrap">
-                      <div className="flex items-center gap-2 text-slate-200"><Icon className="w-4 h-4 text-ink-muted" />{d.recipient_name ?? '—'}</div>
-                      <div className="text-xs text-slate-500 font-mono">{d.to}</div>
-                    </td>
-                    <td className="px-5 py-3 text-slate-300 max-w-xs">
-                      <a href={`#alerts/${d.alert_id}`} className="text-xs text-slate-500 hover:underline">alert #{d.alert_id}</a>
-                      <div className="truncate" title={d.body ?? ''}>{d.subject || d.body}</div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={`inline-block text-xs font-medium capitalize px-2.5 py-0.5 rounded-full border ${STATUS_STYLE[d.status] ?? ''}`}>{d.status}</span>
-                      <div className="text-xs text-slate-500 mt-1">Attempt {d.attempts}</div>
-                      {d.last_error && d.status !== 'sent' && (
-                        <div className="text-xs text-red-300/80 mt-0.5 max-w-[16rem] truncate" title={d.last_error}>{d.last_error}</div>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-right text-xs text-slate-500 whitespace-nowrap">{timeAgo(d.created_at)}</td>
-                  </tr>
-                );
-              })}
-              {deliveries.length === 0 && (
-                <tr><td colSpan={4} className="px-5 py-14 text-center">
-                  <p className="text-base font-semibold text-white">Nothing sent yet</p>
-                  <p className="mt-1 text-sm text-ink-muted">Send a test with <code className="font-mono text-gs-gold">POST /api/deliveries/test</code> in API docs.</p>
-                </td></tr>
-              )}
-            </tbody>
-          </table>
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-6 items-start">
+        <div className="space-y-7 min-w-0">
+          {/* Kanały i udawana awaria */}
+          <Section title="Channels" footer="Turn on an outage to see messages fail and retry, then fall back to another channel.">
+            {channels.map((c) => {
+              const meta = CHANNEL_META[c.channel];
+              const canToggle = c.channel === 'sms' || c.channel === 'phone';
+              return (
+                <Row key={c.channel}
+                  icon={<RowIcon icon={meta?.icon ?? MessageSquare} color={c.down ? 'bg-ios-red' : (meta?.color ?? 'bg-ios-indigo')} />}
+                  label={meta?.label ?? c.channel}
+                  sublabel={c.down ? <span className="text-ios-red">Outage, messages are failing</span> : canToggle ? 'Working' : 'Working, sent by SMTP'}
+                  accessory={canToggle
+                    ? <Toggle checked={c.down} onChange={() => toggleOutage(c.channel, !c.down)}
+                        label={c.down ? `Restore ${c.channel}` : `Simulate ${c.channel} outage`} />
+                    : undefined} />
+              );
+            })}
+          </Section>
+
+          {/* Wysyłki */}
+          <Section title={`Sent messages, ${deliveries.length}`}>
+            {deliveries.map((d) => {
+              const meta = CHANNEL_META[d.channel];
+              return (
+                <Row key={d.id}
+                  icon={<RowIcon icon={meta?.icon ?? MessageSquare} color={meta?.color ?? 'bg-ios-indigo'} />}
+                  label={<span className="font-semibold">{d.recipient_name ?? d.to ?? 'Unknown'}</span>}
+                  sublabel={<span className="block truncate" title={d.body ?? ''}>{d.subject || d.body}</span>}
+                  value={
+                    <span className="flex flex-col items-end">
+                      <span className={`text-[13px] font-semibold capitalize ${STATUS_TEXT[d.status] ?? ''}`}>{d.status}</span>
+                      <span className="text-[13px] text-ink-muted whitespace-nowrap">{timeAgo(d.created_at)}{d.attempts > 1 && `, try ${d.attempts}`}</span>
+                    </span>
+                  } />
+              );
+            })}
+            {deliveries.length === 0 && (
+              <div className="ios-row flex-col items-start gap-0.5 py-4">
+                <span className="text-[15px] text-white">Nothing sent yet</span>
+                <span className="text-[13px] text-ink-muted">Send a test with <code className="font-mono">POST /api/deliveries/test</code> in API docs.</span>
+              </div>
+            )}
+          </Section>
         </div>
 
         <FakePhone refreshKey={tick} />

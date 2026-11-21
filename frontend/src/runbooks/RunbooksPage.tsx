@@ -1,10 +1,10 @@
 // OSOBA 4 – runbooki: wklej YAML / Markdown / tekst, zobacz kroki na żywo, zapisz, podepnij do reguły.
 import { useEffect, useId, useMemo, useState } from 'react';
-import { AlertTriangle, BookOpen, Check, ChevronDown, Info, Link2, Pencil, Plus, Save, Trash2, Unlink, X } from 'lucide-react';
+import { AlertTriangle, BookOpen, Check, ChevronRight, Info, Link2, Plus, Save, Unlink, X } from 'lucide-react';
 import type { Runbook, RunbookStep } from '../shared/types';
 import { MatchGroup, RuleRef, RunbookFormat, describeMatches, errorText, runbookApi } from './runbookApi';
 import StepList from './StepList';
-import { EmptyState } from '../shared/ui';
+import { EmptyState, PageHeader, Row, ghostButton } from '../shared/ui';
 import EngineTester from './EngineTester';
 
 const FORMATS: { value: RunbookFormat; label: string }[] = [
@@ -103,29 +103,22 @@ export default function RunbooksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-semibold text-ink">Runbooks</h1>
-          <p className="mt-1 text-sm text-ink-muted max-w-2xl">
-            Paste a runbook in any format. Steps are extracted automatically and shown on every alert it is attached to.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Runbooks"
+        description="Paste a runbook in any format. Steps are pulled out automatically and shown on every alert it is attached to."
+        actions={<>
           {runbooks.length > 0 && (
-            <button
-              onClick={() => setOpenIds(allOpen ? new Set() : new Set(runbooks.map((r) => r.id)))}
-              className="text-sm font-medium text-ink-muted hover:text-ink px-3 py-2 rounded-full hover:bg-white/5"
-            >
+            <button onClick={() => setOpenIds(allOpen ? new Set() : new Set(runbooks.map((r) => r.id)))} className={ghostButton}>
               {allOpen ? 'Collapse all' : 'Expand all'}
             </button>
           )}
           {editing === null && (
-            <button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-2 px-4 h-10 text-sm">
+            <button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]">
               <Plus className="w-4 h-4" />New runbook
             </button>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
       {loadError && (
         <p role="alert" className="text-sm text-signal-critical bg-signal-critical/10 rounded-xl px-4 py-2.5">
@@ -150,7 +143,7 @@ export default function RunbooksPage() {
         />
       )}
 
-      <div className="space-y-3">
+      <div className="grid gap-5 lg:grid-cols-2 items-start">
         {runbooks.map((rb) => (
           <RunbookCard
             key={rb.id}
@@ -164,8 +157,8 @@ export default function RunbooksPage() {
           />
         ))}
         {runbooks.length === 0 && !loadError && (
-          <EmptyState icon={BookOpen} title="No runbooks yet"
-            text="Add one so responders see clear next steps on every alert." />
+          <div className="lg:col-span-2"><EmptyState icon={BookOpen} title="No runbooks yet"
+            text="Add one so responders see clear next steps on every alert." /></div>
         )}
       </div>
 
@@ -192,79 +185,34 @@ function RunbookCard({ runbook: rb, attached, editing, open, onToggleOpen, onEdi
   const matches = (rb as Runbook & { matches?: MatchGroup | null }).matches;
 
   return (
-    <article className={`glass-card ${editing ? 'ring-1 ring-gs-gold/50' : ''}`}>
-      <div className="flex items-start gap-4 p-5">
-        {/* Step count with one dot per step; amber dots need approval */}
-        <div className="w-14 shrink-0 flex flex-col items-center pt-0.5" aria-hidden="true">
-          <span className="text-2xl font-semibold leading-none tabular-nums text-ink">{rb.steps.length}</span>
-          <span className="mt-1 text-[11px] text-ink-muted">{rb.steps.length === 1 ? 'step' : 'steps'}</span>
-          <span className="mt-2 flex flex-wrap justify-center gap-[3px] max-w-[52px]">
-            {rb.steps.slice(0, 12).map((s, i) => (
-              <span key={i} className={`w-1.5 h-1.5 rounded-full ${s.approval === 'required' ? 'bg-signal-warning' : 'bg-white/25'}`} />
-            ))}
-          </span>
-        </div>
-
+    <article className={`ios-group ${editing ? 'ring-2 ring-ios-blue' : ''}`}>
+      <div className="ios-row py-3.5">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-[17px] font-semibold leading-snug text-white">{rb.name}</h3>
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white/5 text-ink-muted">
-              {FORMAT_LABEL[rb.format] ?? rb.format}
-            </span>
-          </div>
-          <p className="mt-1.5 text-[13px] text-ink-muted">
-            {approvals > 0
-              ? `${approvals} ${approvals === 1 ? 'step needs' : 'steps need'} approval before it runs.`
-              : 'No step needs approval.'}
-            {attached.length === 0 && ' Not attached to any rule yet.'}
-          </p>
-          {(attached.length > 0 || matches) && (
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
-              {attached.map((r) => (
-                <span key={r.id} className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-white/5 text-ink">
-                  <Link2 className="w-3 h-3 text-ink-muted" />{r.name}
-                </span>
-              ))}
-              {matches && (
-                <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-signal-info/10 text-signal-info">
-                  For events where <code className="font-mono text-[11px]">{describeMatches(matches)}</code>
-                </span>
-              )}
-            </div>
-          )}
+          <h3 className="text-[17px] font-semibold text-white leading-snug">{rb.name}</h3>
+          <p className="text-[13px] text-ink-muted">{FORMAT_LABEL[rb.format] ?? rb.format}</p>
         </div>
+      </div>
+      <Row label="Steps" value={<span className="tabular-nums">{rb.steps.length}</span>} />
+      <Row label="Need approval" value={<span className={approvals > 0 ? 'text-ios-orange tabular-nums' : 'tabular-nums'}>{approvals}</span>} />
+      <Row label="Used by" value={attached.length ? attached.map((r) => r.name).join(', ') : 'No rule yet'} />
+      {matches && <Row label="Applies to" value={<code className="font-mono text-[13px]">{describeMatches(matches)}</code>} />}
 
-        <div className="flex items-center gap-1 shrink-0">
-          <button type="button" onClick={onEdit} title="Edit runbook" aria-label={`Edit ${rb.name}`}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-ink-muted hover:text-ink hover:bg-white/5">
-            <Pencil className="w-4 h-4" />
-          </button>
-          <button type="button" onClick={onDelete} title="Delete runbook" aria-label={`Delete ${rb.name}`}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-ink-muted hover:text-signal-critical hover:bg-signal-critical/10">
-            <Trash2 className="w-4 h-4" />
-          </button>
+      <button type="button" onClick={onToggleOpen} aria-expanded={open} aria-controls={stepsId}
+        className="ios-row ios-row--tap w-full text-left">
+        <span className="flex-1 text-[15px] text-white">{open ? 'Hide steps' : 'Show steps'}</span>
+        <ChevronRight className={`w-4 h-4 text-ink-faint transition-transform duration-300 ${open ? 'rotate-90' : ''}`} aria-hidden="true" />
+      </button>
+      <div id={stepsId} className="disclosure ios-divided" data-open={open}>
+        <div {...(open ? {} : ({ inert: '' } as Record<string, string>))}>
+          <div className="bg-black/25 px-4 py-4">
+            <StepList steps={rb.steps} empty="This runbook has no steps yet." />
+          </div>
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={onToggleOpen}
-        aria-expanded={open}
-        aria-controls={stepsId}
-        className="w-full flex items-center justify-between px-5 py-2.5 border-t border-white/[0.06] text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-white/[0.03] rounded-b-2xl"
-      >
-        {open ? 'Hide steps' : `Show steps`}
-        <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      <div id={stepsId} className="disclosure" data-open={open}>
-        <div>
-          <div className="px-5 pb-5" {...(open ? {} : ({ inert: '' } as Record<string, string>))}>
-            <div className="surface-well p-4">
-              <StepList steps={rb.steps} empty="This runbook has no steps yet." />
-            </div>
-          </div>
-        </div>
+      <div className="ios-row justify-between ios-divided">
+        <button type="button" onClick={onEdit} className="text-[15px] text-ios-blue hover:opacity-70">Edit runbook</button>
+        <button type="button" onClick={onDelete} className="text-[15px] text-ios-red hover:opacity-70">Delete</button>
       </div>
     </article>
   );

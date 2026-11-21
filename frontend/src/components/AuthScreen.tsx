@@ -77,11 +77,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
     <div className="min-h-[80vh] flex items-center justify-center p-4">
       <div className="glass-card glass-card--static w-full max-w-md p-8 relative overflow-hidden">
         {/* Glow accent */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-1 bg-amber-500/80 rounded-full blur-[2px]" />
 
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-3">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-[14px] bg-ios-blue text-white mb-4">
             <ShieldCheck className="w-6 h-6" />
           </div>
           <h2 className="text-3xl font-semibold tracking-tight text-white tracking-tight">
@@ -127,7 +126,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           {/* Uname */}
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">
-              Username <span className="text-amber-400">*</span>
+              Username <span className="text-ink-faint">*</span>
             </label>
             <div className="relative">
               <UserIcon className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -146,7 +145,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           {isRegister && (
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">
-                Email Address <span className="text-amber-400">*</span>
+                Email Address <span className="text-ink-faint">*</span>
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -165,7 +164,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           {/* Password */}
           <div>
             <label className="block text-xs font-medium text-slate-300 mb-1">
-              Password <span className="text-amber-400">*</span>
+              Password <span className="text-ink-faint">*</span>
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -185,7 +184,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           {isRegister && (
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1">
-                Confirm Password <span className="text-amber-400">*</span>
+                Confirm Password <span className="text-ink-faint">*</span>
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
@@ -208,20 +207,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
               {/* Single-Use Invite Code */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium text-amber-400">
-                    Invite Code <span className="text-amber-400">*</span>
+                  <label className="text-xs font-medium text-ink-muted">
+                    Invite Code <span className="text-ink-faint">*</span>
                   </label>
                   <span className="text-[10px] text-slate-500">from Admin</span>
                 </div>
                 <div className="relative">
-                  <Key className="w-4 h-4 text-amber-500 absolute left-3 top-3" />
+                  <Key className="w-4 h-4 text-ink-muted absolute left-3 top-3" />
                   <input
                     type="text"
                     required
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                     placeholder="e.g. GS-XXXX-XXXX"
-                    className="field w-full border-amber-500/40 pl-9 pr-3 py-2 text-sm placeholder-slate-600 font-mono tracking-wider uppercase"
+                    className="field w-full pl-9 pr-3 py-2 text-sm placeholder-slate-600 font-mono tracking-wider uppercase"
                   />
                 </div>
               </div>
@@ -271,7 +270,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
           <button
             type="submit"
             disabled={loading}
-            className="btn-primary w-full py-2.5 text-sm flex items-center justify-center space-x-2 shadow-amber-500/10 active:scale-95"
+            className="btn-primary w-full py-2.5 text-sm flex items-center justify-center space-x-2"
           >
             <span>{loading ? 'Processing...' : (isRegister ? 'Complete Registration' : 'Sign In')}</span>
             <ArrowRight className="w-4 h-4" />

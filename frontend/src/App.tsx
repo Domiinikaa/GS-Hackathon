@@ -11,7 +11,6 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { User } from './types';
-import LivingBackdrop from './shared/LivingBackdrop';
 import { describeMood, useSystemMood, type SystemMood } from './shared/useSystemMood';
 import { authService, authStorage } from './services/auth';
 import { AuthScreen } from './components/AuthScreen';
@@ -94,7 +93,6 @@ export default function App() {
   if (authChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center text-ink-muted">
-        <LivingBackdrop />
         <RefreshCw className="w-5 h-5 animate-spin text-gs-gold mr-2" />
         <span>Checking your session</span>
       </div>
@@ -105,7 +103,6 @@ export default function App() {
   if (!currentUser) {
     return (
       <div className="min-h-screen flex flex-col">
-        <LivingBackdrop />
         <header className="px-6 py-5 flex items-center justify-between">
           <Brand />
           <span className="text-xs text-ink-muted">Invite-only access</span>
@@ -138,17 +135,15 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <LivingBackdrop />
-
-      {/* Glass navigation bar */}
-      <header className="sticky top-0 z-50 border-b border-white/[0.08] bg-slate-950/70 backdrop-blur-2xl backdrop-saturate-[1.8] shadow-[inset_0_-1px_0_rgba(255,255,255,0.03)]">
-        <div className="max-w-7xl mx-auto h-16 px-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-6 min-w-0">
-            <a href="#alerts" onClick={() => setActiveTabId('alerts')} className="shrink-0 rounded-full">
+      {/* Translucent iOS-style navigation bar */}
+      <header className="sticky top-0 z-50 bg-[rgba(22,22,24,0.78)] backdrop-blur-2xl backdrop-saturate-[1.8] shadow-[inset_0_-0.5px_0_rgba(84,84,88,0.65)]">
+        <div className="max-w-5xl mx-auto h-14 px-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-5 min-w-0">
+            <a href="#alerts" onClick={() => setActiveTabId('alerts')} className="shrink-0 rounded-md">
               <Brand />
             </a>
 
-            <nav aria-label="Main" className="flex items-center gap-1 overflow-x-auto min-w-0 py-1 [scrollbar-width:none]">
+            <nav aria-label="Main" className="flex items-center gap-0.5 overflow-x-auto min-w-0 [scrollbar-width:none]">
               {visibleTabs.map((t) => {
                 const Icon = t.icon;
                 const active = !isUnauthorizedAdminRoute && t.id === currentTab.id;
@@ -158,13 +153,11 @@ export default function App() {
                     href={`#${t.id}`}
                     onClick={() => setActiveTabId(t.id)}
                     aria-current={active ? 'page' : undefined}
-                    className={`flex items-center gap-1.5 px-3.5 h-9 rounded-full text-sm shrink-0 border transition-all duration-300 ${
-                      active
-                        ? 'text-white font-medium bg-white/[0.08] border-white/[0.12] shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.14),0_4px_16px_rgba(0,0,0,0.25)]'
-                        : 'text-ink-muted border-transparent hover:text-white hover:bg-white/[0.04]'
+                    className={`flex items-center gap-1.5 px-2.5 h-9 rounded-lg text-[14px] shrink-0 transition-colors ${
+                      active ? 'text-ios-blue font-semibold' : 'text-ink-muted hover:text-white'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 ${active ? 'text-gs-gold' : ''}`} />
+                    <Icon className="w-[18px] h-[18px]" strokeWidth={active ? 2.3 : 2} />
                     <span>{t.label}</span>
                   </a>
                 );
@@ -172,32 +165,21 @@ export default function App() {
             </nav>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
             <MoodIndicator mood={mood} onOpen={() => setActiveTabId('alerts')} />
-
-            <div className="text-right hidden md:block px-2 leading-tight">
-              <div className="text-sm font-semibold text-white">
-                @{currentUser.uname}
-                {currentUser.is_admin && <span className="ml-1.5 text-xs font-medium text-gs-gold">Admin</span>}
-              </div>
-              {team && <div className="text-xs text-ink-muted">{team}</div>}
-            </div>
-
-            <a href="/docs" target="_blank" rel="noreferrer"
-              className="hidden lg:block text-xs text-ink-muted hover:text-white px-2">
-              API docs
-            </a>
-
+            <span className="hidden md:block text-[14px] text-ink-muted">
+              {currentUser.uname}{currentUser.is_admin && ', admin'}
+            </span>
             <button onClick={handleLogout} title="Sign out" aria-label="Sign out"
-              className="glass-pill w-9 h-9 justify-center text-ink-muted hover:text-rose-300 hover:border-rose-500/30 transition-colors">
-              <LogOut className="w-4 h-4" />
+              className="w-9 h-9 rounded-full flex items-center justify-center text-ios-blue hover:bg-white/[0.08] transition-colors">
+              <LogOut className="w-[18px] h-[18px]" />
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="max-w-5xl mx-auto px-4 pt-6 pb-16">
         {isUnauthorizedAdminRoute ? (
           <AccessDenied user={currentUser} onReturn={handleReturnToAlerts} />
         ) : currentTab.id === 'admin' ? (
@@ -214,35 +196,26 @@ export default function App() {
 
 function Brand() {
   return (
-    <span className="flex items-baseline gap-1.5 text-[17px] tracking-tight">
-      <span className="font-bold text-gs-gold">GS</span>
-      <span className="font-semibold text-ink">Alerting</span>
+    <span className="flex items-center gap-2 text-[16px] font-semibold text-white">
+      <span className="w-7 h-7 rounded-[8px] bg-ios-blue flex items-center justify-center text-[12px] font-bold">GS</span>
+      Alerting
     </span>
   );
 }
 
 const MOOD_DOT: Record<SystemMood['mood'], string> = {
-  idle: 'bg-ink-muted',
-  clear: 'bg-signal-clear',
-  warning: 'bg-signal-warning',
-  critical: 'bg-signal-critical',
+  idle: 'bg-ink-faint',
+  clear: 'bg-ios-green',
+  warning: 'bg-ios-orange',
+  critical: 'bg-ios-red',
 };
 
-// Names what the backdrop glow means, so color is never the only signal.
+// Shows at a glance whether anything urgent is open.
 function MoodIndicator({ mood, onOpen }: { mood: SystemMood; onOpen: () => void }) {
   return (
-    <a
-      href="#alerts"
-      onClick={onOpen}
-      aria-live="polite"
-      className="glass-pill h-9 px-3.5 hidden sm:flex text-sm text-ink hover:bg-white/10 transition-colors"
-    >
-      <span className="relative flex w-2 h-2">
-        {mood.mood === 'critical' && (
-          <span className="absolute inset-0 rounded-full bg-signal-critical opacity-60 motion-safe:animate-ping" />
-        )}
-        <span className={`relative w-2 h-2 rounded-full ${MOOD_DOT[mood.mood]}`} />
-      </span>
+    <a href="#alerts" onClick={onOpen} aria-live="polite"
+      className="hidden sm:flex items-center gap-1.5 text-[14px] text-white hover:opacity-80 transition-opacity">
+      <span className={`w-2 h-2 rounded-full ${MOOD_DOT[mood.mood]}`} />
       {describeMood(mood)}
     </a>
   );

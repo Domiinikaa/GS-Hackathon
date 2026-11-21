@@ -122,7 +122,7 @@ export default function RulesPage() {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           {editing === null && (
-            <button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-2 px-4 h-10 text-sm">
+            <button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]">
               <Plus className="w-4 h-4" />New rule
             </button>
           )}
@@ -146,11 +146,11 @@ export default function RulesPage() {
           <Search className="w-4 h-4 text-ink-muted absolute left-4 top-1/2 -translate-y-1/2" />
           <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter by name, team or headline"
             aria-label="Filter rules"
-            className="field w-full h-11 pl-10 pr-4 text-sm" />
+            className="field w-full h-10 pl-10 pr-4 text-[15px]" />
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="grid gap-5 lg:grid-cols-2 items-start">
         {visible.map((rule) => (
           <RuleCard
             key={rule.id}
@@ -164,12 +164,12 @@ export default function RulesPage() {
           />
         ))}
         {!loading && rules.length === 0 && !error && (
-          <EmptyState icon={SlidersHorizontal} title="No rules yet"
+          <div className="lg:col-span-2"><EmptyState icon={SlidersHorizontal} title="No rules yet"
             text="Create a rule to start turning events into alerts."
-            action={<button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-2 px-4 h-10 text-sm"><Plus className="w-4 h-4" />New rule</button>} />
+            action={<button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]"><Plus className="w-4 h-4" />New rule</button>} /></div>
         )}
         {!loading && rules.length > 0 && visible.length === 0 && (
-          <p className="text-center text-ink-muted py-8">No rules match “{filter}”.</p>
+          <p className="lg:col-span-2 text-center text-ink-muted py-8">No rules match “{filter}”.</p>
         )}
       </div>
     </div>

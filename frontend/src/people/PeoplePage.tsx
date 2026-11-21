@@ -1,7 +1,7 @@
 // People page.
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Clock, Mail, Pencil, Phone, Plus, RefreshCw, Trash2, Users } from 'lucide-react';
-import { ChannelPill, EmptyState, Notice, PageHeader, SEVERITY_DOT, type SeverityLevel, Toggle, cn, iconButton } from '../shared/ui';
+import { ChevronRight, Plus, RefreshCw, Users } from 'lucide-react';
+import { ChannelList, EmptyState, Notice, PageHeader, Row, SEVERITY_DOT, Section, Segmented, type SeverityLevel, Toggle, cn, iconButton } from '../shared/ui';
 import type { Person } from '../shared/types';
 import { errorMessage } from '../rules/rulesApi';
 import { PersonInput, peopleApi } from './peopleApi';
@@ -18,6 +18,7 @@ export default function PeoplePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [openId, setOpenId] = useState<number | null>(null);
   const [teamFilter, setTeamFilter] = useState<string>('all');
   // null = form closed, 'new' = new person, Person = editing that person
   const [editing, setEditing] = useState<Person | 'new' | null>(null);
@@ -110,7 +111,7 @@ export default function PeoplePage() {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           {editing === null && (
-            <button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-2 px-4 h-10 text-sm">
+            <button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]">
               <Plus className="w-4 h-4" />Add person
             </button>
           )}
@@ -131,122 +132,94 @@ export default function PeoplePage() {
       )}
 
       {teams.length > 1 && (
-        <div className="glass-pill p-1 gap-1 flex-wrap !rounded-2xl sm:!rounded-full w-fit max-w-full" role="group" aria-label="Filter by team">
-          {['all', ...teams].map((t) => (
-            <button key={t} onClick={() => setTeamFilter(t)} aria-pressed={teamFilter === t}
-              className={cn('px-3.5 h-8 rounded-full text-sm transition-all duration-300 border',
-                teamFilter === t
-                  ? 'bg-white/[0.12] border-white/20 text-white font-medium shadow-[inset_0_1px_1px_rgba(255,255,255,0.14)]'
-                  : 'border-transparent text-ink-muted hover:text-white')}>
-              {t === 'all' ? 'All teams' : t}
-              <span className="ml-1.5 text-xs text-ink-muted tabular-nums">
-                {t === 'all' ? people.length : people.filter((p) => p.team === t).length}
-              </span>
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Filter by team"
+          value={teamFilter}
+          onChange={setTeamFilter}
+          options={[{ value: 'all', label: 'All teams' }, ...teams.map((t) => ({ value: t, label: t }))]}
+        />
       )}
 
-      {grouped.map(([team, members]) => (
-        <section key={team} className="space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-semibold text-white">{team}</h2>
-            <span className="text-sm text-ink-muted">{members.length} {members.length === 1 ? 'person' : 'people'}</span>
-            {!members.some((m) => m.on_call) && (
-              <span className="inline-flex items-center gap-1 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 px-2.5 py-0.5 rounded-full"
-                title="Phone-call alerts go only to the on-call person">
-                <AlertTriangle className="w-3 h-3" />Nobody on call, phone alerts fall back to SMS
-              </span>
-            )}
-            {!members.some((m) => m.role === 'lead') && (
-              <span className="inline-flex items-center gap-1 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 px-2.5 py-0.5 rounded-full"
-                title="Risky runbook steps need approval from the team lead">
-                <AlertTriangle className="w-3 h-3" />No team lead, risky steps can't be approved
-              </span>
-            )}
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            {members.map((person) => {
-              const quiet = describeQuietHours(person);
-              return (
-                <article key={person.id} className="glass-card p-5 flex gap-4">
-                  <span className={cn('w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-sm font-semibold text-white ring-1 ring-white/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)]',
-                    person.on_call ? 'bg-gradient-to-br from-emerald-400/40 to-sky-500/30' : 'bg-gradient-to-br from-indigo-400/30 to-slate-500/20')}
-                    aria-hidden="true">
-                    {initials(person.name)}
-                  </span>
-
-                  <div className="flex-1 space-y-3 min-w-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-[16px] font-semibold text-white">{person.name}</h3>
-                          {person.role === 'lead' && (
-                            <span className="text-xs font-medium text-violet-200 bg-violet-500/10 border border-violet-500/30 px-2 py-0.5 rounded-full"
-                              title="Approves risky runbook steps for this team">
-                              Team lead
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-1 flex gap-x-4 gap-y-1 flex-wrap text-[13px] text-ink-muted">
-                          <span className="flex items-center gap-1.5 min-w-0"><Mail className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{person.email ?? 'No email'}</span></span>
-                          <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 shrink-0" />{person.phone ?? 'No phone'}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-0.5 shrink-0 -mr-2 -mt-1">
-                        <button onClick={() => setEditing(person)} className={iconButton} title="Edit" aria-label={`Edit ${person.name}`}>
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => deletePerson(person)} className={cn(iconButton, 'hover:text-rose-300 hover:bg-rose-500/10')}
-                          title="Remove" aria-label={`Remove ${person.name}`}>
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="surface-well p-3 space-y-2">
-                      {SEVERITY_ORDER.map((sev) => {
-                        const chans = person.channel_prefs?.[sev] ?? [];
-                        return (
-                          <div key={sev} className="flex items-center gap-2 flex-wrap">
-                            <span className="w-20 shrink-0 flex items-center gap-1.5 text-xs text-ink-muted">
-                              <span className={cn('w-1.5 h-1.5 rounded-full', SEVERITY_DOT[sev as SeverityLevel] ?? 'bg-slate-400')} />
-                              {SEVERITY_LABEL[sev]}
-                            </span>
-                            {chans.length
-                              ? chans.map((c) => <ChannelPill key={c} channel={c} />)
-                              : <span className="text-xs text-ink-muted">Uses the rule's channels</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <div className="text-xs text-ink-muted space-y-0.5 min-w-0">
-                        {quiet.length > 0
-                          ? quiet.map((q) => <p key={q} className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 shrink-0" />{q}</p>)
-                          : <p className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 shrink-0" />Reachable any time</p>}
-                      </div>
-                      <label className="flex items-center gap-2.5 text-sm text-slate-200 cursor-pointer"
-                        title="Phone-call alerts go only to the on-call person">
-                        <span className={person.on_call ? 'text-emerald-300 font-medium' : ''}>On call</span>
-                        <Toggle checked={!!person.on_call} onChange={() => toggleOnCall(person)}
-                          label={`${person.name}: ${person.on_call ? 'on call, turn off' : 'off call, turn on'}`} />
-                      </label>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      ))}
+      <div className="space-y-7">
+        {grouped.map(([team, members]) => {
+          const warnings = [
+            !members.some((m) => m.on_call) && 'Nobody is on call, so phone alerts fall back to SMS.',
+            !members.some((m) => m.role === 'lead') && "No team lead, so risky runbook steps can't be approved.",
+          ].filter(Boolean) as string[];
+          return (
+            <Section key={team} title={`${team}, ${members.length} ${members.length === 1 ? 'person' : 'people'}`}
+              footer={warnings.length > 0 && <span className="text-ios-orange">{warnings.join(' ')}</span>}>
+              {members.map((person) => (
+                <PersonRow key={person.id} person={person} open={openId === person.id}
+                  onToggleOpen={() => setOpenId(openId === person.id ? null : person.id)}
+                  onToggleOnCall={() => toggleOnCall(person)}
+                  onEdit={() => setEditing(person)}
+                  onDelete={() => deletePerson(person)} />
+              ))}
+            </Section>
+          );
+        })}
+      </div>
 
       {!loading && people.length === 0 && !error && (
         <EmptyState icon={Users} title="No people yet" text="Add the first person so alerts have somewhere to go."
-          action={<button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-2 px-4 h-10 text-sm"><Plus className="w-4 h-4" />Add person</button>} />
+          action={<button onClick={() => setEditing('new')} className="btn-primary flex items-center gap-1.5 px-4 h-9 text-[15px]"><Plus className="w-4 h-4" />Add person</button>} />
       )}
+    </div>
+  );
+}
+
+function PersonRow({ person, open, onToggleOpen, onToggleOnCall, onEdit, onDelete }: {
+  person: Person; open: boolean; onToggleOpen: () => void; onToggleOnCall: () => void; onEdit: () => void; onDelete: () => void;
+}) {
+  const quiet = describeQuietHours(person);
+  return (
+    <div className="ios-divided">
+      <div className="ios-row">
+        <button type="button" onClick={onToggleOpen} aria-expanded={open}
+          className="flex-1 min-w-0 flex items-center gap-3 text-left">
+          <span className="w-10 h-10 rounded-full bg-gradient-to-b from-[#8e8e93] to-[#636366] flex items-center justify-center shrink-0 text-[15px] font-semibold text-white"
+            aria-hidden="true">
+            {initials(person.name)}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[15px] font-semibold text-white truncate">{person.name}</span>
+            <span className="block text-[13px] text-ink-muted truncate">
+              {person.role === 'lead' ? 'Team lead' : 'Member'}{person.on_call && <span className="text-ios-green">, on call</span>}
+            </span>
+          </span>
+        </button>
+        <Toggle checked={!!person.on_call} onChange={onToggleOnCall}
+          label={`${person.name}: ${person.on_call ? 'on call, turn off' : 'off call, turn on'}`} />
+        <button type="button" onClick={onToggleOpen} aria-label={open ? 'Hide details' : 'Show details'} className="p-1 -mr-1">
+          <ChevronRight className={cn('w-4 h-4 text-ink-faint transition-transform duration-300', open && 'rotate-90')} />
+        </button>
+      </div>
+
+      <div className="disclosure" data-open={open}>
+        <div {...(open ? {} : ({ inert: '' } as Record<string, string>))}>
+          <div className="bg-black/25 ios-divided" style={{ paddingLeft: 52 }}>
+            <Row label="Email" value={person.email ?? 'Not set'} />
+            <Row label="Phone" value={person.phone ?? 'Not set'} />
+            {SEVERITY_ORDER.map((sev) => {
+              const chans = person.channel_prefs?.[sev] ?? [];
+              return (
+                <Row key={sev}
+                  label={<span className="inline-flex items-center gap-2">
+                    <span className={cn('w-2 h-2 rounded-full', SEVERITY_DOT[sev as SeverityLevel] ?? 'bg-ink-faint')} />
+                    {SEVERITY_LABEL[sev]} alerts
+                  </span>}
+                  value={chans.length ? <ChannelList channels={chans} /> : "Rule's channels"} />
+              );
+            })}
+            <Row label="Quiet hours" value={quiet.length ? quiet.join(' ') : 'None'} />
+            <div className="ios-row justify-between">
+              <button type="button" onClick={onEdit} className="text-[15px] text-ios-blue hover:opacity-70">Edit</button>
+              <button type="button" onClick={onDelete} className="text-[15px] text-ios-red hover:opacity-70">Remove</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
