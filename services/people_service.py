@@ -93,7 +93,7 @@ def plan_recipients(
 
     if "ui" in rule_channels:
         out.append(PlannedRecipient(
-            Recipient(person_id=None, name=f"team:{target}", channel="ui", to=None),  # type: ignore[arg-type]
+            Recipient(person_id=None, name=f"team:{target}", channel="ui", to=None),
             "live feed for the whole team",
         ))
 

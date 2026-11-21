@@ -25,7 +25,7 @@ class Match:
 @dataclass
 class Recipient:
     """Wynik preferencji ludzi (Osoba 2) -> wejście do wysyłki (Osoba 3)."""
-    person_id: int
+    person_id: int | None   # None for "ui": the team feed, not one person
     name: str
     channel: str            # email | sms | phone | ui
     to: str | None          # adres e-mail / numer telefonu; None dla "ui"
