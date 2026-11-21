@@ -9,7 +9,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Delivery, Person, Team
+from models import Delivery, Person, Team, User
+from routers.deps import get_current_admin_user, get_current_user
 from services.people_service import plan_recipients
 
 router = APIRouter(prefix="/api/people", tags=["People"])
@@ -152,8 +153,14 @@ def get_person(person_id: int, db: Session = Depends(get_db)):
     return to_dict(_get_or_404(db, person_id))
 
 
+def _is_own_profile(user: User, person: Person) -> bool:
+    """A registered account is linked to its Person by e-mail (see routers/auth.py register)."""
+    return bool(person.email) and person.email.strip().lower() == (user.email or "").strip().lower()
+
+
 @router.post("", status_code=201)
-def create_person(payload: PersonIn, db: Session = Depends(get_db)):
+def create_person(payload: PersonIn, db: Session = Depends(get_db), _admin: User = Depends(get_current_admin_user)):
+    """Admins only – everyone else appears in People by registering."""
     data = payload.to_columns()
     data["team"] = _require_team(db, data["team"])
     person = Person(**data)
@@ -164,10 +171,17 @@ def create_person(payload: PersonIn, db: Session = Depends(get_db)):
 
 
 @router.put("/{person_id}")
-def update_person(person_id: int, payload: PersonIn, db: Session = Depends(get_db)):
+def update_person(person_id: int, payload: PersonIn, db: Session = Depends(get_db),
+                  user: User = Depends(get_current_user)):
+    """Admins edit anyone. A regular user edits only their own profile and cannot change role or e-mail."""
     person = _get_or_404(db, person_id)
+    if not user.is_admin and not _is_own_profile(user, person):
+        raise HTTPException(403, "You can only edit your own profile.")
     data = payload.to_columns()
     data["team"] = _require_team(db, data["team"])
+    if not user.is_admin:
+        data["role"] = person.role or "member"   # nobody makes themselves a team lead
+        data["email"] = person.email             # e-mail links the profile to the login account
     for key, value in data.items():
         setattr(person, key, value)
     db.commit()
@@ -176,7 +190,7 @@ def update_person(person_id: int, payload: PersonIn, db: Session = Depends(get_d
 
 
 @router.delete("/{person_id}")
-def delete_person(person_id: int, db: Session = Depends(get_db)):
+def delete_person(person_id: int, db: Session = Depends(get_db), _admin: User = Depends(get_current_admin_user)):
     person = _get_or_404(db, person_id)
     # Keep delivery history, just unlink it from the deleted person
     db.query(Delivery).filter(Delivery.person_id == person_id).update({Delivery.person_id: None})

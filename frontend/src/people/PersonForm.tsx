@@ -27,13 +27,14 @@ interface Props {
   teams: string[];           // teams from Admin & Teams
   onSave: (person: PersonInput) => Promise<string | null>; // returns an error message or null
   onCancel: () => void;
+  canEditAdminFields?: boolean; // false = regular user editing own profile: e-mail and team lead are locked
 }
 
 const inputClass =
   'w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500';
 const labelClass = 'block text-xs font-semibold text-slate-300 mb-1';
 
-export default function PersonForm({ initial, teams, onSave, onCancel }: Props) {
+export default function PersonForm({ initial, teams, onSave, onCancel, canEditAdminFields = true }: Props) {
   const [name, setName] = useState(initial?.name ?? '');
   const [team, setTeam] = useState(initial?.team ?? '');
   const [email, setEmail] = useState(initial?.email ?? '');
@@ -135,8 +136,11 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
         </div>
         <div>
           <label className={labelClass}>E-mail</label>
-          <input type="email" className={inputClass} value={email} onChange={(e) => setEmail(e.target.value)}
-            placeholder="anna@example.com" />
+          <input type="email" className={`${inputClass} disabled:opacity-60 disabled:cursor-not-allowed`} value={email}
+            onChange={(e) => setEmail(e.target.value)} placeholder="anna@example.com" disabled={!canEditAdminFields} />
+          {!canEditAdminFields && (
+            <p className="text-xs text-slate-500 mt-1">Your login e-mail – only an administrator can change it</p>
+          )}
         </div>
         <div>
           <label className={labelClass}>Phone (for SMS and calls)</label>
@@ -153,11 +157,13 @@ export default function PersonForm({ initial, teams, onSave, onCancel }: Props) 
         </span>
       </label>
 
-      <label className="flex items-center gap-3 cursor-pointer select-none">
+      <label className={`flex items-center gap-3 select-none ${canEditAdminFields ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
         <input type="checkbox" checked={isLead} onChange={(e) => setIsLead(e.target.checked)}
-          className="w-4 h-4 accent-amber-500" />
+          disabled={!canEditAdminFields} className="w-4 h-4 accent-amber-500" />
         <span className="text-sm text-slate-200">
-          Team lead <span className="text-slate-500">– approves risky runbook steps for this team</span>
+          Team lead <span className="text-slate-500">
+            – approves risky runbook steps for this team{!canEditAdminFields && ' (set by an administrator)'}
+          </span>
         </span>
       </label>
 

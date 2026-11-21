@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Clock, Mail, Pencil, Phone, Plus, RefreshCw, Trash2, UserRound } from 'lucide-react';
 import type { Person } from '../shared/types';
+import type { User } from '../types';
 import { errorMessage } from '../rules/rulesApi';
 import { PersonInput, peopleApi } from './peopleApi';
 import { SEVERITY_LABEL, SEVERITY_ORDER, SEVERITY_STYLE, channelLabel, describeQuietHours } from './describePerson';
@@ -12,7 +13,12 @@ function toInput(p: Person): PersonInput {
   return rest;
 }
 
-export default function PeoplePage() {
+export default function PeoplePage({ currentUser }: { currentUser?: User | null } = {}) {
+  const isAdmin = Boolean(currentUser?.is_admin);
+  // A login account is linked to its People profile by e-mail (set at registration)
+  const isMe = (p: Person) =>
+    Boolean(p.email && currentUser?.email && p.email.toLowerCase() === currentUser.email.toLowerCase());
+  const canEdit = (p: Person) => isAdmin || isMe(p);
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -104,13 +110,16 @@ export default function PeoplePage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-white">People</h1>
-          <p className="text-sm text-slate-400">Team members, on-call assignments, and notification preferences.</p>
+          <p className="text-sm text-slate-400">
+            Team members, on-call assignments, and notification preferences.
+            {!isAdmin && ' You can edit your own profile.'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} title="Reload" className="text-slate-400 hover:text-white p-2">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          {editing === null && (
+          {isAdmin && editing === null && (
             <button onClick={() => setEditing('new')}
               className="flex items-center space-x-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm">
               <Plus className="w-4 h-4" /><span>Add person</span>
@@ -133,6 +142,7 @@ export default function PeoplePage() {
           teams={availableTeams}
           onSave={savePerson}
           onCancel={() => setEditing(null)}
+          canEditAdminFields={isAdmin}
         />
       )}
 
@@ -175,7 +185,9 @@ export default function PeoplePage() {
 
                 <div className="flex-1 space-y-3 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-white">{person.name}</h3>
+                    <h3 className="font-bold text-white">
+                      {person.name}{isMe(person) && <span className="text-amber-400 font-normal"> (you)</span>}
+                    </h3>
                     {person.role === 'lead' && (
                       <span className="text-xs font-bold text-violet-300 bg-violet-500/10 border border-violet-500/40 px-2 py-0.5 rounded"
                         title="Approves risky runbook steps for this team">
@@ -214,6 +226,7 @@ export default function PeoplePage() {
                   )}
                 </div>
 
+                {canEdit(person) && (
                 <div className="flex items-start gap-3">
                   <button onClick={() => toggleOnCall(person)}
                     title="Phone-call alerts go only to the on-call person"
@@ -226,10 +239,13 @@ export default function PeoplePage() {
                   <button onClick={() => setEditing(person)} className="text-slate-400 hover:text-white" title="Edit">
                     <Pencil className="w-4 h-4" />
                   </button>
-                  <button onClick={() => deletePerson(person)} className="text-slate-400 hover:text-red-400" title="Remove">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {isAdmin && (
+                    <button onClick={() => deletePerson(person)} className="text-slate-400 hover:text-red-400" title="Remove">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
+                )}
               </div>
             );
           })}
@@ -237,7 +253,7 @@ export default function PeoplePage() {
       ))}
 
       {!loading && people.length === 0 && !error && (
-        <p className="text-center text-slate-500 py-8">No people yet. Add the first person so alerts have somewhere to go.</p>
+        <p className="text-center text-slate-500 py-8">No people yet. People appear here when they register with an invite code.</p>
       )}
     </div>
   );
